@@ -88,8 +88,8 @@ def render(game, view_party, opponent_party, cfg):
     hp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res_prev['payout_h'] - d.get('h_pays',0) + orig_corr_amt + crony_income
     rp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res_prev['payout_r'] - d.get('r_pays',0)
 
-    # 【重要呼叫修正】：帶入 h_idx 與 claimed_decay 以觸發新的政績公式
-    shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res_prev['payout_h'], res_prev['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra, res_prev['h_idx'], d.get('claimed_decay', 0.0))
+    # 呼叫最新版加入「期望管理」與「H-Index」的政績計算
+    shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res_prev['payout_h'], res_prev['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra, res_prev['h_idx'], d.get('claimed_decay', 0.0), game.sanity, game.emotion)
     
     t_san_preview = max(0.0, min(100.0, 50.0 + (ra.get('edu_amt', 0) / 500.0) * 50.0))
     s_move_preview = (t_san_preview - game.sanity) * 0.2
@@ -158,7 +158,7 @@ def render(game, view_party, opponent_party, cfg):
             hp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0) + res_exec['payout_h'] - d.get('h_pays',0) + corr_amt + crony_income
             rp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0) + res_exec['payout_r'] - d.get('r_pays',0)
             
-            shift = formulas.calc_support_shift(cfg, hp, rp, res_exec['payout_h'], res_exec['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra, res_exec['h_idx'], d.get('claimed_decay', 0.0))
+            shift = formulas.calc_support_shift(cfg, hp, rp, res_exec['payout_h'], res_exec['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra, res_exec['h_idx'], d.get('claimed_decay', 0.0), game.sanity, game.emotion)
             hp_sup_new = max(0.0, min(100.0, hp.support + shift['actual_shift'] - corr_support_penalty))
             
             gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
