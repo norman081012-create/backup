@@ -16,9 +16,9 @@ def render(game, cfg):
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(t("#### 💰 經濟與財政", "#### 💰 Economy & Finance"))
-        st.write(t(f"GDP 變化: `{rep['old_gdp']:.0f} ➔ {game.gdp:.0f}`", f"GDP Shift: `{rep['old_gdp']:.0f} ➔ {game.gdp:.0f}`"))
-        st.write(t(f"執行系統收益: `${rep['h_inc']:.0f}`", f"H-System Profit: `${rep['h_inc']:.0f}`"))
-        st.write(t(f"監管系統收益: `${rep['r_inc']:.0f}`", f"R-System Profit: `${rep['r_inc']:.0f}`"))
+        st.write(t(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`", f"GDP Shift: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`"))
+        st.write(t(f"執行系統收益: `${rep['h_inc']:.1f}`", f"H-System Profit: `${rep['h_inc']:.1f}`"))
+        st.write(t(f"監管系統收益: `${rep['r_inc']:.1f}`", f"R-System Profit: `${rep['r_inc']:.1f}`"))
         if rep.get('corr_caught'):
             st.error(t(f"🚨 貪污醜聞爆發！執行系統貪污被情報處查獲，沒收所有非法所得並重挫民意。", f"🚨 Corruption Scandal! Funds seized & support heavily damaged."))
         if rep.get('crony_caught'):
