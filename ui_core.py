@@ -168,10 +168,11 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.progress(acc / 100.0, text=f"準確度: {acc}%")
     rng = random.Random(f"intel_{opp.name}_{game.year}")
     
-    with st.expander("對手各項能力", expanded=True):
-        st.write(f"建設能力: {opp.build_ability*(1+rng.uniform(-blur, blur)):.1f}%")
+    with st.expander("對手機構指標", expanded=True):
+        st.write(f"工程處: {opp.build_ability*(1+rng.uniform(-blur, blur)):.1f}%")
         st.write(f"情報處: {opp.intel_ability*(1+rng.uniform(-blur, blur)):.1f}%")
         st.write(f"黨媒: {opp.media_ability*(1+rng.uniform(-blur, blur)):.1f}%")
+        st.write(f"智庫: {opp.media_ability*(1+rng.uniform(-blur, blur)):.1f}%")
         st.write(f"反情報處: {opp.counter_intel_ability*(1+rng.uniform(-blur, blur)):.1f}%")
     with st.expander("對手去年各項花費"):
         st.write(f"政策投入: {opp.last_acts.get('policy',0)*(1+rng.uniform(-blur, blur)):.0f}")
@@ -181,9 +182,9 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     max_c = formulas.get_max_ability_cost(cfg['CURRENT_GDP'], cfg['ABILITY_CAP_DIVISOR'])
     total_maint = sum([formulas.get_ability_maintenance(a, max_c, cfg['MAINTENANCE_RATE']) for a in [view_party.build_ability, view_party.intel_ability, view_party.counter_intel_ability, view_party.media_ability, view_party.thinktank_ability]])
     with st.expander("自身各項能力及維護費", expanded=True):
-        st.write(f"建設:{view_party.build_ability:.1f}% | 情報:{view_party.intel_ability:.1f}%")
+        st.write(f"工程處:{view_party.build_ability:.1f}% | 情報處:{view_party.intel_ability:.1f}%")
         st.write(f"黨媒:{view_party.media_ability:.1f}% | 智庫:{view_party.thinktank_ability:.1f}%")
-        st.write(f"反情報:{view_party.counter_intel_ability:.1f}%")
+        st.write(f"反情報處:{view_party.counter_intel_ability:.1f}%")
         st.write(f"**維護費估算:** -${total_maint:.0f}")
     with st.expander("去年各項花費"):
         st.write(f"政治花費: ${view_party.last_acts.get('policy',0):.0f}")
