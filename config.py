@@ -8,7 +8,7 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
-    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'COVERT_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
+    'BUILD_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
@@ -16,10 +16,8 @@ DEFAULT_CONFIG = {
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
-    'MAX_ABILITY': 10.0, 'ABILITY_DEFAULT': 3.0, 'MAINTENANCE_RATE': 10.0,
-    'DEPT_CAP_RATE': 0.4, 
-    'JUDICIAL_COST': 50,  
-    'JUDICIAL_REDUCTION': 0.3, 
+    'ABILITY_CAP_DIVISOR': 0.4, 'ABILITY_DEFAULT': 10.0, 'MAINTENANCE_RATE': 0.1,
+    'JUDICIAL_REVIEW_COST': 50.0, 'JUDICIAL_MEDIA_REDUCTION': 0.5,
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 0.60, 
@@ -33,23 +31,17 @@ CONFIG_TRANSLATIONS = {
     'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
     'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
     'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-    'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "情報處難度", 'COVERT_DIFF': "隱密難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
+    'BUILD_DIFF': "建設難度", 'MEDIA_DIFF': "媒體難度",
     'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
     'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
     'H_FUND_DEFAULT': "初始執行獎勵基金", 
     'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
-    'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 'ABILITY_DEFAULT': "初始能力", 'MAINTENANCE_RATE': "維護費倍率",
-    'DEPT_CAP_RATE': "部門投資上限比例", 'JUDICIAL_COST': "司法審查費用", 'JUDICIAL_REDUCTION': "司法抵銷媒體比例",
+    'CORRUPTION_PENALTY': "貪污罰金倍率", 
+    'ABILITY_CAP_DIVISOR': "能力上限設定值", 'ABILITY_DEFAULT': "初始能力(%)", 'MAINTENANCE_RATE': "維護費比例",
+    'JUDICIAL_REVIEW_COST': "司法審查成本", 'JUDICIAL_MEDIA_REDUCTION': "司法降媒體效果比例",
     'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
     'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量"
 }
-
-def get_accuracy_text(acc_pct):
-    if acc_pct >= 90: return "極佳"
-    elif acc_pct >= 75: return "良好"
-    elif acc_pct >= 50: return "普通"
-    elif acc_pct >= 30: return "較差"
-    else: return "極差"
 
 def get_economic_forecast_text(decay_val):
     if decay_val <= 0.15: return "🌟 景氣極佳"
@@ -73,10 +65,16 @@ def get_emotion_text(emotion_val):
 
 def get_election_icon(year, cycle):
     rem = year % cycle
-    if rem == 1: return "🗳️ 【大選年】"
-    elif rem == 0: return "🚨 距大選 1 年"
-    elif rem == cycle - 1: return "⏳ 距大選 2 年"
-    else: return f"🏛️ 距大選 {cycle - rem + 1} 年"
+    if rem == 1: return "🗳️ 大選年"
+    elif rem == 2: return "🌱 施政元年"
+    elif rem == cycle - 1: return "⏳ 距選舉 2 年"
+    elif rem == 0: return "🚨 明年選舉"
+    else: return f"距大選 {cycle - rem + 1} 年"
+
+def get_party_logo(name):
+    if name == "Prosperity": return "🦅"
+    elif name == "Equity": return "🤝"
+    return "🚩"
 
 def get_target_eval_text(actual, target):
     if target <= 0: return "無目標"
