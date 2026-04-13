@@ -129,20 +129,23 @@ def render(game, view_party, opponent_party, cfg):
             total_c = max(1.0, float(d.get('total_funds', 1)))
             catch_prob_base = max(0.0, (rp.investigate_ability - hp.stealth_ability)) * 5.0
             
+            corr_caught = False
+            crony_caught = False
+            
             if corr_amt > 0:
                 if random.random() < min(1.0, catch_prob_base * (corr_amt / total_c)):
                     returned_to_r += corr_amt
                     confiscated_to_budget += corr_amt * 0.4
                     target_build = total_c * (d.get('r_value', 1.0) ** 2)
                     corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, target_build) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
-                    st.error(t("🚨 貪污被查獲！資金繳回並重挫支持度。", "🚨 Corruption caught! Funds seized and support drops."))
+                    corr_caught = True
                     corr_amt = 0
 
             if crony_base > 0:
                 if random.random() < min(1.0, catch_prob_base * (crony_base / total_c)):
                     returned_to_r += crony_base
                     confiscated_to_budget += crony_base * 0.5
-                    st.error(t("🚨 圖利廠商被查獲！資金繳回，無額外支持度損失。", "🚨 Cronyism caught! Funds seized, no support loss."))
+                    crony_caught = True
                     crony_base = 0
                     crony_income = 0
             
@@ -172,7 +175,8 @@ def render(game, view_party, opponent_party, cfg):
                 'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
                 'h_party_name': hp.name, 'h_perf': shift['h_perf'], 'r_perf': shift['r_perf'],
                 'h_inc': hp_inc, 'r_inc': rp_inc, 'est_h_inc': preview_data['h_inc'], 'est_r_inc': preview_data['r_inc'],
-                'real_decay': game.current_real_decay, 'view_party_forecast': view_party.current_forecast
+                'real_decay': game.current_real_decay, 'view_party_forecast': view_party.current_forecast,
+                'corr_caught': corr_caught, 'crony_caught': crony_caught, 'returned_to_r': returned_to_r
             }
 
             hp.support, rp.support = hp_sup_new, 100.0 - hp_sup_new
@@ -192,9 +196,6 @@ def render(game, view_party, opponent_party, cfg):
 
             game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
             
-            game.year += 1; game.phase = 1; game.p1_step = 'draft_r'
-            game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
+            game.phase = 3
             game.proposing_party = game.r_role_party
-            for k in list(st.session_state.keys()):
-                if k.startswith('ui_decay_') or k.endswith('_acts'): del st.session_state[k]
-            del st.session_state.turn_initialized; st.rerun()
+            st.rerun()
