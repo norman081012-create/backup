@@ -222,10 +222,17 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         
         my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
         opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
+
+        # 呼叫最新包含期望管理的支持度預估公式
+        ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
+        ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
+        shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan['claimed_decay'])
+        my_sup = shift_preview['actual_shift'] if my_is_h else -shift_preview['actual_shift']
         
         st.markdown(t(f"**📊 智庫評估報告 (依自己預測: -{view_party.current_forecast:.2f})**", f"**📊 Think Tank Report (Based on est: -{view_party.current_forecast:.2f})**"))
         st.markdown(t(f"我方預估收益: {my_net:.0f} (ROI: {my_roi:.1f}%)", f"Our Est Profit: {my_net:.0f} (ROI: {my_roi:.1f}%)"))
         st.markdown(t(f"對方預估收益: {opp_net:.0f} (ROI: {opp_roi:.1f}%)", f"Opp Est Profit: {opp_net:.0f} (ROI: {opp_roi:.1f}%)"))
+        st.markdown(t(f"支持度預估: {my_sup:+.2f}%", f"Est. Support Shift: {my_sup:+.2f}%"))
         
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
         st.markdown(t(f"📈 預期 GDP: {game.gdp:.0f} ➔ {res['est_gdp']:.0f} ({o_gdp_pct:+.2f}%)", f"📈 Exp. GDP: {game.gdp:.0f} ➔ {res['est_gdp']:.0f} ({o_gdp_pct:+.2f}%)"))
@@ -305,6 +312,11 @@ def render_formula_panel(game, cfg):
             st.write(t(f"- **達標率 (H_Index)** = 淨建設量 ({res['c_net']:.0f}) / 標案成本 ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`", f"- **H_Index** = Net Construct ({res['c_net']:.0f}) / Bid Cost ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`"))
             st.write(t(f"- **執行系統收益** = 標案總額 ({plan['proj_fund']:.0f}) × 達標率 (受限於總預算 {game.total_budget:.0f}) = `{res['payout_h']:.0f}`", f"- **H-System Payout** = Total Bid ({plan['proj_fund']:.0f}) × H_Index (Capped by Budget {game.total_budget:.0f}) = `{res['payout_h']:.0f}`"))
             st.write(t(f"- **監管系統收益** = 總預算 - 執行系統收益 = `{res['payout_r']:.0f}`", f"- **R-System Payout** = Total Budget - H Payout = `{res['payout_r']:.0f}`"))
+            
+            st.markdown(t("### 🎭 民意期望與政績管理", "### 🎭 Expectation Management"))
+            public_expected_gdp = max(0.0, game.gdp - (game.gdp * plan.get('claimed_decay', 0.0) * 0.072))
+            st.write(t(f"- **民眾預期 GDP** = 當前 GDP - 宣告衰退損耗 = `{public_expected_gdp:.1f}`", f"- **Public Expected GDP** = Current GDP - Claimed Decay Loss = `{public_expected_gdp:.1f}`"))
+            st.write(t(f"- **監管政績表現** = (最終預測 GDP ({res['est_gdp']:.0f}) - 民眾預期 GDP) / 當前 GDP", f"- **R-System Performance** = (Final Est GDP ({res['est_gdp']:.0f}) - Public Expected GDP) / Current GDP"))
         else:
             st.info(t("目前階段尚無具體標案數據可供計算。", "No proposal data available for calculation in this phase."))
             
