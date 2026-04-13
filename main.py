@@ -1,75 +1,72 @@
 # ==========================================
-# main.py
-# 主程式入口：負責路由、全局初始化與整合
+# engine.py
+# 負責遊戲引擎、政黨類別與全域事件觸發邏輯
 # ==========================================
-import streamlit as st
 import random
-import config
-import engine
-import ui_core
-import phase1
-import phase2
+import streamlit as st
 
-st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
-st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
+class Party:
+    def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
+    def __init__(self, name, cfg):
+        self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
+        self.build_ability = cfg['ABILITY_DEFAULT']
+        self.intel_ability = cfg['ABILITY_DEFAULT']
+        self.counter_intel_ability = cfg['ABILITY_DEFAULT']
+        self.thinktank_ability = cfg['ABILITY_DEFAULT']
+        self.media_ability = cfg['ABILITY_DEFAULT']
+        self.current_forecast = 0.0
+        
+        self.poll_history = {'小型': [], '中型': [], '大型': []}
+        self.latest_poll = None
+        self.poll_count = 0
+        self.last_acts = {'policy': 0, 'legal': 0, 'maint': 0}
 
-if 'cfg' not in st.session_state: st.session_state.cfg = config.DEFAULT_CONFIG.copy()
-cfg = st.session_state.cfg
+class GameEngine:
+    def __init__(self, cfg):
+        self.year = 1
+        self.party_A = Party(cfg['PARTY_A_NAME'], cfg); self.party_B = Party(cfg['PARTY_B_NAME'], cfg)
+        self.gdp = cfg['CURRENT_GDP']; self.total_budget = cfg['BASE_TOTAL_BUDGET'] + (self.gdp * cfg['HEALTH_MULTIPLIER'])
+        self.h_fund = cfg['H_FUND_DEFAULT']
+        self.phase = 1; self.p1_step = 'draft_r' 
+        self.p1_proposals = {'R': None, 'H': None}; self.p1_selected_plan = None
+        self.ruling_party = self.party_A; self.r_role_party = self.party_A; self.h_role_party = self.party_B  
+        self.sanity = cfg['SANITY_DEFAULT']; self.emotion = cfg['EMOTION_DEFAULT']
+        self.current_real_decay = 0.0; self.last_real_decay = 0.0
+        self.proposal_count = 1; self.proposing_party = self.party_A
+        self.history = []; self.swap_triggered_this_year = False
+        self.last_year_report = None
 
-if 'game' not in st.session_state:
-    st.session_state.game = engine.GameEngine(cfg)
-    st.session_state.turn_data = {
-        'r_value': 1.0, 'target_h_fund': 600.0, 'target_gdp_growth': 0.0,
-        'r_pays': 0, 'total_funds': 0, 'agreed': False, 'target_gdp': 5000.0, 'h_ratio': 1.0
-    }
+    def record_history(self, is_election):
+        self.history.append({
+            'Year': self.year, 'GDP': self.gdp, 'Sanity': self.sanity, 'Emotion': self.emotion,
+            'A_Support': self.party_A.support, 'B_Support': self.party_B.support,
+            'A_Wealth': self.party_A.wealth, 'B_Wealth': self.party_B.wealth,
+            'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year
+        })
+        self.swap_triggered_this_year = False
 
-game = st.session_state.game
-
-if game.year > cfg['END_YEAR']:
-    ui_core.render_endgame_charts(game.history, cfg)
-    if st.button("🔄 重新開始全新遊戲", use_container_width=True): st.session_state.clear(); st.rerun()
-    st.stop()
-
-if 'turn_initialized' not in st.session_state:
-    game.current_real_decay = max(0.0, round(random.uniform(cfg['DECAY_MIN'], cfg['DECAY_MAX']), 2))
-    for p in [game.party_A, game.party_B]:
-        error_margin = cfg['PREDICT_DIFF'] / max(0.1, p.predict_ability)
-        p.current_forecast = max(0.0, round(game.current_real_decay + random.uniform(-error_margin, error_margin), 2))
-        p.poll_count = 0 
+def execute_poll(game, view_party, cost):
+    view_party.wealth -= cost
+    error_margin = max(0.0, 15.0 - (view_party.thinktank_ability * 0.1) - (cost * 0.4))
+    a_actual = game.party_A.support
+    a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
     
-    if not hasattr(game, 'p1_step'):
-        game.p1_step = 'draft_r'
-        game.p1_proposals = {'R': None, 'H': None}
-        game.p1_selected_plan = None
-
-    for k in list(st.session_state.keys()):
-        if k.startswith('ui_decay_') or k.endswith('_acts'): del st.session_state[k]
+    poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
     
-    st.session_state.turn_initialized = True
+    game.party_A.latest_poll = a_poll
+    game.party_A.poll_history[poll_type].append(a_poll)
+    
+    b_poll = 100.0 - a_poll
+    game.party_B.latest_poll = b_poll
+    game.party_B.poll_history[poll_type].append(b_poll)
+    
+    view_party.poll_count += 1
 
-view_party = game.proposing_party
-opponent_party = game.party_B if view_party.name == game.party_A.name else game.party_A
-is_election_year = (game.year % cfg['ELECTION_CYCLE'] == 1)
-
-with st.sidebar:
-    ui_core.render_global_settings(cfg, game)
-    god_mode = st.toggle("👁️ 上帝視角", False)
-    if st.button("🔄 重新開始遊戲", use_container_width=True): st.session_state.clear(); st.rerun()
-
-st.title("🏛️ Symbiocracy 共生民主模擬器 v3.0.0")
-
-elec_status = config.get_election_icon(game.year, cfg['ELECTION_CYCLE'])
-st.subheader(f"📅 遊戲年份: {cfg['CALENDAR_NAME']}{game.year}年 / {cfg['END_YEAR']}年 ({elec_status})")
-if god_mode: st.error(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**")
-
-# 全局介面渲染
-if game.phase == 1:
-    ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
-ui_core.render_message_board(game)
-ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
-
-# 階段路由
-if game.phase == 1:
-    phase1.render(game, view_party, cfg)
-elif game.phase == 2:
-    phase2.render(game, view_party, opponent_party, cfg)
+def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
+    game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
+    game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
+    game.swap_triggered_this_year = True
+    game.emotion = min(100.0, game.emotion + 30.0) 
+    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt} 資金給第三政黨，觸發換位！"
+    st.session_state.anim = 'snow'
+    game.phase = 2
