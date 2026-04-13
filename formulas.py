@@ -43,16 +43,20 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'act_fund': act_fund
     }
 
-def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra):
+def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay):
     r_judicial = ra.get('judicial', 0)
     jud_factor = min(0.5, r_judicial / 500.0) 
     
     effective_h_media = hp.media_ability * (1 - jud_factor)
     effective_r_media = rp.media_ability * (1 - jud_factor)
 
-    # 政績評估基準：標案收益是否超越最初爭取的總額、以及 GDP 成長
-    h_perf_val = (payout_h - proj_fund) / max(1.0, float(proj_fund))
-    r_perf_val = (new_gdp - curr_gdp) / max(1.0, curr_gdp)
+    # 【核心修正 1】監管政績 (R_perf)：建立在「期望管理」上
+    # 民眾對 GDP 的期望值 = 當前 GDP - 宣告的衰退損耗
+    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
+    r_perf_val = (new_gdp - public_expected_gdp) / max(1.0, curr_gdp)
+
+    # 【核心修正 2】執行政績 (H_perf)：建立在 KPI 達標率 (H-Index) 上
+    h_perf_val = h_idx - 1.0
 
     h_fail_pct = abs(h_perf_val) if h_perf_val < 0 else 0.0
     r_fail_pct = abs(r_perf_val) if r_perf_val < 0 else 0.0
