@@ -11,7 +11,7 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
-    'RESISTANCE_MULT': 1.0, # 建設阻力倍率 (已調降 5 倍)
+    'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
@@ -20,7 +20,10 @@ DEFAULT_CONFIG = {
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
-    'MAX_ABILITY': 10.0, 'ABILITY_DEFAULT': 6.0, 'MAINTENANCE_RATE': 5.0, # 預設能力 0.6 (60%)，維護費負擔減半
+    'MAX_ABILITY': 10.0, 
+    'ABILITY_DEFAULT': 3.0,          # 其他部門預設 30%
+    'BUILD_ABILITY_DEFAULT': 6.0,    # 工程處預設 60%
+    'MAINTENANCE_RATE': 10.0,        # 維護費率調回 10 倍 (6.0 = 60維持費)
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 60.0, 
@@ -42,7 +45,9 @@ def get_config_translations():
         'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
         'H_FUND_DEFAULT': "初始執行獎勵基金", 
         'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
-        'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 'ABILITY_DEFAULT': "初始能力", 'MAINTENANCE_RATE': "維護費倍率",
+        'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 
+        'ABILITY_DEFAULT': "一般部門初始能力", 'BUILD_ABILITY_DEFAULT': "工程處初始能力", 
+        'MAINTENANCE_RATE': "維護費倍率",
         'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
         'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量"
     }
@@ -58,7 +63,9 @@ def get_config_translations():
         'RULING_BONUS': "Ruling Bonus", 'DEFAULT_BONUS': "Basic Grant", 
         'H_FUND_DEFAULT': "Init Reward Fund", 
         'H_MEDIA_BONUS': "H-Media Bonus", 'R_INV_BONUS': "R-Inv Bonus",
-        'CORRUPTION_PENALTY': "Fine Multiplier", 'MAX_ABILITY': "Max Ability", 'ABILITY_DEFAULT': "Init Ability", 'MAINTENANCE_RATE': "Maint. Rate",
+        'CORRUPTION_PENALTY': "Fine Multiplier", 'MAX_ABILITY': "Max Ability", 
+        'ABILITY_DEFAULT': "Normal Init Ability", 'BUILD_ABILITY_DEFAULT': "Build Init Ability",
+        'MAINTENANCE_RATE': "Maint. Rate",
         'TRUST_BREAK_PENALTY_RATIO': "Swap Fee Ratio", 'ELECTION_CYCLE': "Election Cycle",
         'SUPPORT_CONVERSION_RATE': "Conversion Rate", 'PERF_IMPACT_BASE': "Perf. Impact Base"
     }
