@@ -9,6 +9,7 @@ import engine
 import ui_core
 import phase1
 import phase2
+import phase3
 import i18n
 
 st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
@@ -77,12 +78,15 @@ st.subheader(t(f"📅 {cfg['CALENDAR_NAME']} {game.year} 年 ({elec_status})", f
 
 if god_mode: st.error(t(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**", f"👁️ **God Mode:** Real Decay is **{game.current_real_decay:.2f}**"))
 
-if game.phase == 1:
-    ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
-ui_core.render_message_board(game)
-ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
+if game.phase == 1 or game.phase == 2:
+    if game.phase == 1:
+        ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
+    ui_core.render_message_board(game)
+    ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
 
 if game.phase == 1:
     phase1.render(game, view_party, cfg)
 elif game.phase == 2:
     phase2.render(game, view_party, opponent_party, cfg)
+elif game.phase == 3:
+    phase3.render(game, cfg)
