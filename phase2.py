@@ -44,6 +44,16 @@ def render(game, view_party, opponent_party, cfg):
         
     with c2:
         st.markdown(t("#### 🔒 內部部門投資", "#### 🔒 Dept. Investment"))
+        
+        # 一鍵防呆按鈕，幫助玩家取消不必要的升級花費
+        if st.button(t("🔄 全部回歸當前維護費 (放棄升級)", "🔄 Reset to Current Maintenance (No Upgrade)"), use_container_width=True):
+            st.session_state['up_pre'] = view_party.predict_ability * 10.0
+            st.session_state['up_inv'] = view_party.investigate_ability * 10.0
+            st.session_state['up_med'] = view_party.media_ability * 10.0
+            st.session_state['up_stl'] = view_party.stealth_ability * 10.0
+            if is_h: st.session_state['up_bld'] = view_party.build_ability * 10.0
+            st.rerun()
+
         t_pre, c_pre = ui_core.ability_slider(t("智庫", "Think Tank"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability)
         t_inv, c_inv = ui_core.ability_slider(t("情報處", "Intelligence"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability)
         t_med, c_med = ui_core.ability_slider(t("黨媒", "Media Dept."), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability)
@@ -68,30 +78,26 @@ def render(game, view_party, opponent_party, cfg):
         ra = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'edu_amt': edu_policy_amt, 'corr': h_corr_pct, 'crony': h_crony_pct, 'judicial': judicial_amt} if not is_h else {'media': 0, 'camp': 0, 'incite': 0, 'edu_amt': 0, 'corr': 0, 'crony': 0, 'judicial': 0}
         ha = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'edu_amt': edu_policy_amt, 'corr': h_corr_pct, 'crony': h_crony_pct, 'judicial': judicial_amt} if is_h else {'media': 0, 'camp': 0, 'incite': 0, 'edu_amt': 0, 'corr': 0, 'crony': 0, 'judicial': 0}
 
-    orig_corr_amt = d.get('total_funds', 0) * (ha.get('corr', 0) / 100.0)
-    orig_crony_base = d.get('total_funds', 0) * (ha.get('crony', 0) / 100.0)
-    crony_income = orig_crony_base * 0.1 * d.get('r_value', 1.0)
-    act_build = d.get('total_funds', 0) - orig_corr_amt - orig_crony_base
+    orig_corr_amt = d.get('proj_fund', 0) * (ha.get('corr', 0) / 100.0)
+    orig_crony_base = d.get('proj_fund', 0) * (ha.get('crony', 0) / 100.0)
+    crony_income = orig_crony_base * 0.1
     
-    h_bst = (act_build * d.get('h_ratio', 1.0) * game.h_role_party.build_ability) / max(0.1, d.get('r_value', 1.0)**2)
-    new_h_fund = max(0.0, game.h_fund + h_bst - (view_party.current_forecast * (d.get('r_value', 1.0)**2) * 0.2 * game.h_fund))
-    gdp_bst = (act_build * game.h_role_party.build_ability) / cfg['BUILD_DIFF']
-    new_gdp = max(0.0, game.gdp + gdp_bst - (view_party.current_forecast * 1000))
-    budg = cfg['BASE_TOTAL_BUDGET'] + (new_gdp * cfg['HEALTH_MULTIPLIER'])
-    h_shr = new_h_fund / max(1.0, budg) if budg > 0 else 0.5
+    res_prev = formulas.calc_economy(cfg, game.gdp, game.total_budget, d.get('proj_fund', 0), d.get('bid_cost', 1), game.h_role_party.build_ability, view_party.current_forecast, orig_corr_amt, orig_crony_base)
     
-    hp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + (budg * h_shr) - d.get('h_pays',0) + orig_corr_amt + crony_income
-    rp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + (budg * (1 - h_shr)) - d.get('r_pays',0)
+    budg = cfg['BASE_TOTAL_BUDGET'] + (res_prev['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
+    
+    hp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res_prev['payout_h'] - d.get('h_pays',0) + orig_corr_amt + crony_income
+    rp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res_prev['payout_r'] - d.get('r_pays',0)
 
-    shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, new_h_fund, new_gdp, d.get('target_h_fund', 600), d.get('target_gdp', 5000), game.gdp, ha, ra)
+    shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res_prev['payout_h'], res_prev['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra)
     
     t_san_preview = max(0.0, min(100.0, 50.0 + (ra.get('edu_amt', 0) / 500.0) * 50.0))
     s_move_preview = (t_san_preview - game.sanity) * 0.2
     
     preview_data = {
-        'gdp': new_gdp, 'budg': budg, 'h_fund': new_h_fund,
+        'gdp': res_prev['est_gdp'], 'budg': budg, 'h_fund': res_prev['payout_h'],
         'san': max(0.0, min(100.0, game.sanity - (game.emotion * 0.02) + s_move_preview)),
-        'emo': max(0.0, min(100.0, game.emotion + (ha['incite'] + ra['incite']) * 0.1 - (((new_gdp - game.gdp)/max(1.0, game.gdp))*100) - (game.sanity * 0.20))),
+        'emo': max(0.0, min(100.0, game.emotion + (ha['incite'] + ra['incite']) * 0.1 - (((res_prev['est_gdp'] - game.gdp)/max(1.0, game.gdp))*100) - (game.sanity * 0.20))),
         'h_inc': hp_inc_est, 'r_inc': rp_inc_est,
         'h_roi': (hp_inc_est / max(1.0, float(d.get('h_pays',0)))) * 100.0 if d.get('h_pays',0) > 0 else float('inf'),
         'r_roi': (rp_inc_est / max(1.0, float(d.get('r_pays',0)))) * 100.0 if d.get('r_pays',0) > 0 else float('inf'),
@@ -122,48 +128,41 @@ def render(game, view_party, opponent_party, cfg):
             confiscated_to_budget = 0.0
             corr_support_penalty = 0.0
             
-            corr_amt = d.get('total_funds', 0) * (ha['corr'] / 100.0)
-            crony_base = d.get('total_funds', 0) * (ha['crony'] / 100.0)
-            crony_income = crony_base * 0.1 * d.get('r_value', 1.0)
+            corr_amt = d.get('proj_fund', 0) * (ha['corr'] / 100.0)
+            crony_base = d.get('proj_fund', 0) * (ha['crony'] / 100.0)
+            crony_income = crony_base * 0.1
             
-            total_c = max(1.0, float(d.get('total_funds', 1)))
+            total_c = max(1.0, float(d.get('proj_fund', 1)))
             catch_prob_base = max(0.0, (rp.investigate_ability - hp.stealth_ability)) * 5.0
             
-            corr_caught = False
-            crony_caught = False
+            corr_caught = False; crony_caught = False
             
             if corr_amt > 0:
                 if random.random() < min(1.0, catch_prob_base * (corr_amt / total_c)):
                     returned_to_r += corr_amt
                     confiscated_to_budget += corr_amt * 0.4
-                    target_build = total_c * (d.get('r_value', 1.0) ** 2)
+                    target_build = total_c * 1.0 # 貪污重挫基準
                     corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, target_build) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
-                    corr_caught = True
-                    corr_amt = 0
+                    corr_caught = True; corr_amt = 0
 
             if crony_base > 0:
                 if random.random() < min(1.0, catch_prob_base * (crony_base / total_c)):
                     returned_to_r += crony_base
                     confiscated_to_budget += crony_base * 0.5
-                    crony_caught = True
-                    crony_base = 0
-                    crony_income = 0
+                    crony_caught = True; crony_base = 0; crony_income = 0
             
-            h_bst = (act_build * d.get('h_ratio', 1.0) * hp.build_ability) / max(0.1, d.get('r_value', 1.0)**2)
-            new_h_fund = max(0.0, game.h_fund + h_bst - (game.current_real_decay * (d.get('r_value', 1.0)**2) * 0.2 * game.h_fund))
+            # 使用最新物理模型計算真實結算
+            res_exec = formulas.calc_economy(cfg, game.gdp, game.total_budget, d.get('proj_fund', 0), d.get('bid_cost', 1), hp.build_ability, game.current_real_decay, corr_amt, crony_base)
             
-            gdp_bst = (act_build * hp.build_ability) / cfg['BUILD_DIFF']
-            new_gdp = max(0.0, game.gdp + gdp_bst - (game.current_real_decay * 1000))
-            budg = cfg['BASE_TOTAL_BUDGET'] + (new_gdp * cfg['HEALTH_MULTIPLIER'])
-            h_shr = new_h_fund / max(1.0, budg) if budg > 0 else 0.5
+            budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
             
-            hp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0) + (budg * h_shr) - d.get('h_pays',0) + corr_amt + crony_income
-            rp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0) + (budg * (1 - h_shr)) - d.get('r_pays',0)
+            hp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0) + res_exec['payout_h'] - d.get('h_pays',0) + corr_amt + crony_income
+            rp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0) + res_exec['payout_r'] - d.get('r_pays',0)
             
-            shift = formulas.calc_support_shift(cfg, hp, rp, new_h_fund, new_gdp, d.get('target_h_fund', 600), d.get('target_gdp', 5000), game.gdp, ha, ra)
+            shift = formulas.calc_support_shift(cfg, hp, rp, res_exec['payout_h'], res_exec['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra)
             hp_sup_new = max(0.0, min(100.0, hp.support + shift['actual_shift'] - corr_support_penalty))
             
-            gdp_grw_bonus = ((new_gdp - game.gdp)/max(1.0, game.gdp)) * 100.0
+            gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
             emotion_delta = (ha['incite'] + ra['incite']) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
             game.emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
             
@@ -187,7 +186,8 @@ def render(game, view_party, opponent_party, cfg):
                 st.session_state.anim = 'balloons'
                 game.ruling_party = winner
 
-            game.h_fund, game.gdp = new_h_fund, new_gdp
+            game.gdp = res_exec['est_gdp']
+            game.h_fund = res_exec['payout_h']
             game.total_budget = budg + confiscated_to_budget
             hp.wealth += hp_inc; rp.wealth += rp_inc + returned_to_r
 
