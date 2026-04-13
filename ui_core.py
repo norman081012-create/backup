@@ -231,7 +231,7 @@ def add_event_vlines(fig, history_df):
 
 def render_endgame_charts(history_data, cfg):
     st.balloons()
-    st.title("🏁 遊戲結束！共生內閣軌跡總結算")
+    st.title("🏁 遊戲結束！共生民主軌跡總結算")
     df = pd.DataFrame(history_data)
 
     st.subheader("📊 1. 總體經濟與公民識讀指數走勢")
