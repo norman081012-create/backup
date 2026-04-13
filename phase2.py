@@ -63,10 +63,10 @@ def render(game, view_party, opponent_party, cfg):
     tot_maint = c_inv + c_pre + c_med + c_stl + c_bld
     tot = req_pay + tot_action + tot_maint
     
-    st.write(t(f"**法定專案款:** `{int(req_pay)}` / **政策與媒體:** `{int(tot_action)}` / **內部部門投資:** `{int(tot_maint)}` / **剩餘可用淨值:** `{int(cw - tot)}`", f"**Legal Pay:** `{int(req_pay)}` / **Policy:** `{int(tot_action)}` / **Invest:** `{int(tot_maint)}` / **Remaining:** `{int(cw - tot)}`"))
+    st.write(t(f"**法定專案款:** `{req_pay:.1f}` / **政策與媒體:** `{tot_action:.1f}` / **內部部門投資:** `{tot_maint:.1f}` / **剩餘可用淨值:** `{cw - tot:.1f}`", f"**Legal Pay:** `{req_pay:.1f}` / **Policy:** `{tot_action:.1f}` / **Invest:** `{tot_maint:.1f}` / **Remaining:** `{cw - tot:.1f}`"))
     
     if tot > cw:
-        st.error(t(f"🚨 資金不足！當前行動預算已超支 {int(tot - cw)} 元，請降低投入資金。", f"🚨 Insufficient Funds! Over budget by {int(tot - cw)}. Reduce spending."))
+        st.error(t(f"🚨 資金不足！當前行動預算已超支 {tot - cw:.1f} 元，請降低投入資金。", f"🚨 Insufficient Funds! Over budget by {tot - cw:.1f}. Reduce spending."))
     
     ra, ha = {}, {}
     if f"{opponent_party.name}_acts" in st.session_state:
@@ -88,7 +88,6 @@ def render(game, view_party, opponent_party, cfg):
     hp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res_prev['payout_h'] - d.get('h_pays',0) + orig_corr_amt + crony_income
     rp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res_prev['payout_r'] - d.get('r_pays',0)
 
-    # 呼叫最新版加入「期望管理」與「H-Index」的政績計算
     shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res_prev['payout_h'], res_prev['est_gdp'], d.get('proj_fund', 10), game.gdp, ha, ra, res_prev['h_idx'], d.get('claimed_decay', 0.0), game.sanity, game.emotion)
     
     t_san_preview = max(0.0, min(100.0, 50.0 + (ra.get('edu_amt', 0) / 500.0) * 50.0))
