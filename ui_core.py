@@ -291,8 +291,6 @@ def render_endgame_charts(history_data, cfg):
 
 def render_formula_panel(game, cfg):
     with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)", "🧮 Formula & Calculation Monitor"), expanded=False):
-        st.markdown(t("### 🏛️ 經濟與建設引擎", "### 🏛️ Economic Engine"))
-        
         plan = None
         if game.phase == 1 and getattr(game, 'p1_selected_plan', None):
             plan = game.p1_selected_plan
@@ -300,29 +298,14 @@ def render_formula_panel(game, cfg):
             plan = st.session_state.get('turn_data')
             
         if plan and 'proj_fund' in plan:
-            decay_to_use = game.current_real_decay if game.phase > 1 else plan.get('claimed_decay', game.current_real_decay)
-            res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], game.h_role_party.build_ability, decay_to_use)
-            
-            res_mult = cfg.get('RESISTANCE_MULT', 1.0)
-            st.write(t(f"- **衰退損耗 (L_gdp)** = 當前 GDP ({game.gdp:.1f}) × (真實衰退/預測 {decay_to_use:.2f} × 0.072) = `{res['l_gdp']:.1f}`", f"- **Decay Loss** = GDP ({game.gdp:.1f}) × (Decay {decay_to_use:.2f} × 0.072) = `{res['l_gdp']:.1f}`"))
-            st.write(t(f"- **建設阻力 (Resistance)** = 衰退損耗 ({res['l_gdp']:.1f}) × 阻力倍率 {res_mult} = `{res['resistance']:.1f}`", f"- **Resistance** = Decay Loss ({res['l_gdp']:.1f}) × Mult {res_mult} = `{res['resistance']:.1f}`"))
-            st.write(t(f"- **實質投入資金 (Act_Fund)** = 標案總額 ({plan['proj_fund']:.0f}) - 貪污/圖利 = `{res['act_fund']:.0f}`", f"- **Actual Funds** = Total Bid ({plan['proj_fund']:.0f}) - Corruption/Cronyism = `{res['act_fund']:.0f}`"))
-            st.write(t(f"- **毛建設產出 (Gross)** = 實質投入 ({res['act_fund']:.0f}) × (工程處能力 {game.h_role_party.build_ability:.1f} / 10) = `{res['gross']:.0f}`", f"- **Gross Output** = Act Funds ({res['act_fund']:.0f}) × (Build Ability {game.h_role_party.build_ability:.1f} / 10) = `{res['gross']:.0f}`"))
-            st.write(t(f"- **淨建設量 (C_net)** = 毛產出 ({res['gross']:.0f}) - 建設阻力 ({res['resistance']:.1f}) = `{res['c_net']:.0f}`", f"- **Net Construct** = Gross ({res['gross']:.0f}) - Resistance ({res['resistance']:.1f}) = `{res['c_net']:.0f}`"))
-            st.write(t(f"- **達標率 (H_Index)** = 淨建設量 ({res['c_net']:.0f}) / 標案成本 ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`", f"- **H_Index** = Net Construct ({res['c_net']:.0f}) / Bid Cost ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`"))
-            st.write(t(f"- **執行系統收益** = 標案總額 ({plan['proj_fund']:.0f}) × 達標率 (受限於總預算 {game.total_budget:.0f}) = `{res['payout_h']:.0f}`", f"- **H-System Payout** = Total Bid ({plan['proj_fund']:.0f}) × H_Index (Capped by Budget {game.total_budget:.0f}) = `{res['payout_h']:.0f}`"))
-            st.write(t(f"- **監管系統收益** = 總預算 - 執行系統收益 = `{res['payout_r']:.0f}`", f"- **R-System Payout** = Total Budget - H Payout = `{res['payout_r']:.0f}`"))
-            
-            st.markdown(t("### 🎭 民意期望與政績管理", "### 🎭 Expectation Management"))
-            public_expected_gdp = max(0.0, game.gdp - (game.gdp * plan.get('claimed_decay', 0.0) * 0.072))
-            st.write(t(f"- **民眾預期 GDP** = 當前 GDP - 宣告衰退損耗 = `{public_expected_gdp:.1f}`", f"- **Public Expected GDP** = Current GDP - Claimed Decay Loss = `{public_expected_gdp:.1f}`"))
-            st.write(t(f"- **監管政績表現** = (最終預測 GDP ({res['est_gdp']:.0f}) - 民眾預期 GDP) / 當前 GDP = `{((res['est_gdp'] - public_expected_gdp) / game.gdp)*100:.1f}%`", f"- **R-System Performance** = (Final Est GDP ({res['est_gdp']:.0f}) - Public Expected GDP) / Current GDP"))
+            # 呼叫 formulas 取得格式化的解析列表並印出
+            lines = formulas.get_formula_explanation(game, plan, cfg)
+            for line in lines:
+                st.markdown(line)
         else:
             st.info(t("目前階段尚無具體標案數據可供計算。", "No proposal data available for calculation in this phase."))
             
-        st.markdown(t("### 💡 智庫預估推算解析 (標案陷阱與 ROI 暴跌原理)", "### 💡 Think Tank ROI Analysis (The Bid Trap)"))
-        st.write(t("當你看到標案總額極高，要求成本極低時，可能會覺得能輕鬆 100% 達標賺取暴利。但請注意 **大環境的惡意 (建設阻力)** 考量：", "When you see high bid amounts and low cost requirements, you may expect easy 100% completion and massive profit. But consider the **Environmental Resistance**: "))
-        st.write(t("1. **打折的毛產出**：即使出資 1000，工程能力若只有 6.0 (60%)，毛產出也只有 600。", "1. **Discounted Gross**: Even if you bid 1000, with 60% engineering ability, Gross Output is only 600."))
-        st.write(t("2. **阻力吃掉產出**：毛產出必須先扣除「衰退帶來的建設阻力」，剩下的才是 **淨建設量**。若阻力高達 400，淨建設量就只剩 200。", "2. **Resistance Eats Output**: Gross must subtract Decay Resistance. If resistance is 400, Net Construction is only 200."))
-        st.write(t("3. **真實達標率 (H-Index) 暴跌**：系統以 200 (淨建設量) ÷ 600 (標案成本要求) = 33.3% 結算達標率。", "3. **H-Index Plummets**: 200 (Net) ÷ 600 (Cost) = 33.3% H-Index."))
-        st.write(t("4. **血本無歸的 ROI**：執行系統最終只能領回 1000 × 33.3% = 333。若當初執行黨自己出了 900 元，這回合就等於慘賠 567 元。這就是監管系統利用「高衰退環境」合法坑殺執行黨的權謀！", "4. **Deficit Settlement**: H-System only gets 1000 × 33.3% = 333. If they invested 900, they lose 567. This is how R-System uses high decay to legally trap H-System!"))
+        st.markdown(t("### 📊 核心運作邏輯", "### 📊 Core Logic"))
+        st.write(t("1. **標案成本** 為要求之建設值。若最後淨建設量低於標案成本，達標率 < 100%。", "1. Bid Cost is the required construction. If Net Construction is lower than Bid Cost, H-Index < 100%."))
+        st.write(t("2. **執行系統收益** 依據達標率比例獲取標案總額，若表現優異 (達標率 > 100%)，可獲取額外份額，直到把當年總預算掏空。", "2. H-System gets payout based on completion. If excellent (> 100%), they gain extra shares until the budget is depleted."))
+        st.write(t("3. **部門維護費** 均從能力值 0 起算，能力值越高每年維護費越昂貴。點擊一鍵回歸維護費按鈕可以重置所有升級拉桿，幫助玩家省錢。", "3. Maintenance starts from 0 ability. Higher ability equals more expensive yearly maintenance. Use the reset button to easily cancel upgrades."))
