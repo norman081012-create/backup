@@ -8,7 +8,7 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
-    'BUILD_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
+    'BUILD_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,  # <== 補上 'PREDICT_DIFF': 1.0
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
@@ -31,7 +31,7 @@ CONFIG_TRANSLATIONS = {
     'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
     'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
     'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-    'BUILD_DIFF': "建設難度", 'MEDIA_DIFF': "媒體難度",
+    'BUILD_DIFF': "建設難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度", # <== 補上 'PREDICT_DIFF': "預測難度"
     'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
     'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
     'H_FUND_DEFAULT': "初始執行獎勵基金", 
