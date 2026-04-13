@@ -43,50 +43,70 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'act_fund': act_fund
     }
 
-def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay):
+def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, sanity, emotion):
     r_judicial = ra.get('judicial', 0)
     jud_factor = min(0.5, r_judicial / 500.0) 
     
     effective_h_media = hp.media_ability * (1 - jud_factor)
     effective_r_media = rp.media_ability * (1 - jud_factor)
 
-    # 【核心修正 1】監管政績 (R_perf)：建立在「期望管理」上
-    # 民眾對 GDP 的期望值 = 當前 GDP - 宣告的衰退損耗
+    # 1. 理智乘數 (S) = 思辨度 * (1 - 情緒遮蔽)
+    S = (sanity / 100.0) * (1.0 - (emotion / 100.0))
+    S = max(0.0, min(1.0, S))
+
+    # 2. 媒體對抗值 (Delta M)
+    h_media_power = ha.get('media', 0) * effective_h_media * cfg['H_MEDIA_BONUS']
+    r_media_power = ra.get('media', 0) * effective_r_media
+    # 正規化對抗值避免數值爆炸
+    norm_M_H = (h_media_power - r_media_power) / 1000.0
+    norm_M_R = -norm_M_H
+
+    # 3. 政績評估基準 (V)
+    # 監管系統期望管理：民眾預期 GDP = 當前 GDP - (宣告衰退值帶來的自然損耗)
     public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
     r_perf_val = (new_gdp - public_expected_gdp) / max(1.0, curr_gdp)
-
-    # 【核心修正 2】執行政績 (H_perf)：建立在 KPI 達標率 (H-Index) 上
+    # 執行系統政績：H-Index 是否大於 1.0
     h_perf_val = h_idx - 1.0
 
-    h_fail_pct = abs(h_perf_val) if h_perf_val < 0 else 0.0
-    r_fail_pct = abs(r_perf_val) if r_perf_val < 0 else 0.0
+    base_h_perf = h_perf_val * cfg['PERF_IMPACT_BASE']
+    base_r_perf = r_perf_val * cfg['PERF_IMPACT_BASE']
 
-    h_media_pow = ha.get('media', 0) * effective_h_media * cfg['H_MEDIA_BONUS'] * cfg['MEDIA_DIFF']
-    r_media_pow = ra.get('media', 0) * effective_r_media * cfg['MEDIA_DIFF']
+    h_gain = 0.0
+    r_gain = 0.0
 
-    h_blame_qty = h_fail_pct * cfg['PERF_IMPACT_BASE'] * max(1.0, r_media_pow * 0.01)
-    r_blame_qty = r_fail_pct * cfg['PERF_IMPACT_BASE'] * max(1.0, h_media_pow * 0.01)
+    # === 四大政績影響邏輯 ===
+    # 處理 H 政績
+    if base_h_perf >= 0: # H 表現優良
+        if norm_M_H >= 0: h_gain += base_h_perf * (1.0 + norm_M_H) # 防禦成功
+        else: r_gain += base_h_perf * abs(norm_M_H) # 被對手收割
+    else: # H 搞砸了
+        if norm_M_R >= 0: r_gain += abs(base_h_perf) * (1.0 + norm_M_R) # 落井下石
+        else: h_gain += abs(base_h_perf) * abs(norm_M_H) # 成功甩鍋
 
-    h_camp_pow = ha.get('camp', 0) * effective_h_media * cfg['MEDIA_DIFF']
-    r_camp_pow = ra.get('camp', 0) * effective_r_media * cfg['MEDIA_DIFF']
-    total_camp_pow = max(1.0, h_camp_pow + r_camp_pow)
-    
-    h_eff_camp_qty = (h_camp_pow / total_camp_pow) * ha.get('camp', 0)
-    r_eff_camp_qty = (r_camp_pow / total_camp_pow) * ra.get('camp', 0)
+    # 處理 R 政績
+    if base_r_perf >= 0: # R 表現優良 (含虛報衰退的期望管理成功)
+        if norm_M_R >= 0: r_gain += base_r_perf * (1.0 + norm_M_R) # 防禦成功
+        else: h_gain += base_r_perf * abs(norm_M_H) # 被對手收割
+    else: # R 搞砸了
+        if norm_M_H >= 0: h_gain += abs(base_r_perf) * (1.0 + norm_M_H) # 落井下石
+        else: r_gain += abs(base_r_perf) * abs(norm_M_R) # 成功甩鍋
 
-    h_steal = (ha.get('media', 0) * effective_h_media) / 500.0
-    r_steal = (ra.get('media', 0) * effective_r_media) / 500.0
+    total_perf_shift_H = (h_gain - r_gain) * S
 
+    # 4. 競選造勢 (無腦砸錢洗腦)
+    h_camp_pow = ha.get('camp', 0) * effective_h_media
+    r_camp_pow = ra.get('camp', 0) * effective_r_media
+    camp_shift_H = (h_camp_pow - r_camp_pow) * (1.0 - S) * 0.05 
+
+    # 5. 總結算
     r_jud_penalty = r_judicial * 0.1
-
-    hp_shift = (h_eff_camp_qty - h_blame_qty + r_blame_qty + h_steal - r_steal) * cfg['SUPPORT_CONVERSION_RATE']
-    rp_shift = (r_eff_camp_qty - r_blame_qty + h_blame_qty + r_steal - h_steal - r_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
-
-    act_h_shift = hp_shift * ((100.0 - hp.support) / 100.0) if hp_shift > 0 else hp_shift * (hp.support / 100.0)
+    net_shift_H = (total_perf_shift_H + camp_shift_H + r_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
+    
+    # 支援度移轉防溢出
+    act_h_shift = net_shift_H * ((100.0 - hp.support) / 100.0) if net_shift_H > 0 else net_shift_H * (hp.support / 100.0)
     
     return {
         'actual_shift': act_h_shift, 
         'h_perf': h_perf_val * 100.0, 
-        'r_perf': r_perf_val * 100.0,
-        'h_blame_qty': h_blame_qty, 'r_blame_qty': r_blame_qty
+        'r_perf': r_perf_val * 100.0
     }
