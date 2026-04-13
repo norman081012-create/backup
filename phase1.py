@@ -42,13 +42,13 @@ def render(game, view_party, cfg):
             proj_fund = st.slider(t("標案總額 (最高不超過當年總預算)", "Total Bid Amount (Max=Budget)"), 0.0, max_p, float(min(1000.0, max_p)), 10.0)
             bid_cost = st.slider(t("標案成本 (要求之建設產出值，留點利潤給對手賺)", "Bid Cost (Required construction)"), 1.0, max(1.0, float(proj_fund)), max(1.0, float(proj_fund * 0.8)), 10.0)
             
-            safe_req = max(1, int(proj_fund))
-            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0, safe_req, int(safe_req * 0.5))
+            safe_req = max(1.0, float(proj_fund))
+            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0.0, safe_req, float(safe_req * 0.5))
             h_pays = proj_fund - r_pays
-            r_pct = (r_pays / max(1, proj_fund)) * 100
-            h_pct = (h_pays / max(1, proj_fund)) * 100
+            r_pct = (r_pays / max(1.0, proj_fund)) * 100
+            h_pct = (h_pays / max(1.0, proj_fund)) * 100
             
-            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays} ({r_pct:.1f}%)</span> / 總額: {proj_fund} / <span style='font-size: 1.2em'>執行出資: {h_pays} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays} ({r_pct:.1f}%)</span> / Total: {proj_fund} / <span style='font-size: 1.2em'>H-Pays: {h_pays} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
+            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 總額: {proj_fund:.1f} / <span style='font-size: 1.2em'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Total: {proj_fund:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
@@ -75,7 +75,7 @@ def render(game, view_party, cfg):
                     st.rerun()
                 
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
-                if c_btn3.button(t(f"🔄 強制通過並換位 (費用: {swap_cost})", f"🔄 Force Pass & Swap (Cost: {swap_cost})"), use_container_width=True):
+                if c_btn3.button(t(f"🔄 強制通過並換位 (費用: {swap_cost:.1f})", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True):
                     st.session_state.turn_data.update(plan_dict)
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
@@ -116,7 +116,7 @@ def render(game, view_party, cfg):
             if c2.button(t("❌ 拒絕並重談", "❌ Reject & Renegotiate"), use_container_width=True):
                 game.proposal_count += 1; game.p1_step = 'draft_r'; game.proposing_party = game.r_role_party; st.rerun()
             
-            if c3.button(t(f"🔄 同意但換位\n(各付 {penalty_amt})", f"🔄 Agree & Swap\n(Cost: {penalty_amt})"), use_container_width=True):
+            if c3.button(t(f"🔄 同意但換位\n(各付 {penalty_amt:.1f})", f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("執政權轉移！", "Power Shift!"))
                 game.proposing_party = game.ruling_party; st.rerun()
@@ -139,7 +139,7 @@ def render(game, view_party, cfg):
                 st.session_state.news_flash = t(f"🗞️ **【快訊】通牒生效！** 執行系統妥協吞下底線方案。", f"🗞️ **[BREAKING] Ultimatum Accepted!** H-System compromises.")
                 st.session_state.anim = 'balloons'
                 game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
-            if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 各付 {penalty_amt})", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt})"), use_container_width=True):
+            if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 各付 {penalty_amt:.1f})", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("掀桌倒閣！", "Cabinet Fall!"))
                 game.proposing_party = game.r_role_party; st.rerun()
