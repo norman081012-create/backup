@@ -184,8 +184,8 @@ def render_sidebar_intel_audit(game, view_party, cfg):
         st.write(f"建設:{view_party.build_ability:.1f}% | 情報:{view_party.intel_ability:.1f}%")
         st.write(f"黨媒:{view_party.media_ability:.1f}% | 智庫:{view_party.thinktank_ability:.1f}%")
         st.write(f"反情報:{view_party.counter_intel_ability:.1f}%")
-        st.write(f"**明年維護費估算:** -${total_maint:.0f}")
-    with st.expander("自身去年各項花費"):
+        st.write(f"**維護費估算:** -${total_maint:.0f}")
+    with st.expander("去年各項花費"):
         st.write(f"政治花費: ${view_party.last_acts.get('policy',0):.0f}")
 
 def render_proposal_component(title, plan, game, view_party, cfg):
