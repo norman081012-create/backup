@@ -18,10 +18,11 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
     return base_cost / discount_factor
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0):
-    # 1. 衰退與阻力
+    # 1. 衰退與阻力 (套用大幅調降後的阻力倍率)
     r_decay = forecast_decay * 0.072
     l_gdp = gdp * r_decay
-    resistance = l_gdp * 5.0
+    res_mult = cfg.get('RESISTANCE_MULT', 1.0)
+    resistance = l_gdp * res_mult
     
     # 2. 實質建設產出
     act_fund = max(0.0, proj_fund - corr_amt - crony_base)
@@ -57,15 +58,12 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     # 2. 媒體對抗值 (Delta M)
     h_media_power = ha.get('media', 0) * effective_h_media * cfg['H_MEDIA_BONUS']
     r_media_power = ra.get('media', 0) * effective_r_media
-    # 正規化對抗值避免數值爆炸
     norm_M_H = (h_media_power - r_media_power) / 1000.0
     norm_M_R = -norm_M_H
 
     # 3. 政績評估基準 (V)
-    # 監管系統期望管理：民眾預期 GDP = 當前 GDP - (宣告衰退值帶來的自然損耗)
     public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
     r_perf_val = (new_gdp - public_expected_gdp) / max(1.0, curr_gdp)
-    # 執行系統政績：H-Index 是否大於 1.0
     h_perf_val = h_idx - 1.0
 
     base_h_perf = h_perf_val * cfg['PERF_IMPACT_BASE']
@@ -75,21 +73,19 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     r_gain = 0.0
 
     # === 四大政績影響邏輯 ===
-    # 處理 H 政績
-    if base_h_perf >= 0: # H 表現優良
-        if norm_M_H >= 0: h_gain += base_h_perf * (1.0 + norm_M_H) # 防禦成功
-        else: r_gain += base_h_perf * abs(norm_M_H) # 被對手收割
-    else: # H 搞砸了
-        if norm_M_R >= 0: r_gain += abs(base_h_perf) * (1.0 + norm_M_R) # 落井下石
-        else: h_gain += abs(base_h_perf) * abs(norm_M_H) # 成功甩鍋
+    if base_h_perf >= 0:
+        if norm_M_H >= 0: h_gain += base_h_perf * (1.0 + norm_M_H)
+        else: r_gain += base_h_perf * abs(norm_M_H) 
+    else: 
+        if norm_M_R >= 0: r_gain += abs(base_h_perf) * (1.0 + norm_M_R) 
+        else: h_gain += abs(base_h_perf) * abs(norm_M_H) 
 
-    # 處理 R 政績
-    if base_r_perf >= 0: # R 表現優良 (含虛報衰退的期望管理成功)
-        if norm_M_R >= 0: r_gain += base_r_perf * (1.0 + norm_M_R) # 防禦成功
-        else: h_gain += base_r_perf * abs(norm_M_H) # 被對手收割
-    else: # R 搞砸了
-        if norm_M_H >= 0: h_gain += abs(base_r_perf) * (1.0 + norm_M_H) # 落井下石
-        else: r_gain += abs(base_r_perf) * abs(norm_M_R) # 成功甩鍋
+    if base_r_perf >= 0: 
+        if norm_M_R >= 0: r_gain += base_r_perf * (1.0 + norm_M_R) 
+        else: h_gain += base_r_perf * abs(norm_M_H) 
+    else: 
+        if norm_M_H >= 0: h_gain += abs(base_r_perf) * (1.0 + norm_M_H) 
+        else: r_gain += abs(base_r_perf) * abs(norm_M_R) 
 
     total_perf_shift_H = (h_gain - r_gain) * S
 
@@ -102,7 +98,6 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     r_jud_penalty = r_judicial * 0.1
     net_shift_H = (total_perf_shift_H + camp_shift_H + r_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
     
-    # 支援度移轉防溢出
     act_h_shift = net_shift_H * ((100.0 - hp.support) / 100.0) if net_shift_H > 0 else net_shift_H * (hp.support / 100.0)
     
     return {
