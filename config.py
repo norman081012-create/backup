@@ -21,15 +21,15 @@ DEFAULT_CONFIG = {
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
     'MAX_ABILITY': 10.0, 
-    'ABILITY_DEFAULT': 3.0,          # 其他部門預設 30%
-    'BUILD_ABILITY_DEFAULT': 6.0,    # 工程處預設 60%
-    'MAINTENANCE_RATE': 10.0,        # 維護費率調回 10 倍 (6.0 = 60維持費)
+    'ABILITY_DEFAULT': 3.0,          
+    'BUILD_ABILITY_DEFAULT': 6.0,    
+    'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 60.0, 
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
-    'PERF_IMPACT_BASE': 500.0        
+    'PERF_IMPACT_BASE': 1000.0   # 施政表現基礎影響量 (權重調高 2 倍)
 }
 
 def get_config_translations():
@@ -49,7 +49,7 @@ def get_config_translations():
         'ABILITY_DEFAULT': "一般部門初始能力", 'BUILD_ABILITY_DEFAULT': "工程處初始能力", 
         'MAINTENANCE_RATE': "維護費倍率",
         'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
-        'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量"
+        'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量(權重)"
     }
     en = {
         'CALENDAR_NAME': "Era Name", 'PARTY_A_COLOR': "Party A Color", 'PARTY_B_COLOR': "Party B Color",
