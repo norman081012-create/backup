@@ -181,7 +181,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.title("📈 審計處")
     max_c = formulas.get_max_ability_cost(cfg['CURRENT_GDP'], cfg['ABILITY_CAP_DIVISOR'])
     total_maint = sum([formulas.get_ability_maintenance(a, max_c, cfg['MAINTENANCE_RATE']) for a in [view_party.build_ability, view_party.intel_ability, view_party.counter_intel_ability, view_party.media_ability, view_party.thinktank_ability]])
-    with st.expander("自身各項能力及維護費", expanded=True):
+    with st.expander("自身機構指標及花費", expanded=True):
         st.write(f"工程處:{view_party.build_ability:.1f}% | 情報處:{view_party.intel_ability:.1f}%")
         st.write(f"黨媒:{view_party.media_ability:.1f}% | 智庫:{view_party.thinktank_ability:.1f}%")
         st.write(f"反情報處:{view_party.counter_intel_ability:.1f}%")
