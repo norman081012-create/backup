@@ -102,4 +102,78 @@ def render(game, view_party, opponent_party, cfg):
             if ha['corr'] > 0:
                 # 情報處抓貪邏輯：情報處 - 反情報處
                 eff_inv = max(0, rp.investigate_ability - hp.covert_ability)
-                catch_prob = min(1.0, (eff_inv / cfg['MAX
+                catch_prob = min(1.0, (eff_inv / cfg['MAX_ABILITY']) * (corr_amt / max(1.0, hp.wealth)) * 10.0)
+                if random.random() < catch_prob:
+                    caught = True; fine = corr_amt * cfg['CORRUPTION_PENALTY']; confiscated = corr_amt; corr_amt = 0 
+            
+            h_bst = (act_build * d.get('h_ratio', 1.0) * hp.build_ability) / max(0.1, d.get('r_value', 1.0)**2)
+            new_h_fund = max(0.0, game.h_fund + h_bst - (game.current_real_decay * (d.get('r_value', 1.0)**2) * 0.2 * game.h_fund))
+            
+            gdp_bst = (act_build * hp.build_ability) / cfg['BUILD_DIFF']
+            new_gdp = max(0.0, game.gdp + gdp_bst - (game.current_real_decay * 1000))
+            budg = cfg['BASE_TOTAL_BUDGET'] + (new_gdp * cfg['HEALTH_MULTIPLIER'])
+            h_shr = new_h_fund / max(1.0, budg) if budg > 0 else 0.5
+            
+            t_h = d.get('target_h_fund', 600)
+            surplus_bonus = 0
+            if new_h_fund >= t_h:
+                actual_needed_for_h = max(0, (t_h - game.h_fund + (game.current_real_decay * (d.get('r_value', 1.0)**2) * 0.2 * game.h_fund)) * (d.get('r_value', 1.0)**2) / hp.build_ability)
+                if d.get('total_funds', 0) > actual_needed_for_h: surplus_bonus = d.get('total_funds', 0) - actual_needed_for_h
+            
+            hp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0) + (budg * h_shr) - d.get('h_pays',0) + corr_amt - fine + surplus_bonus
+            rp_inc = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0) + (budg * (1 - h_shr)) - d.get('r_pays',0)
+            
+            shift = formulas.calc_support_shift(cfg, hp, rp, new_h_fund, new_gdp, t_h, d.get('target_gdp', 5000), game.gdp, ha, ra)
+            if caught: shift['actual_shift'] -= 5.0
+            hp_sup_new = max(0.0, min(100.0, hp.support + shift['actual_shift']))
+            
+            gdp_grw_bonus = ((new_gdp - game.gdp)/max(1.0, game.gdp)) * 100.0
+            emotion_decay = game.sanity * 20.0
+            emotion_delta = (ha['incite'] + ra['incite']) * 0.1 - gdp_grw_bonus - emotion_decay
+            game.emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
+            
+            game.sanity = max(0.0, min(1.0, game.sanity - (game.emotion * 0.002))) # 教育移除後自然衰減
+            
+            game.last_year_report = {
+                'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
+                'target_gdp': d.get('target_gdp'), 'target_gdp_growth': d.get('target_gdp_growth'),
+                'target_h_fund': t_h, 'h_party_name': hp.name, 'h_perf': shift['h_perf'], 'r_perf': shift['r_perf'],
+                'h_inc': hp_inc, 'r_inc': rp_inc, 'est_h_inc': preview_data['h_inc'], 'est_r_inc': preview_data['r_inc'],
+                'h_sup_shift': shift['actual_shift'] if hp.name == game.party_A.name else -shift['actual_shift'],
+                'r_sup_shift': -shift['actual_shift'] if hp.name == game.party_A.name else shift['actual_shift'],
+                'real_decay': game.current_real_decay,
+                'view_party_forecast': view_party.current_forecast, 'caught_corruption': caught
+            }
+
+            hp.support, rp.support = hp_sup_new, 100.0 - hp_sup_new
+            
+            if game.year % cfg['ELECTION_CYCLE'] == 1:
+                winner = hp if hp.support > rp.support else rp
+                if game.ruling_party.name != winner.name:
+                    st.session_state.news_flash = f"🎉 **【大選結果】** {winner.name} 以 {winner.support:.1f}% 的支持率勝出，取得政權！"
+                else: st.session_state.news_flash = f"🎉 **【大選結果】** {winner.name} 成功連任！"
+                game.ruling_party = winner
+
+            game.h_fund, game.gdp = new_h_fund, new_gdp
+            game.total_budget = budg + confiscated
+            hp.wealth += hp_inc; rp.wealth += rp_inc
+
+            rp.investigate_ability, _ = formulas.get_ability_preview(rp.investigate_ability, ra['p_inv'], cfg)
+            rp.covert_ability, _ = formulas.get_ability_preview(rp.covert_ability, ra['p_cov'], cfg)
+            rp.predict_ability, _ = formulas.get_ability_preview(rp.predict_ability, ra['p_pre'], cfg)
+            rp.media_ability, _ = formulas.get_ability_preview(rp.media_ability, ra['p_media'], cfg)
+            
+            hp.investigate_ability, _ = formulas.get_ability_preview(hp.investigate_ability, ha['p_inv'], cfg)
+            hp.covert_ability, _ = formulas.get_ability_preview(hp.covert_ability, ha['p_cov'], cfg)
+            hp.predict_ability, _ = formulas.get_ability_preview(hp.predict_ability, ha['p_pre'], cfg)
+            hp.media_ability, _ = formulas.get_ability_preview(hp.media_ability, ha['p_media'], cfg)
+            hp.build_ability, _ = formulas.get_ability_preview(hp.build_ability, ha['p_bld'], cfg)
+
+            game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
+            
+            game.year += 1; game.phase = 1; game.p1_step = 'draft_r'
+            game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
+            game.proposing_party = game.r_role_party
+            for k in list(st.session_state.keys()):
+                if k.startswith('ui_decay_') or k.endswith('_acts'): del st.session_state[k]
+            del st.session_state.turn_initialized; st.rerun()
