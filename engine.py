@@ -1,87 +1,72 @@
 # ==========================================
-# config.py
-# 負責管理遊戲全域設定、UI 中文本與判讀邏輯
+# engine.py
+# 負責遊戲引擎、政黨類別與全域事件觸發邏輯
 # ==========================================
+import random
+import streamlit as st
 
-DEFAULT_CONFIG = {
-    'CALENDAR_NAME': "星曆", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
-    'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
-    'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
-    'BUILD_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
-    'CURRENT_GDP': 5000.0, 
-    'HEALTH_MULTIPLIER': 0.2, 
-    'BASE_TOTAL_BUDGET': 0.0,  
-    'RULING_BONUS': 50.0, 'DEFAULT_BONUS': 100.0, 
-    'H_FUND_DEFAULT': 600.0, 
-    'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
-    'CORRUPTION_PENALTY': 2.0,
-    'ABILITY_CAP_DIVISOR': 0.4, 'ABILITY_DEFAULT': 10.0, 'MAINTENANCE_RATE': 0.1,
-    'JUDICIAL_REVIEW_COST': 50.0, 'JUDICIAL_MEDIA_REDUCTION': 0.5,
-    'TRUST_BREAK_PENALTY_RATIO': 0.05,
-    'ELECTION_CYCLE': 4,
-    'SANITY_DEFAULT': 0.60, 
-    'EMOTION_DEFAULT': 30.0,
-    'SUPPORT_CONVERSION_RATE': 0.05, 
-    'PERF_IMPACT_BASE': 500.0        
-}
+class Party:
+    def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
+    def __init__(self, name, cfg):
+        self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
+        self.build_ability = cfg['ABILITY_DEFAULT']
+        self.intel_ability = cfg['ABILITY_DEFAULT']
+        self.counter_intel_ability = cfg['ABILITY_DEFAULT']
+        self.thinktank_ability = cfg['ABILITY_DEFAULT']
+        self.media_ability = cfg['ABILITY_DEFAULT']
+        self.current_forecast = 0.0
+        
+        self.poll_history = {'小型': [], '中型': [], '大型': []}
+        self.latest_poll = None
+        self.poll_count = 0
+        self.last_acts = {'policy': 0, 'legal': 0, 'maint': 0}
 
-CONFIG_TRANSLATIONS = {
-    'CALENDAR_NAME': "紀元名稱", 'PARTY_A_COLOR': "A黨代表色", 'PARTY_B_COLOR': "B黨代表色",
-    'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
-    'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
-    'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-    'BUILD_DIFF': "建設難度", 'MEDIA_DIFF': "媒體難度",
-    'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
-    'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
-    'H_FUND_DEFAULT': "初始執行獎勵基金", 
-    'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
-    'CORRUPTION_PENALTY': "貪污罰金倍率", 
-    'ABILITY_CAP_DIVISOR': "能力上限設定值", 'ABILITY_DEFAULT': "初始能力(%)", 'MAINTENANCE_RATE': "維護費比例",
-    'JUDICIAL_REVIEW_COST': "司法審查成本", 'JUDICIAL_MEDIA_REDUCTION': "司法降媒體效果比例",
-    'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
-    'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量"
-}
+class GameEngine:
+    def __init__(self, cfg):
+        self.year = 1
+        self.party_A = Party(cfg['PARTY_A_NAME'], cfg); self.party_B = Party(cfg['PARTY_B_NAME'], cfg)
+        self.gdp = cfg['CURRENT_GDP']; self.total_budget = cfg['BASE_TOTAL_BUDGET'] + (self.gdp * cfg['HEALTH_MULTIPLIER'])
+        self.h_fund = cfg['H_FUND_DEFAULT']
+        self.phase = 1; self.p1_step = 'draft_r' 
+        self.p1_proposals = {'R': None, 'H': None}; self.p1_selected_plan = None
+        self.ruling_party = self.party_A; self.r_role_party = self.party_A; self.h_role_party = self.party_B  
+        self.sanity = cfg['SANITY_DEFAULT']; self.emotion = cfg['EMOTION_DEFAULT']
+        self.current_real_decay = 0.0; self.last_real_decay = 0.0
+        self.proposal_count = 1; self.proposing_party = self.party_A
+        self.history = []; self.swap_triggered_this_year = False
+        self.last_year_report = None
 
-def get_economic_forecast_text(decay_val):
-    if decay_val <= 0.15: return "🌟 景氣極佳"
-    elif decay_val <= 0.35: return "📈 穩定成長"
-    elif decay_val <= 0.55: return "⚖️ 持平放緩"
-    elif decay_val <= 0.75: return "📉 衰退警報"
-    else: return "⚠️ 經濟風暴"
+    def record_history(self, is_election):
+        self.history.append({
+            'Year': self.year, 'GDP': self.gdp, 'Sanity': self.sanity, 'Emotion': self.emotion,
+            'A_Support': self.party_A.support, 'B_Support': self.party_B.support,
+            'A_Wealth': self.party_A.wealth, 'B_Wealth': self.party_B.wealth,
+            'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year
+        })
+        self.swap_triggered_this_year = False
 
-def get_civic_index_text(index_val):
-    score = index_val * 100
-    if score < 40: return f"群氓狀態 ({score:.1f}分)"
-    elif score < 60: return f"盲從階段 ({score:.1f}分)"
-    elif score < 80: return f"理性中等 ({score:.1f}分)"
-    else: return f"覺醒公民 ({score:.1f}分)"
+def execute_poll(game, view_party, cost):
+    view_party.wealth -= cost
+    error_margin = max(0.0, 15.0 - (view_party.thinktank_ability * 0.1) - (cost * 0.4))
+    a_actual = game.party_A.support
+    a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
+    
+    poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
+    
+    game.party_A.latest_poll = a_poll
+    game.party_A.poll_history[poll_type].append(a_poll)
+    
+    b_poll = 100.0 - a_poll
+    game.party_B.latest_poll = b_poll
+    game.party_B.poll_history[poll_type].append(b_poll)
+    
+    view_party.poll_count += 1
 
-def get_emotion_text(emotion_val):
-    if emotion_val < 20: return f"平穩冷靜 ({emotion_val:.1f})"
-    elif emotion_val < 50: return f"些微躁動 ({emotion_val:.1f})"
-    elif emotion_val < 80: return f"群情激憤 ({emotion_val:.1f})"
-    else: return f"陷入狂熱 ({emotion_val:.1f})"
-
-def get_election_icon(year, cycle):
-    rem = year % cycle
-    if rem == 1: return "🗳️ 大選年"
-    elif rem == 2: return "🌱 施政元年"
-    elif rem == cycle - 1: return "⏳ 距選舉 2 年"
-    elif rem == 0: return "🚨 明年選舉"
-    else: return f"距大選 {cycle - rem + 1} 年"
-
-def get_party_logo(name):
-    if name == "Prosperity": return "🦅"
-    elif name == "Equity": return "🤝"
-    return "🚩"
-
-def get_target_eval_text(actual, target):
-    if target <= 0: return "無目標"
-    diff_pct = ((actual - target) / target) * 100
-    if diff_pct >= 15: return f"🟢 大幅超標 (+{diff_pct:.1f}%)"
-    elif diff_pct >= 5: return f"🟢 中幅超標 (+{diff_pct:.1f}%)"
-    elif diff_pct >= 0: return f"🟢 微幅超標 (+{diff_pct:.1f}%)"
-    elif diff_pct >= -5: return f"🔴 微幅落後 ({diff_pct:.1f}%)"
-    elif diff_pct >= -15: return f"🔴 中幅落後 ({diff_pct:.1f}%)"
-    else: return f"🔴 嚴重落後 ({diff_pct:.1f}%)"
+def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
+    game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
+    game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
+    game.swap_triggered_this_year = True
+    game.emotion = min(100.0, game.emotion + 30.0) 
+    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt} 資金給第三政黨，觸發換位！"
+    st.session_state.anim = 'snow'
+    game.phase = 2
