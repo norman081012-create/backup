@@ -11,9 +11,14 @@ class Party:
     def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
     def __init__(self, name, cfg):
         self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
-        self.build_ability = cfg['ABILITY_DEFAULT']; self.investigate_ability = cfg['ABILITY_DEFAULT']
-        self.media_ability = cfg['ABILITY_DEFAULT']
-        self.predict_ability = cfg['ABILITY_DEFAULT']; self.stealth_ability = cfg['ABILITY_DEFAULT']
+        
+        # 依據新設定初始化部門能力
+        self.build_ability = cfg.get('BUILD_ABILITY_DEFAULT', 6.0)
+        self.investigate_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.predict_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.stealth_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        
         self.current_forecast = 0.0
         
         self.poll_history = {'小型': [], '中型': [], '大型': []}
