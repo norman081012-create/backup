@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
+    'RESISTANCE_MULT': 1.0, # 建設阻力倍率 (已調降 5 倍)
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
@@ -19,7 +20,7 @@ DEFAULT_CONFIG = {
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
-    'MAX_ABILITY': 10.0, 'ABILITY_DEFAULT': 3.0, 'MAINTENANCE_RATE': 10.0,
+    'MAX_ABILITY': 10.0, 'ABILITY_DEFAULT': 6.0, 'MAINTENANCE_RATE': 5.0, # 預設能力 0.6 (60%)，維護費負擔減半
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 60.0, 
@@ -35,6 +36,7 @@ def get_config_translations():
         'CROWN_WINNER': "勝選者稱呼", 'CROWN_LOSER': "敗選者稱呼",
         'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
+        'RESISTANCE_MULT': "建設阻力倍率",
         'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
         'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
         'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
@@ -50,6 +52,7 @@ def get_config_translations():
         'CROWN_WINNER': "Winner Title", 'CROWN_LOSER': "Loser Title",
         'INITIAL_WEALTH': "Initial Wealth", 'END_YEAR': "Total Years",
         'DECAY_MIN': "Min Decay", 'DECAY_MAX': "Max Decay",  
+        'RESISTANCE_MULT': "Resistance Mult",
         'BUILD_DIFF': "Build Diff", 'INVESTIGATE_DIFF': "Inv Diff", 'PREDICT_DIFF': "Predict Diff", 'MEDIA_DIFF': "Media Diff",
         'CURRENT_GDP': "Initial GDP", 'HEALTH_MULTIPLIER': "GDP Multiplier", 'BASE_TOTAL_BUDGET': "Base Budget",  
         'RULING_BONUS': "Ruling Bonus", 'DEFAULT_BONUS': "Basic Grant", 
