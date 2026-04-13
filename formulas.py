@@ -4,23 +4,16 @@
 # ==========================================
 import math
 
-def calc_log_gain(invest_amount, base_cost=50.0):
-    return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
+def get_ability_maintenance(ability, cfg):
+    return max(0, (ability - 3.0) * cfg['MAINTENANCE_RATE'])
 
-def get_max_ability_cost(initial_gdp, divisor):
-    init_budget = initial_gdp / 5.0
-    return init_budget / max(0.01, divisor)
+def calculate_upgrade_cost(current, target, build_ability=0.0):
+    # 工程處(A_build)讓各部門能力提升效率增加（打折）
+    base_cost = max(0, (2**(target - current) - 1) * 50) if target > current else 0
+    discount_factor = 1.0 + (build_ability * 0.1)
+    return base_cost / discount_factor
 
-def get_ability_maintenance(ability_pct, max_cost, maint_rate):
-    total_value = ability_pct * (max_cost / 100.0)
-    return total_value * maint_rate
-
-def calculate_upgrade_cost(current_pct, target_pct, max_cost):
-    if target_pct <= current_pct: return 0.0
-    return (target_pct - current_pct) * (max_cost / 100.0)
-
-def calculate_required_funds(cfg, t_h_fund, t_gdp, curr_h_fund, curr_gdp, r_val, forecast_decay, build_abi_pct):
-    build_abi = max(0.1, build_abi_pct / 10.0)
+def calculate_required_funds(cfg, t_h_fund, t_gdp, curr_h_fund, curr_gdp, r_val, forecast_decay, build_abi):
     strictness_multiplier = r_val ** 2 
     eff_decay_h = forecast_decay * strictness_multiplier * 0.2 * curr_h_fund
     req_boost_h = (t_h_fund - curr_h_fund) + eff_decay_h
@@ -35,27 +28,35 @@ def calculate_required_funds(cfg, t_h_fund, t_gdp, curr_h_fund, curr_gdp, r_val,
     return req_funds, h_ratio
 
 def calc_support_shift(cfg, hp, rp, act_h, act_gdp, t_h, t_gdp, curr_gdp, ha, ra):
+    r_judicial = ra.get('judicial', 0)
+    jud_factor = min(0.5, r_judicial / 500.0) 
+    
+    effective_h_media = hp.media_ability * (1 - jud_factor)
+    effective_r_media = rp.media_ability * (1 - jud_factor)
+
     h_fail_pct = ((t_h - act_h) / max(1, float(t_h))) if act_h < t_h else 0.0
     r_fail_pct = ((t_gdp - act_gdp) / max(1, float(t_gdp))) if act_gdp < t_gdp else 0.0
 
-    h_media_reduction = 1.0 - (cfg['JUDICIAL_MEDIA_REDUCTION'] if ra.get('judicial', False) else 0.0)
-    r_media_reduction = 1.0 - (cfg['JUDICIAL_MEDIA_REDUCTION'] if ha.get('judicial', False) else 0.0)
-
-    h_media_pow = ha['media'] * (hp.media_ability / 10.0) * cfg['H_MEDIA_BONUS'] * cfg['MEDIA_DIFF'] * h_media_reduction
-    r_media_pow = ra['media'] * (rp.media_ability / 10.0) * cfg['MEDIA_DIFF'] * r_media_reduction
+    h_media_pow = ha.get('media', 0) * effective_h_media * cfg['H_MEDIA_BONUS'] * cfg['MEDIA_DIFF']
+    r_media_pow = ra.get('media', 0) * effective_r_media * cfg['MEDIA_DIFF']
 
     h_blame_qty = h_fail_pct * cfg['PERF_IMPACT_BASE'] * max(1.0, r_media_pow * 0.01)
     r_blame_qty = r_fail_pct * cfg['PERF_IMPACT_BASE'] * max(1.0, h_media_pow * 0.01)
 
-    h_camp_pow = ha['camp'] * (hp.media_ability / 10.0) * cfg['MEDIA_DIFF'] * h_media_reduction
-    r_camp_pow = ra['camp'] * (rp.media_ability / 10.0) * cfg['MEDIA_DIFF'] * r_media_reduction
+    h_camp_pow = ha.get('camp', 0) * effective_h_media * cfg['MEDIA_DIFF']
+    r_camp_pow = ra.get('camp', 0) * effective_r_media * cfg['MEDIA_DIFF']
     total_camp_pow = max(1.0, h_camp_pow + r_camp_pow)
     
-    h_eff_camp_qty = (h_camp_pow / total_camp_pow) * ha['camp']
-    r_eff_camp_qty = (r_camp_pow / total_camp_pow) * ra['camp']
+    h_eff_camp_qty = (h_camp_pow / total_camp_pow) * ha.get('camp', 0)
+    r_eff_camp_qty = (r_camp_pow / total_camp_pow) * ra.get('camp', 0)
 
-    hp_shift = (h_eff_camp_qty - h_blame_qty + r_blame_qty) * cfg['SUPPORT_CONVERSION_RATE']
-    rp_shift = (r_eff_camp_qty - r_blame_qty + h_blame_qty) * cfg['SUPPORT_CONVERSION_RATE']
+    h_steal = (ha.get('media', 0) * effective_h_media) / 500.0
+    r_steal = (ra.get('media', 0) * effective_r_media) / 500.0
+
+    r_jud_penalty = r_judicial * 0.1
+
+    hp_shift = (h_eff_camp_qty - h_blame_qty + r_blame_qty + h_steal - r_steal) * cfg['SUPPORT_CONVERSION_RATE']
+    rp_shift = (r_eff_camp_qty - r_blame_qty + h_blame_qty + r_steal - h_steal - r_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
 
     act_h_shift = hp_shift * ((100.0 - hp.support) / 100.0) if hp_shift > 0 else hp_shift * (hp.support / 100.0)
     
@@ -66,8 +67,7 @@ def calc_support_shift(cfg, hp, rp, act_h, act_gdp, t_h, t_gdp, curr_gdp, ha, ra
         'h_blame_qty': h_blame_qty, 'r_blame_qty': r_blame_qty
     }
 
-def calculate_preview(cfg, game, req_funds, h_ratio, r_val, fc_decay, hp_build_pct, r_pays, h_pays):
-    hp_build = max(0.1, hp_build_pct / 10.0)
+def calculate_preview(cfg, game, req_funds, h_ratio, r_val, fc_decay, hp_build, r_pays, h_pays):
     gdp_bst = (req_funds * hp_build) / cfg['BUILD_DIFF']
     est_gdp = max(0.0, game.gdp + gdp_bst - (fc_decay * 1000))
     gdp_change_pct = ((est_gdp - game.gdp) / max(1.0, game.gdp)) * 100.0
