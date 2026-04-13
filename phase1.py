@@ -30,44 +30,33 @@ def render(game, view_party, cfg):
             opp_plan = game.p1_proposals.get(opp_role)
             opp_claimed = opp_plan['claimed_decay'] if opp_plan else None
             
-            c_decay, c_gdp = st.columns(2)
             input_key = f"ui_decay_val_{game.year}_{active_role}"
-            
             if input_key not in st.session_state: st.session_state[input_key] = float(view_party.current_forecast)
             
-            with c_decay:
-                opp_txt = t(f"對手公告: {opp_claimed:.2f}", f"Opp. Claimed: {opp_claimed:.2f}") if opp_claimed is not None else t("等待對手公告", "Awaiting Opp.")
-                st.markdown(t(f"**公告衰退值 (當前: {st.session_state[input_key]:.2f})** | {opp_txt}", f"**Claimed Decay (Current: {st.session_state[input_key]:.2f})** | {opp_txt}"))
-                claimed_decay = st.number_input(t("公告衰退值", "Claimed Decay"), value=float(st.session_state[input_key]), step=0.01, key=f"num_{input_key}", label_visibility="collapsed")
-                st.session_state[input_key] = claimed_decay
+            opp_txt = t(f"對手公告: {opp_claimed:.2f}", f"Opp. Claimed: {opp_claimed:.2f}") if opp_claimed is not None else t("等待對手公告", "Awaiting Opp.")
+            st.markdown(t(f"**公告衰退值 (當前估算: {st.session_state[input_key]:.2f})** | {opp_txt}", f"**Claimed Decay (Current: {st.session_state[input_key]:.2f})** | {opp_txt}"))
+            claimed_decay = st.number_input(t("公告衰退值", "Claimed Decay"), value=float(st.session_state[input_key]), step=0.01, key=f"num_{input_key}", label_visibility="collapsed")
+            st.session_state[input_key] = claimed_decay
                 
-            with c_gdp:
-                st.markdown(t("**目標 GDP 成長率 (%)**", "**Target GDP Growth (%)**"))
-                t_gdp_growth = st.number_input(t("GDP成長", "GDP Growth"), value=0.0, step=0.5, label_visibility="collapsed")
-
-            max_h = max(10.0, float(game.total_budget))
-            t_h_fund = st.slider(t("標案達標付款 (最高不超過當年總預算)", "Reward Fund Target (Max = Total Budget)"), 0.0, max_h, float(min(game.h_fund, max_h)), 10.0)
-            r_val = st.slider(t("標案利潤 (右低利潤/高嚴格度，左高利潤/低嚴格度)", "Profit Margin (Right: Strict, Left: Lenient)"), 0.5, 3.0, 1.0, 0.1)
+            max_p = max(10.0, float(game.total_budget))
+            proj_fund = st.slider(t("標案總額 (最高不超過當年總預算)", "Total Bid Amount (Max=Budget)"), 0.0, max_p, float(min(1000.0, max_p)), 10.0)
+            bid_cost = st.slider(t("標案成本 (要求之建設產出值，留點利潤給對手賺)", "Bid Cost (Required construction)"), 1.0, max(1.0, float(proj_fund)), max(1.0, float(proj_fund * 0.8)), 10.0)
             
-            t_gdp = game.gdp * (1 + (t_gdp_growth / 100.0))
-            req_funds, h_ratio = formulas.calculate_required_funds(cfg, t_h_fund, t_gdp, game.h_fund, game.gdp, r_val, claimed_decay, game.h_role_party.build_ability)
+            safe_req = max(1, int(proj_fund))
+            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0, safe_req, int(safe_req * 0.5))
+            h_pays = proj_fund - r_pays
+            r_pct = (r_pays / max(1, proj_fund)) * 100
+            h_pct = (h_pays / max(1, proj_fund)) * 100
             
-            safe_req = max(1, int(req_funds))
-            r_pays = st.slider(t(f"💰 資金分配調整", f"💰 Funding Distribution"), 0, safe_req, int(safe_req * 0.5), label_visibility="collapsed")
-            h_pays = req_funds - r_pays
-            r_pct = (r_pays / max(1, req_funds)) * 100
-            h_pct = (h_pays / max(1, req_funds)) * 100
-            
-            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays} ({r_pct:.1f}%)</span> / 總額: {req_funds} / <span style='font-size: 1.2em'>執行出資: {h_pays} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays} ({r_pct:.1f}%)</span> / Total: {req_funds} / <span style='font-size: 1.2em'>H-Pays: {h_pays} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
+            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays} ({r_pct:.1f}%)</span> / 總額: {proj_fund} / <span style='font-size: 1.2em'>執行出資: {h_pays} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays} ({r_pct:.1f}%)</span> / Total: {proj_fund} / <span style='font-size: 1.2em'>H-Pays: {h_pays} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             plan_dict = {
-                'r_value': r_val, 'target_h_fund': t_h_fund, 'target_gdp_growth': t_gdp_growth, 
-                'target_gdp': t_gdp, 'r_pays': r_pays, 'claimed_decay': claimed_decay,
-                'total_funds': req_funds, 'h_pays': h_pays, 'h_ratio': h_ratio, 'author': active_role
+                'proj_fund': proj_fund, 'bid_cost': bid_cost, 
+                'r_pays': r_pays, 'h_pays': h_pays, 'claimed_decay': claimed_decay,
+                'author': active_role
             }
 
             c_btn1, c_btn2, c_btn3 = st.columns(3)
-            
             if c_btn1.button(t("📤 送出常規草案", "📤 Submit Draft"), use_container_width=True, type="primary"):
                 if game.p1_step == 'ultimatum_draft_r':
                     game.p1_selected_plan = plan_dict; game.p1_step = 'ultimatum_resolve_h'; game.proposing_party = game.h_role_party
