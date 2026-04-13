@@ -90,3 +90,6 @@ elif game.phase == 2:
     phase2.render(game, view_party, opponent_party, cfg)
 elif game.phase == 3:
     phase3.render(game, cfg)
+
+# 將運作公式置底顯示給玩家參考
+ui_core.render_formula_panel(game, cfg)
