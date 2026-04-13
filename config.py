@@ -8,7 +8,7 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.0, 'DECAY_MAX': 0.8,  
-    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'EDU_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
+    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'COVERT_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
@@ -17,6 +17,9 @@ DEFAULT_CONFIG = {
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
     'MAX_ABILITY': 10.0, 'ABILITY_DEFAULT': 3.0, 'MAINTENANCE_RATE': 10.0,
+    'DEPT_CAP_RATE': 0.4, # 部門投資上限比例
+    'JUDICIAL_COST': 50,  # 司法審查固定花費
+    'JUDICIAL_REDUCTION': 0.3, # 司法審查減少對手媒體的比例
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 0.60, 
@@ -30,15 +33,23 @@ CONFIG_TRANSLATIONS = {
     'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
     'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
     'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-    'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'EDU_DIFF': "教育難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
+    'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'COVERT_DIFF': "隱密難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
     'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
-    'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
+    'RULING_BONUS': "執政紅利", 'DEFAULT_BONUS': "基本補助金", 
     'H_FUND_DEFAULT': "初始執行獎勵基金", 
     'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
     'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 'ABILITY_DEFAULT': "初始能力", 'MAINTENANCE_RATE': "維護費倍率",
+    'DEPT_CAP_RATE': "部門投資上限參數", 'JUDICIAL_COST': "司法審查費用", 'JUDICIAL_REDUCTION': "司法抵銷媒體比例",
     'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
     'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現基礎影響量"
 }
+
+def get_accuracy_text(acc_pct):
+    if acc_pct >= 90: return "極佳"
+    elif acc_pct >= 75: return "良好"
+    elif acc_pct >= 50: return "普通"
+    elif acc_pct >= 30: return "較差"
+    else: return "極差"
 
 def get_economic_forecast_text(decay_val):
     if decay_val <= 0.15: return "🌟 景氣極佳"
@@ -49,13 +60,10 @@ def get_economic_forecast_text(decay_val):
 
 def get_civic_index_text(index_val):
     score = index_val * 100
-    if score < 15: return f"完全灌輸 ({score:.1f}分)"
-    elif score < 30: return f"強灌輸型 ({score:.1f}分)"
-    elif score < 45: return f"輕灌輸型 ({score:.1f}分)"
-    elif score < 60: return f"過渡平衡 ({score:.1f}分)"
-    elif score < 75: return f"輕思辨型 ({score:.1f}分)"
-    elif score < 90: return f"強思辨型 ({score:.1f}分)"
-    else: return f"高度自主思辨 ({score:.1f}分)"
+    if score < 40: return f"群氓狀態 ({score:.1f}分)"
+    elif score < 60: return f"盲從階段 ({score:.1f}分)"
+    elif score < 80: return f"理性中等 ({score:.1f}分)"
+    else: return f"覺醒公民 ({score:.1f}分)"
 
 def get_emotion_text(emotion_val):
     if emotion_val < 20: return f"平穩冷靜 ({emotion_val:.1f})"
@@ -65,16 +73,20 @@ def get_emotion_text(emotion_val):
 
 def get_election_icon(year, cycle):
     rem = year % cycle
-    if rem == 1: return "🗳️ 大選年"
-    elif rem == 2: return "🌱 施政元年"
-    elif rem == cycle - 1: return "⏳ 距選舉 2 年"
-    elif rem == 0: return "🚨 明年選舉"
-    else: return f"距大選 {cycle - rem + 1} 年"
+    if rem == 1: return "🗳️ 【大選年】"
+    elif rem == 0: return "🚨 距大選 1 年"
+    elif rem == cycle - 1: return "⏳ 距大選 2 年"
+    else: return f"🏛️ 距大選 {cycle - rem + 1} 年"
 
-def get_party_logo(name):
-    if name == "Prosperity": return "🦅"
-    elif name == "Equity": return "⚖️"
-    return "🚩"
+def get_thinktank_eval(ability, diff):
+    abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
+    acc_lvl = "high" if diff <= 0.05 else "med" if diff <= 0.15 else "low"
+    matrix = {
+        ('high', 'high'): "頂尖發揮，完美預判", ('high', 'med'): "微幅誤差，戰略可控", ('high', 'low'): "黑天鵝事件！未能看透劇變",
+        ('med', 'high'): "表現超常，精準命中", ('med', 'med'): "中規中矩，誤差預期內", ('med', 'low'): "嚴重誤判，建議升級",
+        ('low', 'high'): "瞎貓碰死耗子，幸運猜中", ('low', 'med'): "表現尚可，參考價值低", ('low', 'low'): "完全失能，嚴重誤導決策！"
+    }
+    return matrix.get((abi_lvl, acc_lvl), "運作異常")
 
 def get_target_eval_text(actual, target):
     if target <= 0: return "無目標"
@@ -83,5 +95,4 @@ def get_target_eval_text(actual, target):
     elif diff_pct >= 5: return f"🟢 中幅超標 (+{diff_pct:.1f}%)"
     elif diff_pct >= 0: return f"🟢 微幅超標 (+{diff_pct:.1f}%)"
     elif diff_pct >= -5: return f"🔴 微幅落後 ({diff_pct:.1f}%)"
-    elif diff_pct >= -15: return f"🔴 中幅落後 ({diff_pct:.1f}%)"
-    else: return f"🔴 嚴重落後 ({diff_pct:.1f}%)"
+    elif diff_pct >= -15: return
