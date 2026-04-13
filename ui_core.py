@@ -56,7 +56,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         if is_preview:
             st.markdown(t(f"**預估 GDP:** `{disp_gdp:.0f}` *(變動: {disp_gdp - game.gdp:+.0f})*", f"**Est. GDP:** `{disp_gdp:.0f}` *(Change: {disp_gdp - game.gdp:+.0f})*"))
         else:
-            t_gdp = st.session_state.turn_data.get('target_gdp', 0) if game.year > 1 else 0
             st.markdown(t(f"**當前 GDP:** `{disp_gdp:.1f}` *(變動: {disp_gdp - rep['old_gdp'] if rep else 0:+.0f})*", f"**Current GDP:** `{disp_gdp:.1f}` *(Change: {disp_gdp - rep['old_gdp'] if rep else 0:+.0f})*"))
 
     with c2:
@@ -65,7 +64,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         else:
             current_h_ratio = (disp_h_fund / disp_budg) * 100 if disp_budg > 0 else 50
             st.markdown(t(f"**總預算池:** `{disp_budg:.0f}` *(變動: {disp_budg - rep['old_budg'] if rep else 0:+.0f})*", f"**Total Budget:** `{disp_budg:.0f}` *(Change: {disp_budg - rep['old_budg'] if rep else 0:+.0f})*"))
-            t_h = st.session_state.turn_data.get('target_h_fund', 0) if game.year > 1 else 0
             st.markdown(t(f"**獎勵基金:** `{disp_h_fund:.0f}` *(佔比: {current_h_ratio:.1f}%)*", f"**Reward Fund:** `{disp_h_fund:.0f}` *(Share: {current_h_ratio:.1f}%)*"))
 
     with c3:
@@ -206,20 +204,31 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     c1, c2 = st.columns(2)
     
     with c1:
-        st.write(t(f"**公告衰退:** {plan['claimed_decay']:.2f} | **目標 GDP 成長:** {plan['target_gdp_growth']}%", f"**Claimed Decay:** {plan['claimed_decay']:.2f} | **Target GDP Growth:** {plan['target_gdp_growth']}%"))
-        st.write(t(f"**總額:** {plan['total_funds']} (監管出資: {plan['r_pays']} | 執行出資: {plan['h_pays']})", f"**Total:** {plan['total_funds']} (R-Pays: {plan['r_pays']} | H-Pays: {plan['h_pays']})"))
+        st.write(t(f"**公告衰退:** {plan['claimed_decay']:.2f} | **標案總額:** {plan['proj_fund']:.0f}", f"**Claimed Decay:** {plan['claimed_decay']:.2f} | **Total Bid:** {plan['proj_fund']:.0f}"))
+        st.write(t(f"**標案成本 (要求值):** {plan['bid_cost']:.0f} (監管出資: {plan['r_pays']} | 執行出資: {plan['h_pays']})", f"**Bid Cost (Req):** {plan['bid_cost']:.0f} (R-Pays: {plan['r_pays']} | H-Pays: {plan['h_pays']})"))
         
     with c2:
-        o_gdp_pct, o_h_g, o_h_n, o_r_g, o_r_n, o_h_sup, o_r_sup, o_est_gdp, o_est_h_fund, o_h_roi, o_r_roi = formulas.calculate_preview(cfg, game, plan['total_funds'], plan['h_ratio'], plan['r_value'], view_party.current_forecast, game.h_role_party.build_ability, plan['r_pays'], plan['h_pays'])
+        res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], game.h_role_party.build_ability, view_party.current_forecast)
+        
         my_is_h = (view_party.name == game.h_role_party.name)
-        my_net, my_sup, my_roi = (o_h_n, o_h_sup, o_h_roi) if my_is_h else (o_r_n, o_r_sup, o_r_roi)
-        opp_net, opp_sup, opp_roi = (o_r_n, o_r_sup, o_r_roi) if my_is_h else (o_h_n, o_h_sup, o_h_roi)
+        h_gross = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res['payout_h']
+        r_gross = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res['payout_r']
+        
+        h_net = h_gross - plan['h_pays']
+        r_net = r_gross - plan['r_pays']
+        
+        o_h_roi = (h_net / max(1.0, float(plan['h_pays']))) * 100.0 if plan['h_pays'] > 0 else float('inf')
+        o_r_roi = (r_net / max(1.0, float(plan['r_pays']))) * 100.0 if plan['r_pays'] > 0 else float('inf')
+        
+        my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
+        opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
         
         st.markdown(t(f"**📊 智庫評估報告 (依自己預測: -{view_party.current_forecast:.2f})**", f"**📊 Think Tank Report (Based on est: -{view_party.current_forecast:.2f})**"))
         st.markdown(t(f"我方預估收益: {my_net:.0f} (ROI: {my_roi:.1f}%)", f"Our Est Profit: {my_net:.0f} (ROI: {my_roi:.1f}%)"))
         st.markdown(t(f"對方預估收益: {opp_net:.0f} (ROI: {opp_roi:.1f}%)", f"Opp Est Profit: {opp_net:.0f} (ROI: {opp_roi:.1f}%)"))
-        st.markdown(t(f"支持度預估: {my_sup:+.2f}%", f"Est. Support Shift: {my_sup:+.2f}%"))
-        st.markdown(t(f"📈 預期 GDP: {game.gdp:.0f} ➔ {o_est_gdp:.0f} ({o_gdp_pct:+.2f}%)", f"📈 Exp. GDP: {game.gdp:.0f} ➔ {o_est_gdp:.0f} ({o_gdp_pct:+.2f}%)"))
+        
+        o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
+        st.markdown(t(f"📈 預期 GDP: {game.gdp:.0f} ➔ {res['est_gdp']:.0f} ({o_gdp_pct:+.2f}%)", f"📈 Exp. GDP: {game.gdp:.0f} ➔ {res['est_gdp']:.0f} ({o_gdp_pct:+.2f}%)"))
         
         diff = abs(plan['claimed_decay'] - view_party.current_forecast)
         if diff > 0.3: risk_txt = t("🔴 風險極高 (數據嚴重偏離預估)", "🔴 Very High Risk")
@@ -273,3 +282,33 @@ def render_endgame_charts(history_data, cfg):
     fig2.update_yaxes(title_text=t("支持度 (%)", "Support (%)"), secondary_y=True, range=[0, 100])
     add_event_vlines(fig2, df)
     st.plotly_chart(fig2, use_container_width=True)
+
+def render_formula_panel(game, cfg):
+    with st.expander(t("🧮 遊戲公式與計算過程監控", "🧮 Formula & Calculation Monitor"), expanded=False):
+        st.markdown(t("### 🏛️ 經濟與建設引擎", "### 🏛️ Economic Engine"))
+        
+        plan = None
+        if game.phase == 1 and game.p1_selected_plan:
+            plan = game.p1_selected_plan
+        elif game.phase >= 2:
+            plan = st.session_state.get('turn_data')
+            
+        if plan and 'proj_fund' in plan:
+            decay_to_use = game.current_real_decay if game.phase > 1 else plan.get('claimed_decay', game.current_real_decay)
+            res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], game.h_role_party.build_ability, decay_to_use)
+            
+            st.write(t(f"- **衰退損耗 (L_gdp)** = 當前 GDP ({game.gdp:.1f}) × (真實衰退/預測 {decay_to_use:.2f} × 0.072) = `{res['l_gdp']:.1f}`", f"- **Decay Loss** = GDP ({game.gdp:.1f}) × (Decay {decay_to_use:.2f} × 0.072) = `{res['l_gdp']:.1f}`"))
+            st.write(t(f"- **建設阻力 (Resistance)** = 衰退損耗 ({res['l_gdp']:.1f}) × 5.0 = `{res['resistance']:.1f}`", f"- **Resistance** = Decay Loss ({res['l_gdp']:.1f}) × 5.0 = `{res['resistance']:.1f}`"))
+            st.write(t(f"- **實質投入資金 (Act_Fund)** = 標案總額 ({plan['proj_fund']:.0f}) - 貪污/圖利 = `{res['act_fund']:.0f}`", f"- **Actual Funds** = Total Bid ({plan['proj_fund']:.0f}) - Corruption/Cronyism = `{res['act_fund']:.0f}`"))
+            st.write(t(f"- **毛建設產出 (Gross)** = 實質投入 ({res['act_fund']:.0f}) × (工程處能力 {game.h_role_party.build_ability:.1f} / 10) = `{res['gross']:.0f}`", f"- **Gross Output** = Act Funds ({res['act_fund']:.0f}) × (Build Ability {game.h_role_party.build_ability:.1f} / 10) = `{res['gross']:.0f}`"))
+            st.write(t(f"- **淨建設量 (C_net)** = 毛產出 ({res['gross']:.0f}) - 建設阻力 ({res['resistance']:.1f}) = `{res['c_net']:.0f}`", f"- **Net Construct** = Gross ({res['gross']:.0f}) - Resistance ({res['resistance']:.1f}) = `{res['c_net']:.0f}`"))
+            st.write(t(f"- **達標率 (H_Index)** = 淨建設量 ({res['c_net']:.0f}) / 標案成本 ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`", f"- **H_Index** = Net Construct ({res['c_net']:.0f}) / Bid Cost ({plan['bid_cost']:.0f}) = `{res['h_idx']:.2f}`"))
+            st.write(t(f"- **執行系統收益** = 標案總額 ({plan['proj_fund']:.0f}) × 達標率 (受限於總預算 {game.total_budget:.0f}) = `{res['payout_h']:.0f}`", f"- **H-System Payout** = Total Bid ({plan['proj_fund']:.0f}) × H_Index (Capped by Budget {game.total_budget:.0f}) = `{res['payout_h']:.0f}`"))
+            st.write(t(f"- **監管系統收益** = 總預算 - 執行系統收益 = `{res['payout_r']:.0f}`", f"- **R-System Payout** = Total Budget - H Payout = `{res['payout_r']:.0f}`"))
+        else:
+            st.info(t("目前階段尚無具體標案數據可供計算。", "No proposal data available for calculation in this phase."))
+            
+        st.markdown(t("### 📊 核心運作邏輯", "### 📊 Core Logic"))
+        st.write(t("1. **標案成本** 為要求之建設值。若最後淨建設量低於標案成本，達標率 < 100%。", "1. Bid Cost is the required construction. If Net Construction is lower than Bid Cost, H-Index < 100%."))
+        st.write(t("2. **執行系統收益** 依據達標率比例獲取標案總額，若表現優異 (達標率 > 100%)，可獲取額外份額，直到把當年總預算掏空。", "2. H-System gets payout based on completion. If excellent (> 100%), they gain extra shares until the budget is depleted."))
+        st.write(t("3. **部門維護費** 均從能力值 0 起算，能力值越高每年維護費越昂貴。點擊一鍵回歸維護費按鈕可以重置所有升級拉桿，幫助玩家省錢。", "3. Maintenance starts from 0 ability. Higher ability equals more expensive yearly maintenance. Use the reset button to easily cancel upgrades."))
