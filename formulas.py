@@ -25,7 +25,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     
     available_fund = max(0.0, proj_fund - corr_amt)
     
-    # 精算達標所需成本 (反推)
     req_cost = (bid_cost + resistance) / max(0.01, (build_abi / 10.0))
     
     if req_cost <= available_fund:
@@ -39,12 +38,9 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         h_idx = c_net / max(1.0, float(bid_cost))
 
     payout_h = min(budget_t, proj_fund * h_idx)
-    
     total_bonus_deduction = (cfg['DEFAULT_BONUS'] * 2) + cfg['RULING_BONUS']
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
-    
     est_gdp = max(0.0, gdp - l_gdp + c_net)
-    
     h_project_profit = payout_h - act_fund
     
     return {
@@ -54,7 +50,23 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, sanity, emotion):
+def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, eval_decay, sanity, emotion):
+    # [修改] 依照公告衰退與真實(或預估)衰退計算基礎與額外加成
+    true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * eval_decay * 0.072))
+    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
+
+    # Ruling Party GDP performance
+    base_ruling_perf = (new_gdp - true_expected_gdp) / max(1.0, curr_gdp)
+    claimed_weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
+    claim_bonus = (true_expected_gdp - public_expected_gdp) / max(1.0, curr_gdp) * claimed_weight
+    
+    ruling_perf_val = base_ruling_perf + claim_bonus
+    h_perf_val = h_idx - 1.0
+    
+    # 決定誰吃 GDP 紅利，誰吃 H-Index 紅利
+    h_raw_perf = h_perf_val + (ruling_perf_val if hp.name == ruling_party_name else 0)
+    r_raw_perf = ruling_perf_val if rp.name == ruling_party_name else 0
+
     r_judicial = ra.get('judicial', 0); h_judicial = ha.get('judicial', 0)
     jud_factor_total = min(0.8, (r_judicial + h_judicial) / 1000.0) 
     
@@ -69,12 +81,8 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     norm_M_H = (h_media_power - r_media_power) / 1000.0
     norm_M_R = -norm_M_H
 
-    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
-    r_perf_val = (new_gdp - public_expected_gdp) / max(1.0, curr_gdp)
-    h_perf_val = h_idx - 1.0
-
-    base_h_perf = h_perf_val * cfg['PERF_IMPACT_BASE']
-    base_r_perf = r_perf_val * cfg['PERF_IMPACT_BASE']
+    base_h_perf = h_raw_perf * cfg['PERF_IMPACT_BASE']
+    base_r_perf = r_raw_perf * cfg['PERF_IMPACT_BASE']
 
     h_gain = 0.0; r_gain = 0.0
     if base_h_perf >= 0:
@@ -103,7 +111,7 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     net_shift_H = (total_perf_shift_H + camp_shift_H + r_jud_penalty - h_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
     act_h_shift = net_shift_H * ((100.0 - hp.support) / 100.0) if net_shift_H > 0 else net_shift_H * (hp.support / 100.0)
     
-    return {'actual_shift': act_h_shift, 'h_perf': h_perf_val * 100.0, 'r_perf': r_perf_val * 100.0, 'norm_M_H': norm_M_H, 'S': S}
+    return {'actual_shift': act_h_shift, 'h_perf': h_perf_val * 100.0, 'r_perf': ruling_perf_val * 100.0, 'norm_M_H': norm_M_H, 'S': S}
 
 def get_formula_explanation(game, view_party, plan, cfg):
     tt_decay = view_party.current_forecast
@@ -115,7 +123,6 @@ def get_formula_explanation(game, view_party, plan, cfg):
     h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
     r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
     
-    # [修正] 真實驗證：執行系統淨利 = 標案收益 - 實際工程花費 + 監管出資
     h_profit = h_base + res['payout_h'] - res['act_fund'] + plan['r_pays']
     r_profit = r_base + res['payout_r'] - plan['r_pays']
     
@@ -138,7 +145,8 @@ def get_formula_explanation(game, view_party, plan, cfg):
 
     ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
-    shift = calc_support_shift(cfg, game.h_role_party, game.r_role_party, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan.get('claimed_decay', 0.0), game.sanity, game.emotion)
+    
+    shift = calc_support_shift(cfg, game.h_role_party, game.r_role_party, game.ruling_party.name, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan.get('claimed_decay', 0.0), tt_decay, game.sanity, game.emotion)
     my_sup = shift['actual_shift'] if my_is_h else -shift['actual_shift']
     gdp_diff = res['est_gdp'] - game.gdp
 
