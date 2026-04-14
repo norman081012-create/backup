@@ -3,13 +3,10 @@
 # 負責共用 UI 渲染、圖表繪製、標準化組件
 # ==========================================
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import random
 import config
 import formulas
 import engine
-import random
 import i18n
 t = i18n.t
 
@@ -92,7 +89,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 my_is_h = view_party.name == rep['h_party_name']
                 real_inc = rep['h_inc'] if my_is_h else rep['r_inc']
                 est_inc = rep['est_h_inc'] if my_is_h else rep['est_r_inc']
-                pol_cost = view_party.last_acts.get('policy', 0)
                 st.write(f"{t('淨利')}: {t('真')}:{real_inc:.1f} ({t('去年估')}:{est_inc:.1f})")
         else:
             if is_preview:
@@ -145,7 +141,6 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 st.markdown(f"**{t('黨產資金')}:** `${party.wealth:.1f}`")
             else:
                 rng = random.Random(f"wealth_{party.name}_{game.year}")
-                
                 opp_stl = party.stealth_ability / 10.0
                 my_inv = view_party.investigate_ability / 10.0
                 err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.4)
@@ -159,15 +154,12 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 if party.latest_poll is not None:
                     best_type = None
                     for pt in ['大型', '中型', '小型']:
-                        if len(party.poll_history[pt]) > 0:
-                            best_type = pt
-                            break
+                        if len(party.poll_history[pt]) > 0: best_type = pt; break
                     if best_type:
                         avg = sum(party.poll_history[best_type]) / len(party.poll_history[best_type])
                         count = len(party.poll_history[best_type])
                         disp_sup = f"{party.latest_poll:.1f}%(最新民調) ({count}次{best_type}民調平均: {avg:.1f}%)"
-                    else:
-                        disp_sup = f"{party.latest_poll:.1f}%(最新民調)"
+                    else: disp_sup = f"{party.latest_poll:.1f}%(最新民調)"
                 else:
                     disp_sup = "??? (需作民調)"
             
@@ -208,17 +200,27 @@ def render_sidebar_intel_audit(game, view_party, cfg):
 def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"#### {title}")
     
-    # [新增] 兩個切換按鈕置於預覽標題下方
     c_tog1, c_tog2 = st.columns(2)
     use_claimed = c_tog1.toggle(t("切換以 公告衰退 試算 (預設為智庫衰退)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
-    simulate_self_h = c_tog2.toggle(t("此方案切換如果自己去執行位的收入"), False, key=f"sim_h_{title}_{plan.get('author', 'sys')}")
+    # [修改] 將按鈕改為「模擬倒閣換位」，真實反映調換位子的效果
+    simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (依據新定位試算)"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
     
     c1, c2 = st.columns(2)
     
     eval_decay = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
-    target_build_abi = view_party.build_ability if simulate_self_h else game.h_role_party.build_ability
     
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], target_build_abi, eval_decay)
+    if simulate_swap:
+        sim_h_party = game.r_role_party
+        sim_r_party = game.h_role_party
+        sim_ruling_name = game.party_B.name if game.ruling_party.name == game.party_A.name else game.party_A.name
+        my_is_h = (view_party.name == sim_h_party.name)
+    else:
+        sim_h_party = game.h_role_party
+        sim_r_party = game.r_role_party
+        sim_ruling_name = game.ruling_party.name
+        my_is_h = (view_party.name == sim_h_party.name)
+
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay)
     
     eval_req_cost = res['req_cost']
     eval_r_pays = plan['r_pays']
@@ -228,17 +230,15 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.write(f"**{t('公告衰退值')}:** {plan['claimed_decay']:.2f} | **{t('標案總額')}:** {plan['proj_fund']:.1f}")
         st.write(f"**{t('標案成本')}:** {plan['bid_cost']:.1f}")
         
-        if simulate_self_h:
+        if simulate_swap:
             st.info(f"🔧 **{t('模擬執行方出資')}:** {t('總額')} {eval_req_cost:.1f} ({t('監管出資')}: {eval_r_pays:.1f} | {t('執行出資')}: {eval_h_pays:.1f})")
         else:
             st.write(f"**{t('出資總額')}:** {plan.get('req_cost', eval_req_cost):.1f} ({t('監管出資')}: {plan['r_pays']:.1f} | {t('執行出資')}: {plan['h_pays']:.1f})")
             
     with c2:
-        my_is_h = True if simulate_self_h else (view_party.name == game.h_role_party.name)
-        h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
-        r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
+        h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if sim_ruling_name == sim_h_party.name else 0)
+        r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if sim_ruling_name == sim_r_party.name else 0)
         
-        # [修正] 實際收益扣掉真實所需的工程成本 (act_fund)，並加上監管方貼補 (eval_r_pays)
         h_net = h_base + res['payout_h'] - res['act_fund'] + eval_r_pays
         r_net = r_base + res['payout_r'] - eval_r_pays
         
@@ -248,11 +248,14 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
         opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
         
+        ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
+        ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
+        
         shift_preview = formulas.calc_support_shift(
-            cfg, game.h_role_party, game.r_role_party, 
+            cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, 
-            game.h_role_party.last_acts, game.r_role_party.last_acts, 
-            res['h_idx'], plan.get('claimed_decay', 0.0), game.sanity, game.emotion
+            ha_dummy, ra_dummy, 
+            res['h_idx'], plan.get('claimed_decay', 0.0), eval_decay, game.sanity, game.emotion
         )
         my_sup = shift_preview['actual_shift'] if my_is_h else -shift_preview['actual_shift']
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
@@ -285,35 +288,15 @@ def render_proposal_component(title, plan, game, view_party, cfg):
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     current_pct = current_val * 10.0
     t_pct = st.slider(f"{label}", 0.0, 100.0, float(current_pct), 1.0, key=key)
-    
     t_val = t_pct / 10.0
     cost = formulas.calculate_upgrade_cost(current_val, t_val, build_ability)
     maint = formulas.get_ability_maintenance(t_val, cfg)
     
-    if t_val > current_val:
-        st.caption(f"📈 {t('升級花費')}: ${cost:.1f} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費將達')} ${maint:.1f}")
-    elif t_val < current_val:
-        st.caption(f"📉 {t('降級退回')} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費降至')} ${maint:.1f}")
-    else:
-        st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${maint:.1f}")
+    if t_val > current_val: st.caption(f"📈 {t('升級花費')}: ${cost:.1f} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費將達')} ${maint:.1f}")
+    elif t_val < current_val: st.caption(f"📉 {t('降級退回')} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費降至')} ${maint:.1f}")
+    else: st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${maint:.1f}")
         
     return t_val, cost
-
-def add_event_vlines(fig, history_df):
-    for _, row in history_df.iterrows():
-        y = row['Year']
-        if row['Is_Swap']: fig.add_vline(x=y, line_dash="dot", line_color="red", annotation_text="倒閣!", annotation_position="top left")
-        if row['Is_Election']: fig.add_vline(x=y, line_dash="dash", line_color="green", annotation_text="選舉", annotation_position="bottom right")
-
-def render_endgame_charts(history_data, cfg):
-    st.balloons()
-    st.title("🏁 遊戲結束！共生內閣軌跡總結算")
-    df = pd.DataFrame(history_data)
-    fig1 = make_subplots(specs=[[{"secondary_y": True}]])
-    fig1.add_trace(go.Scatter(x=df['Year'], y=df['GDP'], name="總 GDP", line=dict(color='blue', width=3)), secondary_y=False)
-    fig1.add_trace(go.Scatter(x=df['Year'], y=df['Sanity'], name="資訊辨識 (0-100)", line=dict(color='purple', width=3)), secondary_y=True)
-    add_event_vlines(fig1, df)
-    st.plotly_chart(fig1, use_container_width=True)
 
 def render_formula_panel(game, view_party, cfg):
     with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)"), expanded=False):
