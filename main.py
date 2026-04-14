@@ -39,7 +39,7 @@ elif st.session_state.get('anim') == 'snow':
 
 if game.year > cfg['END_YEAR']:
     ui_core.render_endgame_charts(game.history, cfg)
-    if st.button(t("🔄 重新開始全新遊戲"), use_container_width=True): st.session_state.clear(); st.rerun()
+    if st.button(t("🔄 重新開始全新遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
     st.stop()
 
 if 'turn_initialized' not in st.session_state:
@@ -68,15 +68,15 @@ is_election_year = (game.year % cfg['ELECTION_CYCLE'] == 1)
 with st.sidebar:
     ui_core.render_global_settings(cfg, game)
     ui_core.render_sidebar_intel_audit(game, view_party, cfg)
-    god_mode = st.toggle(t("👁️ 上帝視角"), False)
-    if st.button(t("🔄 重新開始遊戲"), use_container_width=True): st.session_state.clear(); st.rerun()
+    god_mode = st.toggle(t("👁️ 上帝視角", "👁️ God Mode"), False)
+    if st.button(t("🔄 重新開始遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
 
-st.title(t("🏛️ Symbiocracy 共生民主模擬器 v3.0.0"))
+st.title(t("🏛️ Symbiocracy 共生民主模擬器 v3.0.0", "🏛️ Symbiocracy Simulator v3.0.0"))
 
 elec_status = config.get_election_icon(game.year, cfg['ELECTION_CYCLE'])
-st.subheader(f"📅 {cfg['CALENDAR_NAME']} {game.year} 年 ({elec_status})")
+st.subheader(t(f"📅 {cfg['CALENDAR_NAME']} {game.year} 年 ({elec_status})", f"📅 {cfg['CALENDAR_NAME']} Year {game.year} ({elec_status})"))
 
-if god_mode: st.error(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**")
+if god_mode: st.error(t(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**", f"👁️ **God Mode:** Real Decay is **{game.current_real_decay:.2f}**"))
 
 if game.phase == 1 or game.phase == 2:
     if game.phase == 1:
@@ -91,5 +91,5 @@ elif game.phase == 2:
 elif game.phase == 3:
     phase3.render(game, cfg)
 
-# 確保 view_party 有正確傳入，解決 TypeError
+# 修正：補上 view_party 解決 TypeError
 ui_core.render_formula_panel(game, view_party, cfg)
