@@ -10,7 +10,7 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.2, 'DECAY_MAX': 1.2,  
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.9,  # [修改] 衰退值區間 0.1 ~ 0.9
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
@@ -30,7 +30,8 @@ DEFAULT_CONFIG = {
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.4  # [已修改] 觀測誤差基數調整為 0.4
+    'OBS_ERR_BASE': 0.4,
+    'CLAIMED_DECAY_WEIGHT': 0.2  # [新增] 公告衰退影響的權重
 }
 
 def get_config_translations():
@@ -50,7 +51,7 @@ def get_config_translations():
         'MAINTENANCE_RATE': "維護費倍率",
         'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
         'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現影響量權重",
-        'OBS_ERR_BASE': "觀測誤差基數"
+        'OBS_ERR_BASE': "觀測誤差基數", 'CLAIMED_DECAY_WEIGHT': "公告衰退操弄權重"
     }
 
 def get_economic_forecast_text(decay_val):
