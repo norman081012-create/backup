@@ -2,6 +2,7 @@
 # main.py
 # 主程式入口：負責路由、全局初始化與整合
 # ==========================================
+import ui_formulas
 import streamlit as st
 import random
 import config
@@ -13,7 +14,7 @@ import phase2
 import phase3
 import phase4
 import i18n
-import ui_formulas
+
 st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
 st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
 
