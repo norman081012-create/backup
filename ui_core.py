@@ -10,7 +10,33 @@ import formulas
 import engine
 import i18n
 t = i18n.t
-
+def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
+    a_c = (2**current_val - 1) * 50.0
+    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
+    
+    # 計算若一毛錢都不給，組織慣性所能維持的最低極限
+    a_base = max(0.0, a_c - max_decay)
+    min_val = math.log2(a_base / 50.0 + 1)
+    
+    current_pct = current_val * 10.0
+    min_pct = min_val * 10.0
+    
+    # UI 滑桿的最小值被鎖定在 min_pct，完美體現「龐大組織萎縮極限」
+    t_pct = st.slider(f"{label}", float(min_pct), 100.0, float(current_pct), 0.1, key=key)
+    t_val = t_pct / 10.0
+    
+    # 這裡算出的 cost 已經包含了 (維護 + 升級) 的總額
+    cost = formulas.calculate_upgrade_cost(current_val, t_val, cfg, is_build, build_ability)
+    maint = formulas.get_ability_maintenance(current_val, cfg, is_build, build_ability)
+    
+    if t_val > current_val: 
+        st.caption(f"📈 <span style='color:orange'>**{t('擴編總花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}%", unsafe_allow_html=True)
+    elif t_val < current_val: 
+        st.caption(f"📉 <span style='color:blue'>**{t('放任萎縮 (節省經費)')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 花費: ${cost:.1f} *(省下 ${maint - cost:.1f})*", unsafe_allow_html=True)
+    else: 
+        st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${cost:.1f}")
+        
+    return t_val, cost
 def sync_party_names(game, cfg):
     game.party_A.name = cfg['PARTY_A_NAME']; game.party_B.name = cfg['PARTY_B_NAME']
 
