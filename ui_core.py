@@ -10,6 +10,8 @@ import config
 import formulas
 import engine
 import random
+import i18n
+t = i18n.t
 
 def render_global_settings(cfg, game):
     st.sidebar.title("🎛️ 控制台")
@@ -18,12 +20,12 @@ def render_global_settings(cfg, game):
             if 'COLOR' in key: cfg[key] = st.color_picker(key, value=cfg[key], key=f"cfg_{key}")
             elif isinstance(default_val, float): cfg[key] = st.number_input(key, value=float(cfg[key]), step=0.1, format="%.2f", key=f"cfg_{key}")
             elif isinstance(default_val, int): cfg[key] = st.number_input(key, value=int(cfg[key]), step=1, key=f"cfg_{key}")
+            elif isinstance(default_val, str): cfg[key] = st.text_input(key, value=str(cfg[key]), key=f"cfg_{key}")
     game.party_A.name = cfg['PARTY_A_NAME']; game.party_B.name = cfg['PARTY_B_NAME']
 
 def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None):
     rep = game.last_year_report
     st.markdown("---")
-    
     disp_gdp = preview_data['gdp'] if is_preview else game.gdp
     disp_san = preview_data['san'] if is_preview else game.sanity
     disp_emo = preview_data['emo'] if is_preview else game.emotion
@@ -37,12 +39,10 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         st.markdown(f"**資訊辨識:** `{config.get_civic_index_text(disp_san)}` *(變動: {san_chg:+.1f})*")
         emo_chg = disp_emo - rep['old_emo'] if rep else 0
         st.markdown(f"**選民情緒:** `{config.get_emotion_text(disp_emo)}` *(變動: {emo_chg:+.1f})*")
-        
         gdp_base = rep['old_gdp'] if rep else game.gdp
         gdp_diff = disp_gdp - gdp_base
         gdp_pct = (gdp_diff / max(1.0, gdp_base)) * 100.0
-        label_gdp = "預估 GDP" if is_preview else "當前 GDP"
-        st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` *(變動: {gdp_diff:+.1f}, {gdp_pct:+.2f}%)*")
+        st.markdown(f"**{'預估 GDP' if is_preview else '當前 GDP'}:** `{disp_gdp:.1f}` *(變動: {gdp_diff:+.1f}, {gdp_pct:+.2f}%)*")
 
     with c2:
         st.markdown("### 💰 執行系統資源")
@@ -54,7 +54,10 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
 
     with c3:
         fc = view_party.current_forecast
-        acc = min(100, int((view_party.predict_ability / cfg['MAX_ABILITY']) * 100))
+        opp_stl = (game.party_B if view_party.name == game.party_A.name else game.party_A).stealth_ability / 10.0
+        my_inv = view_party.investigate_ability / 10.0
+        err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.4)
+        acc = max(0, min(100, int((1.0 - err_margin) * 100)))
         st.markdown(f"### 🕵️ 智庫 準確度: {acc}%")
         st.write(f"經濟預估: {config.get_economic_forecast_text(fc)} (預估衰退值: -{fc:.2f})")
 
@@ -74,8 +77,8 @@ def render_message_board(game):
         st.session_state.news_flash = None
         
     if game.phase == 1:
-        if game.year == 1: st.info("📢 **【年度通報】** 新的一年開始了，國家百廢待舉，請盡快展開預算與目標協商。")
-        elif game.last_year_report: st.info("📢 **【年度通報】** 新的一年開始了，請盡快展開預算與目標協商。")
+        if game.year == 1: st.info("📢 **【年度通報】** 新的一年開始了，請盡快展開預算與目標協商。")
+        elif game.last_year_report: st.info("📢 **【年度通報】** 新的一年開始了，請展開預算與目標協商。")
     elif game.phase == 2:
         st.info("📢 **【年度通報】** 法案已通過，請分配黨產資金進行內部升級、競選造勢與媒體攻防。")
 
@@ -138,7 +141,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     blur = err_margin if not st.session_state.get('god_mode') else 0.0
     acc = max(0, min(100, int((1.0 - err_margin) * 100)))
     
-    st.progress(acc / 100.0, text=f"準確度: {acc}%")
+    st.progress(acc / 100.0, text=f"觀測準確度: {acc}%")
     rng = random.Random(f"intel_{opp.name}_{game.year}")
     
     st.write(f"智庫: {max(0, opp.predict_ability*(1+rng.uniform(-blur, blur))*10):.1f}% | 情報處: {max(0, opp.investigate_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
@@ -146,7 +149,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"工程處: {max(0, opp.build_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
 
     st.markdown("---")
-    st.title("🏢 審計處 - 內部部門報告")
+    st.title("🧾 內部部門報告")
     total_maint = sum([formulas.get_ability_maintenance(a, cfg) for a in [view_party.build_ability, view_party.investigate_ability, view_party.media_ability, view_party.predict_ability, view_party.stealth_ability]])
     st.write(f"智庫: {view_party.predict_ability*10:.1f}% | 情報處: {view_party.investigate_ability*10:.1f}%")
     st.write(f"黨媒: {view_party.media_ability*10:.1f}% | 反情報處: {view_party.stealth_ability*10:.1f}%")
@@ -158,7 +161,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     c1, c2 = st.columns(2)
     with c1:
         st.write(f"**公告衰退值:** {plan['claimed_decay']:.2f} | **標案總額:** {plan['proj_fund']:.1f}")
-        st.write(f"**標案成本 (要求值):** {plan['bid_cost']:.1f} (監管出資: {plan['r_pays']:.1f} | 執行出資: {plan['h_pays']:.1f})")
+        st.write(f"**標案成本:** {plan['bid_cost']:.1f} (監管出資: {plan['r_pays']:.1f} | 執行出資: {plan['h_pays']:.1f})")
     with c2:
         st.write("👉 詳見下方公式與計算過程監控面板")
 
@@ -173,19 +176,4 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     if t_val > current_val:
         st.caption(f"📈 升級花費: ${cost:.1f} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 維護費將達 ${maint:.1f}")
     elif t_val < current_val:
-        st.caption(f"📉 降級退回 | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 維護費降至 ${maint:.1f}")
-    else:
-        st.caption(f"🛡️ 穩定維持 | 能力: {current_pct:.1f}% | 維護費 ${maint:.1f}")
-    return t_val, cost
-
-def render_formula_panel(game, view_party, cfg):
-    with st.expander("🧮 遊戲公式與計算過程監控 (智庫解析)", expanded=False):
-        plan = None
-        if game.phase == 1 and getattr(game, 'p1_selected_plan', None): plan = game.p1_selected_plan
-        elif game.phase >= 2: plan = st.session_state.get('turn_data')
-            
-        if plan and 'proj_fund' in plan:
-            lines = formulas.get_formula_explanation(game, view_party, plan, cfg)
-            for line in lines: st.markdown(line)
-        else:
-            st.info("目前階段尚無具體標案數據可供計算。")
+        st.caption(f"📉 降級退回 | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}%
