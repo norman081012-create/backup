@@ -38,38 +38,41 @@ def render(game, view_party, cfg):
             claimed_decay = st.number_input(t("公告衰退值", "Claimed Decay"), value=float(st.session_state[input_key]), step=0.01, key=f"num_{input_key}", label_visibility="collapsed")
             st.session_state[input_key] = claimed_decay
             
-            # [修改] 拉桿解綁：各自擁有獨立最大值，不再互相牽制
             max_budget = max(10.0, float(game.total_budget))
             
+            # 拉桿完全解綁
             proj_fund = st.slider(t("標案總額 (提供給執行方的總預算)", "Total Bid Amount"), 0.0, max_budget, float(min(1000.0, max_budget)), 10.0)
-            bid_cost = st.slider(t("標案成本 (要求執行方達成的建設產出值)", "Bid Cost (Required construction)"), 0.0, max_budget * 1.5, float(min(800.0, max_budget)), 10.0)
+            bid_cost = st.slider(t("標案成本 (要求執行方達成的建設產出值)", "Bid Cost (Required construction)"), 0.0, max_budget * 1.5, float(min(800.0, max_budget * 1.5)), 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, float(min(500.0, max_budget)), 10.0)
             
-            h_pays = proj_fund - r_pays
+            # [修正] 出資總額必須由「智庫預估衰退值」與「執行方工程值」來精算，不能被公告衰退影響
+            tt_decay = float(view_party.current_forecast)
+            res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, tt_decay)
+            req_cost = res_for_req['req_cost']
             
-            # [新增] 邏輯防護鎖定：如果設定不合理，鎖死按鈕並顯示警告
+            # 執行出資 = 總工程所需成本 - 監管補貼
+            h_pays = req_cost - r_pays
+            
             is_invalid = False
             warning_msg = ""
-            if r_pays > proj_fund:
+            if proj_fund <= 0:
                 is_invalid = True
-                warning_msg = t("⚠️ 錯誤：監管出資額不能大於標案總額！", "⚠️ Error: R-Pays cannot exceed Total Bid Amount!")
-            elif proj_fund <= 0:
-                is_invalid = True
-                warning_msg = t("⚠️ 錯誤：標案總額必須大於 0！", "⚠️ Error: Total Bid Amount must be > 0!")
+                warning_msg = t("⚠️ 異常：標案總額必須大於 0！", "⚠️ Error: Total Bid Amount must be > 0!")
             elif bid_cost <= 0:
                 is_invalid = True
-                warning_msg = t("⚠️ 錯誤：標案成本必須大於 0！", "⚠️ Error: Bid Cost must be > 0!")
+                warning_msg = t("⚠️ 異常：標案成本必須大於 0！", "⚠️ Error: Bid Cost must be > 0!")
+            # [修正] 異常防護機制：監管出資不能大於「出資總額(req_cost)」，而不是標案總額
+            elif r_pays > req_cost:
+                is_invalid = True
+                warning_msg = t("⚠️ 異常：監管出資額不能大於出資總額！", "⚠️ Error: R-Pays cannot exceed Total Req. Cost!")
 
-            r_pct = (r_pays / max(1.0, proj_fund)) * 100 if proj_fund > 0 else 0
-            h_pct = (h_pays / max(1.0, proj_fund)) * 100 if proj_fund > 0 else 0
+            r_pct = (r_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
+            h_pct = (h_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
             
             if is_invalid:
                 st.error(warning_msg)
             else:
-                st.markdown(t(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 總額: {proj_fund:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Total: {proj_fund:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
-            
-            res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, claimed_decay)
-            req_cost = res_for_req['req_cost']
+                st.markdown(t(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 出資總額: {req_cost:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Req. Cost: {req_cost:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
