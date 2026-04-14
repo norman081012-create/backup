@@ -10,13 +10,14 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.9,  
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.8,  # [修改] 預設衰退改為 0.1~0.8
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
-    'RULING_BONUS': 50.0, 'DEFAULT_BONUS': 100.0, 
+    'BASE_INCOME_RATIO': 0.05,    # [新增] 每黨基本錢為總預算 0.05
+    'RULING_BONUS_RATIO': 0.10,   # [新增] 執政黨額外領取 0.10
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
@@ -26,11 +27,11 @@ DEFAULT_CONFIG = {
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
-    'SANITY_DEFAULT': 50.0,   # [已修改] 初始資訊辨識改為 50.0
+    'SANITY_DEFAULT': 50.0,   
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.7,      # [已修改] 調整此權重讓初始準確度落在 30%
+    'OBS_ERR_BASE': 0.7,      
     'CLAIMED_DECAY_WEIGHT': 0.2  
 }
 
@@ -43,7 +44,7 @@ def get_config_translations():
         'RESISTANCE_MULT': "建設阻力倍率",
         'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
         'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
-        'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
+        'BASE_INCOME_RATIO': "基本政黨補助比例", 'RULING_BONUS_RATIO': "執政額外補助比例", 
         'H_FUND_DEFAULT': "初始執行獎勵基金", 
         'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
         'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 
