@@ -53,10 +53,14 @@ def render(game, view_party, cfg):
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
-                opp_txt1 = t(f"對手公告: -{opp_claimed_decay:.1f}%", f"Opp. Claimed: -{opp_claimed_decay:.1f}%") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
-                # [修改] 全面替換字眼與顯示邏輯
-                st.markdown(t(f"**公告衰退值 (當前公告: -{st.session_state.get(widget_decay_key, tt_decay):.1f}%)** | {opp_txt1}"))
-                claimed_decay = st.number_input("公告衰退值 (%)", step=1.0, min_value=0.0, max_value=100.0, key=widget_decay_key, label_visibility="collapsed")
+                opp_txt1 = t(f"對手公告: {opp_claimed_decay:.3f}", f"Opp. Claimed: {opp_claimed_decay:.3f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
+                
+                # 計算相當於多少建設量
+                current_val = st.session_state.get(widget_decay_key, tt_decay)
+                equiv_infra = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+                
+                st.markdown(t(f"**公告衰退值 (當前公告: {current_val:.3f}) (相當於 {equiv_infra:.1f} 建設量)** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告衰退值", step=0.001, min_value=0.0, max_value=1.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
@@ -72,8 +76,8 @@ def render(game, view_party, cfg):
             def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
             def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
             
-            proj_fund = st.slider(t("計畫達成獎勵金 (提供給執行方的總預算，最高不超過當年總預算)", "Total Plan Reward"), 0.0, max_budget, def_proj, 10.0)
-            bid_cost = st.slider(t("計畫總效益 (預期增加之 GDP 與基礎建設)", "Plan Total Benefit"), 0.0, max_budget * 1.5, def_bid, 10.0)
+            proj_fund = st.slider(t("計畫獎勵金 (執行方100%完成計畫之獎勵金，最高不超過當年總預算)", "Total Plan Reward (Max=Budget)"), 0.0, max_budget, def_proj, 10.0)
+            bid_cost = st.slider(t("計畫總效益 (計畫100%完成時產生之建設量)", "Plan Total Benefit (Construction Volume)"), 0.0, max_budget * 1.5, def_bid, 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, def_rpays, 10.0)
             
             req_cost = bid_cost * claimed_cost
