@@ -2,6 +2,7 @@
 # main.py
 # 主程式入口：負責路由、全局初始化與整合
 # ==========================================
+import ui_formulas
 import streamlit as st
 import random
 import config
@@ -103,4 +104,4 @@ elif game.phase == 3:
     phase3.render(game, cfg)
 
 if game.phase != 4:
-    ui_proposal.render_formula_panel(game, view_party, cfg)
+    ui_formulas.render_formula_panel(game, view_party, cfg)
