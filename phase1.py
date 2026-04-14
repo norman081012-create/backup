@@ -25,7 +25,6 @@ def render(game, view_party, cfg):
             role_text_zh = '監管系統' if active_role == 'R' else '執行系統'
             role_text_en = 'R-System' if active_role == 'R' else 'H-System'
             
-            # [修改] 調整標題排版，將按鈕縮小置於右側，並修正 session state 的 key 賦值使其生效
             c_title, c_btn = st.columns([0.8, 0.2])
             with c_title:
                 st.markdown(t(f"#### 📝 {view_party.name} ({role_text_zh}黨) 草案擬定室", f"#### 📝 {view_party.name} ({role_text_en}) Draft Room"))
@@ -47,7 +46,6 @@ def render(game, view_party, cfg):
 
             with c_btn:
                 if st.button(t("🔄 帶入情報", "🔄 Auto-Fill"), use_container_width=True):
-                    # 必須直接覆寫 number_input 綁定的專屬 key 才能生效
                     st.session_state[widget_decay_key] = tt_decay
                     st.session_state[widget_cost_key] = tt_cost
                     st.rerun()
@@ -124,7 +122,8 @@ def render(game, view_party, cfg):
                     st.rerun()
                 
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
-                if c_btn3.button(t(f"🔄 強制通過並換位 (費用: {swap_cost:.1f})", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
+                # [修改] 新增雙方繳納給慈善機構的說明
+                if c_btn3.button(t(f"🔄 強制通過並換位\n(費用: 雙方各繳 {swap_cost:.1f} 予慈善團體)", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
                     st.session_state.turn_data.update(plan_dict)
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
@@ -166,7 +165,8 @@ def render(game, view_party, cfg):
             if c2.button(t("❌ 拒絕並重談", "❌ Reject & Renegotiate"), use_container_width=True):
                 game.proposal_count += 1; game.p1_step = 'draft_r'; game.proposing_party = game.r_role_party; st.rerun()
             
-            if c3.button(t(f"🔄 同意但換位\n(各付 {penalty_amt:.1f})", f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
+            # [修改] 新增雙方繳納給慈善機構的說明
+            if c3.button(t(f"🔄 同意但換位\n(雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("執政權轉移！", "Power Shift!"))
                 game.proposing_party = game.ruling_party; st.rerun()
@@ -189,7 +189,9 @@ def render(game, view_party, cfg):
                 st.session_state.news_flash = t(f"🗞️ **【快訊】通牒生效！** 執行系統妥協吞下底線方案。", f"🗞️ **[BREAKING] Ultimatum Accepted!** H-System compromises.")
                 st.session_state.anim = 'balloons'
                 game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
-            if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 各付 {penalty_amt:.1f})", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
+                
+            # [修改] 新增雙方繳納給慈善機構的說明
+            if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("掀桌倒閣！", "Cabinet Fall!"))
                 game.proposing_party = game.r_role_party; st.rerun()
