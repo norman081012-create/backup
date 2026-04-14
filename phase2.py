@@ -28,16 +28,25 @@ def render(game, view_party, opponent_party, cfg):
         h_corr_pct = 0; h_crony_pct = 0
         judicial_amt = 0.0; edu_policy_amt = 0.0
         
-        # [修改] 載入去年的設定值
         last_media = min(float(view_party.last_acts.get('media', 0.0)), cw)
         last_camp = min(float(view_party.last_acts.get('camp', 0.0)), cw)
         last_incite = min(float(view_party.last_acts.get('incite', 0.0)), cw)
         last_judicial = min(float(view_party.last_acts.get('judicial', 0.0)), cw)
         
         if is_h:
-            h_corr_pct = st.slider(t("💸 秘密貪污 (%)"), 0, 100, 0)
+            last_corr = int(view_party.last_acts.get('corr', 0))
+            last_crony = int(view_party.last_acts.get('crony', 0))
+            h_corr_pct = st.slider(t("💸 秘密貪污 (%)"), 0, 100, last_corr)
+            
+            # [修復] 強制 Clamp 防呆避免 min_value == max_value 且 value 越界導致的 Streamlit 崩潰
             max_crony = max(0, 100 - h_corr_pct)
-            h_crony_pct = st.slider(t("🏢 圖利自身廠商 (%)"), 0, max_crony, 0)
+            safe_crony = min(last_crony, max_crony)
+            
+            if max_crony <= 0:
+                h_crony_pct = 0
+                st.info("秘密貪污已達上限，無法再進行圖利。")
+            else:
+                h_crony_pct = st.slider(t("🏢 圖利自身廠商 (%)"), 0, max_crony, safe_crony)
         else:
             judicial_amt = st.slider(t("⚖️ 媒體審查 (投入資金)(打壓對手黨媒效率，依對手當前支持度反噬自身民調)"), 0.0, cw, last_judicial)
             edu_policy_amt = st.slider(t("🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))"), -cw, cw, 0.0)
@@ -88,15 +97,19 @@ def render(game, view_party, opponent_party, cfg):
     claimed_decay = float(d.get('claimed_decay') or 0.0)
     r_pays = float(d.get('r_pays') or 0.0)
 
+    # [修改] 將貪污與圖利的預覽收益加進智庫分析，讓玩家能清楚看到利潤
     corr_val = float(act_ha.get('corr') or 0.0)
+    crony_val = float(act_ha.get('crony') or 0.0)
     orig_corr_amt = proj_fund * (corr_val / 100.0)
+    orig_crony_income = (proj_fund * (crony_val / 100.0)) * 0.1
     
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), orig_corr_amt)
     
     h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
-    hp_net_est = h_base + res_prev['payout_h'] - res_prev['act_fund'] + r_pays
+    # 圖利與貪汙加進 h_net_est
+    hp_net_est = h_base + res_prev['payout_h'] - res_prev['act_fund'] + r_pays + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
     shift_preview = formulas.calc_support_shift(
