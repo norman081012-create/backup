@@ -53,9 +53,10 @@ def render(game, view_party, cfg):
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
-                opp_txt1 = t(f"對手公告: {opp_claimed_decay:.2f}", f"Opp. Claimed: {opp_claimed_decay:.2f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
-                st.markdown(t(f"**公告衰退值 (當前公告: {st.session_state.get(widget_decay_key, tt_decay):.2f})** | {opp_txt1}"))
-                claimed_decay = st.number_input("公告衰退值", step=0.01, key=widget_decay_key, label_visibility="collapsed")
+                opp_txt1 = t(f"對手公告: -{opp_claimed_decay:.1f}%", f"Opp. Claimed: -{opp_claimed_decay:.1f}%") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
+                # [修改] 全面替換字眼與顯示邏輯
+                st.markdown(t(f"**公告無施政跌幅 (當前公告: -{st.session_state.get(widget_decay_key, tt_decay):.1f}%)** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告無施政跌幅 (%)", step=1.0, min_value=0.0, max_value=100.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
@@ -122,7 +123,6 @@ def render(game, view_party, cfg):
                     st.rerun()
                 
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
-                # [修改] 新增雙方繳納給慈善機構的說明
                 if c_btn3.button(t(f"🔄 強制通過並換位\n(費用: 雙方各繳 {swap_cost:.1f} 予慈善團體)", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
                     st.session_state.turn_data.update(plan_dict)
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
@@ -165,7 +165,6 @@ def render(game, view_party, cfg):
             if c2.button(t("❌ 拒絕並重談", "❌ Reject & Renegotiate"), use_container_width=True):
                 game.proposal_count += 1; game.p1_step = 'draft_r'; game.proposing_party = game.r_role_party; st.rerun()
             
-            # [修改] 新增雙方繳納給慈善機構的說明
             if c3.button(t(f"🔄 同意但換位\n(雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("執政權轉移！", "Power Shift!"))
@@ -190,7 +189,6 @@ def render(game, view_party, cfg):
                 st.session_state.anim = 'balloons'
                 game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
                 
-            # [修改] 新增雙方繳納給慈善機構的說明
             if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 engine.trigger_swap(game, penalty_amt, t("掀桌倒閣！", "Cabinet Fall!"))
