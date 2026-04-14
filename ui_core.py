@@ -10,33 +10,7 @@ import formulas
 import engine
 import i18n
 t = i18n.t
-def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
-    a_c = (2**current_val - 1) * 50.0
-    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
-    
-    # 計算若一毛錢都不給，組織慣性所能維持的最低極限
-    a_base = max(0.0, a_c - max_decay)
-    min_val = math.log2(a_base / 50.0 + 1)
-    
-    current_pct = current_val * 10.0
-    min_pct = min_val * 10.0
-    
-    # UI 滑桿的最小值被鎖定在 min_pct，完美體現「龐大組織萎縮極限」
-    t_pct = st.slider(f"{label}", float(min_pct), 100.0, float(current_pct), 0.1, key=key)
-    t_val = t_pct / 10.0
-    
-    # 這裡算出的 cost 已經包含了 (維護 + 升級) 的總額
-    cost = formulas.calculate_upgrade_cost(current_val, t_val, cfg, is_build, build_ability)
-    maint = formulas.get_ability_maintenance(current_val, cfg, is_build, build_ability)
-    
-    if t_val > current_val: 
-        st.caption(f"📈 <span style='color:orange'>**{t('擴編總花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}%", unsafe_allow_html=True)
-    elif t_val < current_val: 
-        st.caption(f"📉 <span style='color:blue'>**{t('放任萎縮 (節省經費)')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 花費: ${cost:.1f} *(省下 ${maint - cost:.1f})*", unsafe_allow_html=True)
-    else: 
-        st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${cost:.1f}")
-        
-    return t_val, cost
+
 def sync_party_names(game, cfg):
     game.party_A.name = cfg['PARTY_A_NAME']; game.party_B.name = cfg['PARTY_B_NAME']
 
@@ -121,7 +95,13 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
     with c4:
         if game.phase == 1:
             st.markdown(t("### 📊 財報"))
-            total_maint = sum([formulas.get_ability_maintenance(a, cfg) for a in [view_party.build_ability, view_party.investigate_ability, view_party.media_ability, view_party.predict_ability, view_party.stealth_ability]])
+            total_maint = (
+                formulas.get_ability_maintenance(view_party.predict_ability, cfg, False, view_party.build_ability) +
+                formulas.get_ability_maintenance(view_party.investigate_ability, cfg, False, view_party.build_ability) +
+                formulas.get_ability_maintenance(view_party.media_ability, cfg, False, view_party.build_ability) +
+                formulas.get_ability_maintenance(view_party.stealth_ability, cfg, False, view_party.build_ability) +
+                formulas.get_ability_maintenance(view_party.build_ability, cfg, True, view_party.build_ability)
+            )
             if game.year == 1:
                 st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({view_party.wealth:.1f} - 0.0)")
             else:
@@ -297,21 +277,39 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.markdown("---")
     st.title(t("🧾 審計處 - 內部部門報告"))
     st.write(f"**當前通膨指數:** `{inflation_rate:.1f}%`")
-    total_maint = sum([formulas.get_ability_maintenance(a, cfg) for a in [view_party.build_ability, view_party.investigate_ability, view_party.media_ability, view_party.predict_ability, view_party.stealth_ability]])
+    total_maint = (
+        formulas.get_ability_maintenance(view_party.predict_ability, cfg, False, view_party.build_ability) +
+        formulas.get_ability_maintenance(view_party.investigate_ability, cfg, False, view_party.build_ability) +
+        formulas.get_ability_maintenance(view_party.media_ability, cfg, False, view_party.build_ability) +
+        formulas.get_ability_maintenance(view_party.stealth_ability, cfg, False, view_party.build_ability) +
+        formulas.get_ability_maintenance(view_party.build_ability, cfg, True, view_party.build_ability)
+    )
     st.write(f"{t('智庫')}: {view_party.predict_ability*10:.1f}% | {t('情報處')}: {view_party.investigate_ability*10:.1f}%")
     st.write(f"{t('黨媒')}: {view_party.media_ability*10:.1f}% | {t('反情報處')}: {view_party.stealth_ability*10:.1f}%")
     st.write(f"{t('工程處')}: {view_party.build_ability*10:.1f}%")
     st.write(f"**(依據當前機構投資，明年維護費估算: -${total_maint:.1f})**")
 
-def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
-    current_pct = current_val * 10.0
-    t_pct = st.slider(f"{label}", 0.0, 100.0, float(current_pct), 1.0, key=key)
-    t_val = t_pct / 10.0
-    cost = formulas.calculate_upgrade_cost(current_val, t_val, build_ability)
-    maint = formulas.get_ability_maintenance(t_val, cfg)
+def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
+    a_c = (2**current_val - 1) * 50.0
+    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
     
-    if t_val > current_val: st.caption(f"📈 <span style='color:orange'>**{t('升級花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費將達')} ${maint:.1f}", unsafe_allow_html=True)
-    elif t_val < current_val: st.caption(f"📉 <span style='color:blue'>**{t('降級退回')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費降至')} ${maint:.1f}", unsafe_allow_html=True)
-    else: st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${maint:.1f}")
+    a_base = max(0.0, a_c - max_decay)
+    min_val = math.log2(a_base / 50.0 + 1)
+    
+    current_pct = current_val * 10.0
+    min_pct = min_val * 10.0
+    
+    t_pct = st.slider(f"{label}", float(min_pct), 100.0, float(current_pct), 0.1, key=key)
+    t_val = t_pct / 10.0
+    
+    cost = formulas.calculate_upgrade_cost(current_val, t_val, cfg, is_build, build_ability)
+    maint = formulas.get_ability_maintenance(current_val, cfg, is_build, build_ability)
+    
+    if t_val > current_val: 
+        st.caption(f"📈 <span style='color:orange'>**{t('擴編總花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}%", unsafe_allow_html=True)
+    elif t_val < current_val: 
+        st.caption(f"📉 <span style='color:blue'>**{t('放任萎縮 (節省經費)')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 花費: ${cost:.1f} *(省下 ${maint - cost:.1f})*", unsafe_allow_html=True)
+    else: 
+        st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${cost:.1f}")
         
     return t_val, cost
