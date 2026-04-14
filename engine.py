@@ -76,12 +76,14 @@ class GameEngine:
             self.support_queues[p_name]['camp'] = [x for x in self.support_queues[p_name]['camp'] if x['age'] <= 2]
             
             for x in self.support_queues[p_name]['perf']: 
-                if p_name == a_name: a_sup_amt += x['val'] * (1.0 - (x['age']/7.0))
-                else: b_sup_amt += x['val'] * (1.0 - (x['age']/7.0))
+                val = x['val'] * (1.0 - (x['age']/7.0))
+                if p_name == a_name: a_sup_amt += val
+                else: b_sup_amt += val
                 
             for x in self.support_queues[p_name]['camp']: 
-                if p_name == a_name: a_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
-                else: b_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
+                val = x['val'] * (1.0 - (x['age']/3.0))
+                if p_name == a_name: a_sup_amt += val
+                else: b_sup_amt += val
 
         a_sup_amt += shifts[a_name]['backlash']
         b_sup_amt += shifts[b_name]['backlash']
@@ -103,6 +105,8 @@ class GameEngine:
             'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year,
             'Ruling': self.ruling_party.name, 'H_Party': self.h_role_party.name,
             'R_Party': self.r_role_party.name,
+            'A_Edu': float(self.party_A.last_acts.get('edu_amt', 0)),
+            'B_Edu': float(self.party_B.last_acts.get('edu_amt', 0)),
             'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
             'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
         })
