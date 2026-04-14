@@ -19,7 +19,8 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
     b_norm = max(0.01, build_abi / 10.0)
-    inflation = gdp / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)
+    # [修改] 初始通膨為 0，只計算增長的部分
+    inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
     base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
@@ -47,7 +48,8 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
-    est_gdp = max(0.0, gdp - l_gdp + c_net)
+    # [修改] 建設量不 1:1 轉換，套用設定的倍率
+    est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
     h_project_profit = payout_h - act_fund
     
     return {
@@ -71,7 +73,6 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     h_raw_perf = h_perf_val + (ruling_perf_val if hp.name == ruling_party_name else 0)
     r_raw_perf = ruling_perf_val if rp.name == ruling_party_name else 0
 
-    # [修改] 媒體審查邏輯：僅打壓對手黨媒
     r_judicial = ra.get('judicial', 0); h_judicial = ha.get('judicial', 0)
     opp_media_penalty_r = min(0.8, r_judicial / 1000.0) 
     opp_media_penalty_h = min(0.8, h_judicial / 1000.0) 
@@ -111,7 +112,6 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     r_camp_pow = ra.get('camp', 0) * effective_r_media
     camp_shift_H = (h_camp_pow - r_camp_pow) * (1.0 - S) * 0.05 
 
-    # [修改] 打壓民調反噬邏輯：扣除民調強度依據對手當前支持度計算
     r_jud_penalty = r_judicial * 0.05 * (hp.support / 100.0)
     h_jud_penalty = h_judicial * 0.05 * (rp.support / 100.0)
     
@@ -162,6 +162,7 @@ def get_formula_explanation(game, view_party, plan, cfg):
     lines.append(f"> 公式: [H政績 {shift['h_perf']:.1f} 與 R政績 {shift['r_perf']:.1f} + 雙方媒體/競選攻防估算 {shift['norm_M_H']:.2f}] × 理智乘數S {shift['S']:.2f} × 轉換率 {cfg['SUPPORT_CONVERSION_RATE']}")
 
     lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f} ({gdp_diff:+.1f})`")
-    lines.append(f"> 公式: 當前GDP {game.gdp:.1f} - 自然衰退量 {res['l_gdp']:.1f} + 淨建設量 {res['c_net']:.1f} = {res['est_gdp']:.1f}")
+    # [修改] 反映新的轉換率公式
+    lines.append(f"> 公式: 當前GDP {game.gdp:.1f} - 自然衰退量 {res['l_gdp']:.1f} + (淨建設量 {res['c_net']:.1f} × 轉換倍率 {cfg.get('GDP_CONVERSION_RATE', 0.2)}) = {res['est_gdp']:.1f}")
 
     return lines
