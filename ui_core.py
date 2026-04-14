@@ -97,7 +97,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
             if rep:
                 my_is_h = view_party.name == rep['h_party_name']
                 real_inc = rep['h_inc'] if my_is_h else rep['r_inc']
-                # [修改] 修復 KeyError
                 est_inc = rep.get('est_h_inc', 0.0) if my_is_h else rep.get('est_r_inc', 0.0)
                 st.write(f"{t('淨利')}: {t('真')}:**{real_inc:.1f}** ({t('去年估')}:{est_inc:.1f})")
         else:
@@ -149,7 +148,6 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
             st.markdown(f"## {eye}{logo} {party.name} {crown_str}")
             st.markdown(f"#### {role_badge}")
 
-            # [修改] 放大了黨產資金字體
             if party.name == view_party.name:
                 st.markdown(f"### 💰 **{t('黨產資金')}:** `${party.wealth:.1f}`")
             else:
@@ -206,11 +204,16 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_build, view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
+    
+    # [新增] 將通膨指數顯示於審計處，並使用初始設定 5000 為基礎 0%
+    inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
+    
     st.write(f"**{t('建設估價')}**: {eval_txt}")
-    st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` / 基於觀測對手工程能力與通膨試算)*")
+    st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` / 包含當前通膨 `{inflation_rate:.1f}%`)*")
 
     st.markdown("---")
     st.title(t("🧾 審計處 - 內部部門報告"))
+    st.write(f"**當前通膨指數:** `{inflation_rate:.1f}%`")
     total_maint = sum([formulas.get_ability_maintenance(a, cfg) for a in [view_party.build_ability, view_party.investigate_ability, view_party.media_ability, view_party.predict_ability, view_party.stealth_ability]])
     st.write(f"{t('智庫')}: {view_party.predict_ability*10:.1f}% | {t('情報處')}: {view_party.investigate_ability*10:.1f}%")
     st.write(f"{t('黨媒')}: {view_party.media_ability*10:.1f}% | {t('反情報處')}: {view_party.stealth_ability*10:.1f}%")
@@ -295,20 +298,20 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         abs_diff = abs(diff)
         opp_role = 'R' if plan.get('author') == 'R' else 'H'
         
+        # [修改] 將衰退值判讀邏輯更換為預期心理與恐慌紅利攻防
         if abs_diff > 0.3: 
             light = "🔴"
             if cl_decay > tt_decay:
-                risk_txt = t("研判對手惡意高估衰退率，企圖製造恐慌騙取紅利與支持！") if opp_role == 'R' else t("研判對手高估衰退率，意圖墊高阻力預期，套取過高獎勵金！")
+                risk_txt = t("研判對手惡意高估衰退率，企圖製造恐慌以降低施政期望，收割預期反差紅利！")
             else:
-                risk_txt = t("研判對手低估衰退率，意圖苛扣我方資源與獎勵！") if opp_role == 'R' else t("研判對手低估衰退率，企圖掩蓋困境並收割自然成長紅利！")
+                risk_txt = t("研判對手低估衰退率，粉飾太平，若最終施政未達標將遭民意反噬！")
         elif abs_diff > 0.1: 
-            light, risk_txt = "🟡", t("中度風險 (數據略有出入，需留意預算流失)")
+            light, risk_txt = "🟡", t("中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)")
         else: 
-            light, risk_txt = "🟢", t("差異極小 (公告與智庫基準相符，屬正常估值)")
+            light, risk_txt = "🟢", t("差異極小 (公告衰退率誠實，無心理預期操弄空間)")
             
         st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
         
-        # [新增] 建設單價判讀
         cl_cost = plan.get('claimed_cost', eval_unit_cost)
         diff_c = cl_cost - eval_unit_cost
         abs_diff_c = abs(diff_c)
