@@ -18,17 +18,14 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
     return base_cost * max(0.1, discount_factor)
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
-    # [新增] 全新的指數型大國通膨公式
     b_norm = max(0.01, build_abi / 10.0)
     inflation = gdp / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)
     base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
-    # 自然衰退照舊
     l_gdp = gdp * forecast_decay * 0.072
     
-    # 決定使用的單位產出成本
     if override_unit_cost is not None:
         unit_cost = override_unit_cost
     else:
@@ -74,11 +71,13 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     h_raw_perf = h_perf_val + (ruling_perf_val if hp.name == ruling_party_name else 0)
     r_raw_perf = ruling_perf_val if rp.name == ruling_party_name else 0
 
+    # [修改] 媒體審查邏輯：僅打壓對手黨媒
     r_judicial = ra.get('judicial', 0); h_judicial = ha.get('judicial', 0)
-    jud_factor_total = min(0.8, (r_judicial + h_judicial) / 1000.0) 
+    opp_media_penalty_r = min(0.8, r_judicial / 1000.0) 
+    opp_media_penalty_h = min(0.8, h_judicial / 1000.0) 
     
-    effective_h_media = hp.media_ability * (1.0 - jud_factor_total)
-    effective_r_media = rp.media_ability * (1.0 - jud_factor_total)
+    effective_h_media = hp.media_ability * (1.0 - opp_media_penalty_r)
+    effective_r_media = rp.media_ability * (1.0 - opp_media_penalty_h)
 
     S = (sanity / 100.0) * (1.0 - (emotion / 100.0))
     S = max(0.0, min(1.0, S))
@@ -112,8 +111,9 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     r_camp_pow = ra.get('camp', 0) * effective_r_media
     camp_shift_H = (h_camp_pow - r_camp_pow) * (1.0 - S) * 0.05 
 
-    r_jud_penalty = r_judicial * 0.05 * (sanity / 100.0)
-    h_jud_penalty = h_judicial * 0.05 * (sanity / 100.0)
+    # [修改] 打壓民調反噬邏輯：扣除民調強度依據對手當前支持度計算
+    r_jud_penalty = r_judicial * 0.05 * (hp.support / 100.0)
+    h_jud_penalty = h_judicial * 0.05 * (rp.support / 100.0)
     
     net_shift_H = (total_perf_shift_H + camp_shift_H + r_jud_penalty - h_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
     act_h_shift = net_shift_H * ((100.0 - hp.support) / 100.0) if net_shift_H > 0 else net_shift_H * (hp.support / 100.0)
