@@ -30,9 +30,9 @@ def render(game, view_party, opponent_party, cfg):
             judicial_amt = st.slider("⚖️ 司法審查 (投入資金)(降低全體黨媒效果，引起高思辨選民反感)", 0.0, cw, 0.0)
             edu_policy_amt = st.slider("🎓 教育方針 (投入資金)(左:填鴨[提升競選洗腦] 右:思辨[降低媒體洗腦])", -cw, cw, 0.0)
             
-        media_ctrl = st.slider("📺 媒體操控 (投入資金)(改變施政產生的影響力，如甩鍋或搶功勞)", 0.0, cw, 0.0)
-        camp_amt = st.slider("🎉 舉辦競選 (投入資金)(無腦砸錢洗腦，社會思辨越低/填鴨越高越有效)", 0.0, cw, 0.0)
-        incite_emo = st.slider("🔥 煽動情緒 (投入資金)(高情緒會短暫降低生產力與社會思辨力，時效短)", 0.0, cw, 0.0)
+        media_ctrl = st.slider("📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)", 0.0, cw, 0.0)
+        camp_amt = st.slider("🎉 舉辦競選 (投入資金)(無腦砸錢洗腦，思辨越低/填鴨越高越有效)", 0.0, cw, 0.0)
+        incite_emo = st.slider("🔥 煽動情緒 (投入資金)(高情緒高填鴨降低生產力/降低思辨力，時效短)", 0.0, cw, 0.0)
         
     with c2:
         st.markdown("#### 🔒 內部部門投資")
