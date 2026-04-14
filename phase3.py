@@ -93,9 +93,19 @@ def render(game, cfg):
         }
 
         hp.support, rp.support = hp_sup_new, 100.0 - hp_sup_new
+        
+        # [修改] 針對選舉年的動態對白
         if game.year % cfg['ELECTION_CYCLE'] == 1:
             winner = hp if hp.support > rp.support else rp
-            st.session_state.news_flash = f"🎉 **【大選結果】** {winner.name} 取勝，成為當權派！"
+            gap = abs(hp.support - rp.support)
+            if gap > 20:
+                msg = f"🎉 **【大選結果：狂勝！】** {winner.name} 黨以 {gap:.1f}% 的巨大領先差距輾壓對手，取得壓倒性勝利，強勢成為當權派！"
+            elif gap > 5:
+                msg = f"🎉 **【大選結果：穩定勝選】** {winner.name} 黨穩紮穩打，以 {gap:.1f}% 的差距擊敗對手，順利贏得執政權！"
+            else:
+                msg = f"🎉 **【大選結果：驚險過關】** 選情陷入超級泥沼！{winner.name} 黨最終以微幅的 {gap:.1f}% 差距險勝，奪下執政權！"
+            
+            st.session_state.news_flash = msg
             st.session_state.anim = 'balloons'
             game.ruling_party = winner
 
