@@ -51,7 +51,8 @@ def get_config_translations():
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
         # ...其餘省略以維持簡潔...
-
+    }
+    
 def get_intel_market_eval(unit_cost):
     if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
     elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
