@@ -193,7 +193,8 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 else:
                     disp_sup = "??? (需作民調)"
             
-            st.markdown(f"### 📊 支持量: `{pts:.1f} 點` (佔比: {disp_sup})")
+            # [修改] 隱藏了裸露的 pts 支持量，僅顯示佔比/民調結果
+            st.markdown(f"### 📊 支持度: **{disp_sup}**")
             
             if party.name == view_party.name and not is_election_year:
                 b1, b2, b3 = st.columns(3)
