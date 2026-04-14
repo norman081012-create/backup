@@ -10,13 +10,13 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
-    'DECAY_MIN': 0.0, 'DECAY_MAX': 1.0,  
+    # [修改] 真實衰退亂數預設範圍 0.1 ~ 1.0
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 1.0,  
     'DECAY_WEIGHT_MULT': 0.05,
     'BASE_DECAY_RATE': 0.0,
     
-    # [新增] 絕對衰退物理極限參數
-    'DECAY_AMOUNT_DEFAULT': 1500.0,  # 軟體部門(智庫/情報/媒體等)每年最大萎縮量
-    'DECAY_AMOUNT_BUILD': 500.0,     # 硬體部門(工程)每年最大萎縮量
+    'DECAY_AMOUNT_DEFAULT': 1500.0,
+    'DECAY_AMOUNT_BUILD': 500.0,
     
     'CATCH_RATE_PER_PERCENT': 0.02,
     'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
@@ -49,7 +49,7 @@ DEFAULT_CONFIG = {
 
 def get_config_translations():
     return {
-        'DECAY_MIN': "最小衰退率 (0~1)", 'DECAY_MAX': "最大衰退率 (0~1)",  
+        'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
     }
