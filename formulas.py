@@ -1,6 +1,6 @@
 # ==========================================
 # formulas.py
-# 負責核心無狀態的純數學模型計算，與動態生成 UI 說明文本
+# 負責核心無狀態的純數學模型計算
 # ==========================================
 import math
 import i18n
@@ -10,17 +10,15 @@ def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
 def get_ability_maintenance(ability, cfg):
-    return max(0, ability * cfg['MAINTENANCE_RATE'])
+    return max(0.0, ability * cfg['MAINTENANCE_RATE'])
 
 def calculate_upgrade_cost(current, target, build_ability=0.0):
-    # 工程處減少各單位升級成本: 權重 0.02 (6.0 能力 -> 0.12 的折扣)
-    base_cost = max(0, (2**(target - current) - 1) * 50) if target > current else 0
+    base_cost = max(0.0, (2**(target - current) - 1) * 50) if target > current else 0.0
     discount_factor = 1.0 - (build_ability * 0.02)
-    discount_factor = max(0.1, discount_factor) # 最高打 1 折
+    discount_factor = max(0.1, discount_factor)
     return base_cost * discount_factor
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0):
-    # 圖利不降低實質投入資金，但貪污會
     r_decay = forecast_decay * 0.072
     l_gdp = gdp * r_decay
     res_mult = cfg.get('RESISTANCE_MULT', 1.0)
@@ -44,13 +42,12 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     }
 
 def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, sanity, emotion):
-    # 司法審查降低全體黨媒效果，但會引起高思辯選民下降
     r_judicial = ra.get('judicial', 0)
     h_judicial = ha.get('judicial', 0)
     jud_factor_total = min(0.8, (r_judicial + h_judicial) / 1000.0) 
     
-    effective_h_media = hp.media_ability * (1 - jud_factor_total)
-    effective_r_media = rp.media_ability * (1 - jud_factor_total)
+    effective_h_media = hp.media_ability * (1.0 - jud_factor_total)
+    effective_r_media = rp.media_ability * (1.0 - jud_factor_total)
 
     S = (sanity / 100.0) * (1.0 - (emotion / 100.0))
     S = max(0.0, min(1.0, S))
@@ -89,7 +86,6 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     r_camp_pow = ra.get('camp', 0) * effective_r_media
     camp_shift_H = (h_camp_pow - r_camp_pow) * (1.0 - S) * 0.05 
 
-    # 司法反噬高思辨度選民
     r_jud_penalty = r_judicial * 0.05 * (sanity / 100.0)
     h_jud_penalty = h_judicial * 0.05 * (sanity / 100.0)
     
@@ -104,7 +100,6 @@ def calc_support_shift(cfg, hp, rp, payout_h, new_gdp, proj_fund, curr_gdp, ha, 
     }
 
 def get_formula_explanation(game, view_party, plan, cfg):
-    """動態生成 UI 顯示的公式推演字串列表，完全基於智庫的視角與預測"""
     tt_decay = view_party.current_forecast
     build_abi = game.h_role_party.build_ability
     
