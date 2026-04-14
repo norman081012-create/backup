@@ -58,13 +58,14 @@ def render(game, cfg):
             crony_base = 0
             crony_income = 0
             
-        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt)
+        # [修正] 最終結算傳入 r_pays 確保正確計算
+        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
-        hp_project_net = res_exec['payout_h'] - res_exec['act_fund'] + r_pays
+        hp_project_net = res_exec['h_project_profit']
         rp_project_net = res_exec['payout_r'] - r_pays
         
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
@@ -144,26 +145,4 @@ def render(game, cfg):
         
         st.write(f"**執行系統新增支持量**:")
         h_perf_color = "green" if h_shift['perf'] > 0 else "red"
-        h_camp_color = "green" if h_shift['camp'] > 0 else "red"
-        st.markdown(f"- 政績: <span style='color:{h_perf_color}'>**{h_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
-        st.markdown(f"- 聲勢: <span style='color:{h_camp_color}'>**{h_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
-        
-        st.write(f"**監管系統新增支持量**:")
-        r_perf_color = "green" if r_shift['perf'] > 0 else "red"
-        r_camp_color = "green" if r_shift['camp'] > 0 else "red"
-        st.markdown(f"- 政績: <span style='color:{r_perf_color}'>**{r_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
-        st.markdown(f"- 聲勢: <span style='color:{r_camp_color}'>**{r_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
-        if r_shift['backlash'] != 0:
-            st.write(f"- 審查反噬: `{r_shift['backlash']:+.1f} 點` (即時扣除)")
-
-    st.markdown("---")
-    if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
-        game.year += 1
-        if game.year > cfg['END_YEAR']: game.phase = 4
-        else:
-            game.phase = 1; game.p1_step = 'draft_r'
-            game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
-            for k in list(st.session_state.keys()):
-                if k.endswith('_acts'): del st.session_state[k]
-            if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
-        st.rerun()
+        h_camp
