@@ -38,8 +38,10 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         h_idx = c_net / max(1.0, float(bid_cost))
 
     payout_h = min(budget_t, proj_fund * h_idx)
-    total_bonus_deduction = (cfg['DEFAULT_BONUS'] * 2) + cfg['RULING_BONUS']
+    # [修改] 套用新的基礎與執政獎金比例
+    total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
+    
     est_gdp = max(0.0, gdp - l_gdp + c_net)
     h_project_profit = payout_h - act_fund
     
@@ -51,11 +53,9 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     }
 
 def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, eval_decay, sanity, emotion):
-    # [修改] 依照公告衰退與真實(或預估)衰退計算基礎與額外加成
     true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * eval_decay * 0.072))
     public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
 
-    # Ruling Party GDP performance
     base_ruling_perf = (new_gdp - true_expected_gdp) / max(1.0, curr_gdp)
     claimed_weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
     claim_bonus = (true_expected_gdp - public_expected_gdp) / max(1.0, curr_gdp) * claimed_weight
@@ -63,7 +63,6 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     ruling_perf_val = base_ruling_perf + claim_bonus
     h_perf_val = h_idx - 1.0
     
-    # 決定誰吃 GDP 紅利，誰吃 H-Index 紅利
     h_raw_perf = h_perf_val + (ruling_perf_val if hp.name == ruling_party_name else 0)
     r_raw_perf = ruling_perf_val if rp.name == ruling_party_name else 0
 
@@ -120,8 +119,10 @@ def get_formula_explanation(game, view_party, plan, cfg):
     res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_decay)
     
     my_is_h = (view_party.name == game.h_role_party.name)
-    h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
-    r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
+    
+    # [修改] 使用新的總預算比例參數
+    h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
     h_profit = h_base + res['payout_h'] - res['act_fund'] + plan['r_pays']
     r_profit = r_base + res['payout_r'] - plan['r_pays']
@@ -133,15 +134,15 @@ def get_formula_explanation(game, view_party, plan, cfg):
     
     lines.append(f"**我方預估收益:** `{my_profit:.1f}`")
     if my_is_h:
-        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {my_profit:.1f}")
+        lines.append(f"> 公式: (基本額 {h_base:.1f} + 計畫獎勵 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {my_profit:.1f}")
     else:
-        lines.append(f"> 公式: 基礎金 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
+        lines.append(f"> 公式: 基本額 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
 
     lines.append(f"**對方預估收益:** `{opp_profit:.1f}`")
     if not my_is_h:
-        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {opp_profit:.1f}")
+        lines.append(f"> 公式: (基本額 {h_base:.1f} + 計畫獎勵 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {opp_profit:.1f}")
     else:
-        lines.append(f"> 公式: 基礎金 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
+        lines.append(f"> 公式: 基本額 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
 
     ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
