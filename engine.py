@@ -12,7 +12,6 @@ class Party:
     def __init__(self, name, cfg):
         self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
         
-        # 依據新設定初始化部門能力
         self.build_ability = cfg.get('BUILD_ABILITY_DEFAULT', 6.0)
         self.investigate_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
@@ -57,14 +56,11 @@ def execute_poll(game, view_party, cost):
     a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
     
     poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
-    
     game.party_A.latest_poll = a_poll
     game.party_A.poll_history[poll_type].append(a_poll)
-    
     b_poll = 100.0 - a_poll
     game.party_B.latest_poll = b_poll
     game.party_B.poll_history[poll_type].append(b_poll)
-    
     view_party.poll_count += 1
 
 def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
@@ -73,11 +69,6 @@ def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
     game.swap_triggered_this_year = True
     game.emotion = min(100.0, game.emotion + 30.0) 
     
-    msg_en = "Political Turmoil!" if msg_prefix == "政局動盪！" else "Takeover!" if msg_prefix == "監管系統強制接管！" else "Power Shift!" if msg_prefix == "執政權轉移！" else "Cabinet Fall!" if msg_prefix == "掀桌倒閣！" else msg_prefix
-    
-    st.session_state.news_flash = t(
-        f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt} 資金給第三政黨，觸發換位！",
-        f"🗞️ **[BREAKING] {msg_en}** Both parties forced to donate {penalty_amt} to third party, swap triggered!"
-    )
+    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt:.1f} 資金給第三政黨，觸發換位！"
     st.session_state.anim = 'snow'
     game.phase = 2
