@@ -1,6 +1,5 @@
 # ==========================================
 # i18n.py
-# 負責全系統的多語系文字切換字典
 # ==========================================
 import streamlit as st
 
@@ -111,12 +110,12 @@ TRANSLATIONS = {
     "淨利": "Net Profit",
     "真": "Real",
     "去年估": "Last Est.",
-    "我方預估收益": "Our Est Profit",
-    "對方預估收益": "Opp Est Profit",
-    # [修改點]
+    "我方預估總收益": "Our Est Total Profit",
+    "對方預估總收益": "Opp Est Total Profit",
     "新增支持量預估": "Est Support Points",
     "衰退值判讀": "Drop Analysis",
     "建設單價判讀": "Unit Cost Analysis",
+    "預期大環境政績 (未經媒體)": "Est. Environment Perf (Raw)",
     
     "中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)": "🟡 Med Risk (Slight discrepancy in drop, affects psychological expectation)",
     "差異極小 (公告衰退率誠實，無心理預期操弄空間)": "🟢 Low Risk (Honest drop claim, no expectation manipulation)",
