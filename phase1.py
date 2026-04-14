@@ -24,45 +24,51 @@ def render(game, view_party, cfg):
         else:
             role_text_zh = '監管系統' if active_role == 'R' else '執行系統'
             role_text_en = 'R-System' if active_role == 'R' else 'H-System'
-            st.markdown(t(f"#### 📝 {view_party.name} ({role_text_zh}黨) 草案擬定室", f"#### 📝 {view_party.name} ({role_text_en}) Draft Room"))
+            
+            # [修改] 調整標題排版，將按鈕縮小置於右側，並修正 session state 的 key 賦值使其生效
+            c_title, c_btn = st.columns([0.8, 0.2])
+            with c_title:
+                st.markdown(t(f"#### 📝 {view_party.name} ({role_text_zh}黨) 草案擬定室", f"#### 📝 {view_party.name} ({role_text_en}) Draft Room"))
             
             opp_role = 'H' if active_role == 'R' else 'R'
             opp_plan = game.p1_proposals.get(opp_role)
             
             input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
+            widget_decay_key = f"num_{input_decay_key}"
+            widget_cost_key = f"num_{input_cost_key}"
             
             tt_decay = float(view_party.current_forecast)
             suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, game.h_role_party.build_ability, view_party.current_forecast)
             tt_cost = round(suggested_unit_cost, 2)
             
-            if input_decay_key not in st.session_state: st.session_state[input_decay_key] = tt_decay
-            if input_cost_key not in st.session_state: st.session_state[input_cost_key] = tt_cost
-            
-            # [新增] 換回智庫/情報預估按鈕
-            if st.button(t("🔄 全部換回自己智庫/情報的預估報告", "🔄 Reset to Think Tank/Intel Eval"), use_container_width=True):
-                st.session_state[input_decay_key] = tt_decay
-                st.session_state[input_cost_key] = tt_cost
-                st.rerun()
+            if widget_decay_key not in st.session_state: st.session_state[widget_decay_key] = tt_decay
+            if widget_cost_key not in st.session_state: st.session_state[widget_cost_key] = tt_cost
+
+            with c_btn:
+                if st.button(t("🔄 帶入情報", "🔄 Auto-Fill"), use_container_width=True):
+                    # 必須直接覆寫 number_input 綁定的專屬 key 才能生效
+                    st.session_state[widget_decay_key] = tt_decay
+                    st.session_state[widget_cost_key] = tt_cost
+                    st.rerun()
 
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = t(f"對手公告: {opp_claimed_decay:.2f}", f"Opp. Claimed: {opp_claimed_decay:.2f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
-                st.markdown(t(f"**公告衰退值 (當前公告: {st.session_state[input_decay_key]:.2f})** | {opp_txt1}"))
-                claimed_decay = st.number_input("公告衰退值", value=float(st.session_state[input_decay_key]), step=0.01, key=f"num_{input_decay_key}", label_visibility="collapsed")
+                st.markdown(t(f"**公告衰退值 (當前公告: {st.session_state.get(widget_decay_key, tt_decay):.2f})** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告衰退值", step=0.01, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
                 opp_claimed_cost = opp_plan.get('claimed_cost') if opp_plan else None
                 opp_txt2 = t(f"對手公告: {opp_claimed_cost:.2f}", f"Opp. Claimed: {opp_claimed_cost:.2f}") if opp_claimed_cost is not None else t("等待對手公告", "Awaiting Opp.")
-                st.markdown(t(f"**公告建設單價 (當前公告: {st.session_state[input_cost_key]:.2f})** | {opp_txt2}"))
-                claimed_cost = st.number_input("公告建設單價", value=float(st.session_state[input_cost_key]), step=0.01, key=f"num_{input_cost_key}", label_visibility="collapsed")
+                st.markdown(t(f"**公告建設單價 (當前公告: {st.session_state.get(widget_cost_key, tt_cost):.2f})** | {opp_txt2}"))
+                claimed_cost = st.number_input("公告建設單價", step=0.01, key=widget_cost_key, label_visibility="collapsed")
                 st.session_state[input_cost_key] = claimed_cost
             
             max_budget = max(10.0, float(game.total_budget))
             
-            # [修改] 若對手有提案，載入對手的；否則預設為 0.0
             def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
             def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
             def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
