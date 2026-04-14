@@ -67,11 +67,11 @@ TRANSLATIONS = {
     "💡 **監管系統特性**: 調查能力值 1.2 倍加成": "💡 **R-System Perk**: Intelligence x1.2",
     "💸 秘密貪污 (%)": "💸 Secret Corruption (%)",
     "🏢 圖利自身廠商 (%)": "🏢 Cronyism (%)",
-    "⚖️ 司法審查 (降低全體黨媒效果，但會引起高思辯選民反感)": "⚖️ Judicial Review (Reduces all media, angers critical thinkers)",
-    "📺 媒體操控 (提升競選與煽動效果)": "📺 Media Control (Boosts campaign & incitement)",
-    "🎓 教育方針 (左:填鴨 右:思辨, 投入資金)": "🎓 Education Policy (Left: Canned, Right: Critical)",
-    "🎉 舉辦競選 (投入資金)": "🎉 Campaign (Funds)",
-    "🔥 煽動情緒 (投入資金)": "🔥 Incite Emotion (Funds)",
+    "⚖️ 司法審查 (投入資金)(降低全體黨媒效果，引起高思辯選民反感)": "⚖️ Judicial Review (Reduces all media, angers critical thinkers)",
+    "📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)": "📺 Media Control (Changes policy impact)",
+    "🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))": "🎓 Education Policy (Left: Canned, Right: Critical)",
+    "🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)": "🎉 Campaign (Lower sanity = higher effect)",
+    "🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)": "🔥 Incite Emotion (Reduces sanity short-term)",
     "#### 🔒 內部部門投資": "#### 🔒 Dept. Investment",
     "🔄 全部回歸當前維護費 (放棄升級)": "🔄 Reset to Current Maintenance",
     "當前": "Current",
@@ -105,9 +105,8 @@ TRANSLATIONS = {
     "支持度預估": "Est Support Shift",
     "預期 GDP": "Expected GDP",
     "衰退值判讀": "Decay Analysis",
-    "🔴 風險極高 (數據嚴重偏離預估)": "🔴 Very High Risk",
-    "🟡 風險中等 (數據略有出入)": "🟡 Med Risk",
-    "🟢 風險極低 (基準比對)": "🟢 Low Risk",
+    "中等差異 (數據略有出入)": "🟡 Med Risk",
+    "差異極小 (基準比對)": "🟢 Low Risk",
     "📈 升級花費": "📈 Upgrade Cost",
     "維護費將達": "Maint reaches",
     "📉 免費降級": "📉 Free Downgrade",
@@ -116,7 +115,8 @@ TRANSLATIONS = {
     "維護費": "Maint",
     "小民調 ($5)": "Small Poll ($5)",
     "中民調 ($10)": "Med Poll ($10)",
-    "大民調 ($20)": "Big Poll ($20)"
+    "大民調 ($20)": "Big Poll ($20)",
+    "切換以 公告衰退 試算 (預設為智庫衰退)": "Toggle to use Claimed Decay (Default: Think Tank)"
 }
 
 def t(zh_text, en_text=None):
