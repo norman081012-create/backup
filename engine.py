@@ -6,6 +6,7 @@ import random
 import streamlit as st
 
 class Party:
+    def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
     def __init__(self, name, cfg):
         self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
         self.build_ability = cfg.get('BUILD_ABILITY_DEFAULT', 6.0)
