@@ -1,148 +1,137 @@
 # ==========================================
-# i18n.py
-# 負責全系統的多語系文字切換字典
+# engine.py
+# 負責遊戲引擎、政黨類別與全域事件觸發邏輯
 # ==========================================
+import random
 import streamlit as st
+import i18n
+t = i18n.t
 
-TRANSLATIONS = {
-    "🎛️ 控制台": "🎛️ Control Panel",
-    "📝 參數調整(即時)": "📝 Live Parameters",
-    "🌐 國家總體現況": "🌐 National Status",
-    "💰 執行系統資源": "💰 Executive Resources",
-    "📊 財報": "📊 Financial Report",
-    "📊 智庫評估報告": "📊 Think Tank Report",
-    "👤 玩家頁面": "👤 Player Dashboard",
-    "🕵️ 情報處 - 對手機構指標": "🕵️ Intelligence - Opponent Stats",
-    "📈 審計處 - 內部部門投資": "📈 Audit - Internal Dept. Investments",
-    "資訊辨識": "Civic Literacy",
-    "選民情緒": "Voter Emotion",
-    "當前 GDP": "Current GDP",
-    "預期 GDP": "Expected GDP",
-    "總預算池": "Total Budget Pool",
-    "獎勵基金": "Reward Fund",
-    "可用淨資產": "Available Net Assets",
-    "去年施政花費": "Last Yr Policy Cost",
-    "維護成本": "Maintenance Cost",
-    "收益總結": "Profit Summary",
-    "智庫": "Think Tank",
-    "情報處": "Intelligence",
-    "黨媒": "Media Dept",
-    "反情報處": "Counter-Intel",
-    "工程處": "Engineering",
-    "🤝 Phase 1: 監管系統委託執行系統建設提案": "🤝 Phase 1: R-System Proposal",
-    "🚨 **最後通牒啟動中：** 監管系統必須擬定最終裁決草案！": "🚨 **Ultimatum Active:** R-System must draft final resolution!",
-    "⏳ 等待對手公布草案...": "⏳ Waiting for opponent's draft...",
-    "草案擬定室": "Draft Room",
-    "對手公告": "Opp. Claimed",
-    "等待對手公告": "Awaiting Opp.",
-    "公告衰退率(0~1)": "Claimed Decay",
-    "公告建設單價": "Claimed Unit Cost",
-    "當前公告:": "Current Claim:",
-    "目標 GDP 成長率 (%)": "Target GDP Growth (%)",
-    "計畫獎勵金 (執行方100%完成計畫之獎勵金，最高不超過當年總預算)": "Total Plan Reward (Max=Budget)",
-    "計畫總效益 (計畫100%完成時產生之建設量)": "Plan Total Benefit (Construction Volume)",
-    "💰 監管出資額 (從監管方預算中支付的補貼)": "💰 R-Pays",
-    "監管出資": "R-Pays",
-    "執行出資": "H-Pays",
-    "總額": "Total",
-    "出資總額": "Total Req. Cost",
-    "模擬執行方出資": "Simulated H-System Pays",
-    "監管補貼": "R-Subsidy",
-    "工程成本": "Act. Fund",
-    "國庫剩餘": "Treasury Remainder",
-    "提案出資": "Proposal Pays",
-    "模擬如果發生倒閣換位 (依據新定位試算)": "Toggle: Simulate if Swap Happens (Calculated by new roles)",
-    "切換至 智庫預估 試算 (預設為公告數值)": "Toggle to use Think Tank Values (Default: Claimed)",
-    "📤 送出常規草案": "📤 Submit Draft",
-    "💥 發布最後通牒": "💥 Issue Ultimatum",
-    "🔄 強制通過並換位": "🔄 Force Pass & Swap",
-    "📜 當前草案預覽": "📜 Current Draft Preview",
-    "📜 對手 (執行系統) 既有草案參考": "📜 Opponent Draft Ref.",
-    "⚖️ 監管系統草案": "⚖️ R-System Draft",
-    "🛡️ 執行系統草案": "🛡️ H-System Draft",
-    "✅ 選擇此方案": "✅ Select this draft",
-    "📜 待覆議草案內容": "📜 Draft to Confirm",
-    "✅ 同意法案": "✅ Agree to Bill",
-    "❌ 拒絕並重談": "❌ Reject & Renegotiate",
-    "🔄 同意但換位": "🔄 Agree & Swap",
-    "💥 逼迫最終提案 (通牒)": "💥 Force Final (Ultimatum)",
-    "🚨 最終方案決斷 (執行系統專屬)": "🚨 Final Decision (H-System Only)",
-    "✅ 忍辱負重 (接受通牒)": "✅ Accept Ultimatum",
-    "🔄 掀桌倒閣換位": "🔄 Flip Table & Swap",
-    "🛠️ Phase 2: 政策執行與行動 - 輪到": "🛠️ Phase 2: Execution - Turn:",
-    "🛡️ 執行系統": "🛡️ H-System",
-    "⚖️ 監管系統": "⚖️ R-System",
-    "#### 📣 政策與媒體": "#### 📣 Policy & Media",
-    "💡 **執行系統特性**: 媒體操控值 1.2 倍加成": "💡 **H-System Perk**: Media Control x1.2",
-    "💡 **監管系統特性**: 調查能力值 1.2 倍加成": "💡 **R-System Perk**: Intelligence x1.2",
-    "💸 秘密貪污 (%)": "💸 Secret Corruption (%)",
-    "🏢 圖利自身廠商 (%)": "🏢 Cronyism (%)",
-    "⚖️ 媒體審查 (投入資金)(打壓對手黨媒效率，依對手當前支持度反噬自身民調)": "⚖️ Media Censorship (Reduces opp. media, penalizes own support)",
-    "📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)": "📺 Media Control (Changes policy impact)",
-    "🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))": "🎓 Education Policy (Left: Canned, Right: Critical)",
-    "🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)": "🎉 Campaign (Lower sanity = higher effect)",
-    "🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)": "🔥 Incite Emotion (Reduces sanity short-term)",
-    "#### 🔒 內部部門投資": "#### 🔒 Dept. Investment",
-    "🔄 全部回歸當前維護費 (放棄升級)": "🔄 Reset to Current Maintenance",
-    "當前": "Current",
-    "確認行動/結算": "Confirm & Execute",
-    "🚨 資金不足！當前行動預算已超支": "🚨 Insufficient Funds! Over budget by",
-    "⚖️ Phase 3: 年度結算報告": "⚖️ Phase 3: Annual Report",
-    "#### 💰 經濟與財政": "#### 💰 Economy & Finance",
-    "GDP 變化": "GDP Shift",
-    "執行系統收益總結:": "H-System Profit Summary:",
-    "監管系統收益總結:": "R-System Profit Summary:",
-    "🚨 貪污醜聞爆發！執行系統貪污被情報處查獲，沒收非法所得。": "🚨 Corruption Caught! Funds seized.",
-    "🚨 圖利爭議！執行系統圖利遭舉發，強制沒收資金。": "🚨 Cronyism Caught! Funds seized.",
-    "#### 🧠 社會與民意 (新增量)": "#### 🧠 Society & Opinion (New Shifts)",
-    "施政滿意度位移 (執行/監管)": "Performance Shift (H / R)",
-    "⏩ 確認報告並進入下一年": "⏩ Confirm & Next Year",
-    "🏁 遊戲結束！共生內閣軌跡總結算": "🏁 Game Over! Final History Report",
-    "👑 當權": "👑 Ruling",
-    "🎯 候選": "🎯 Candidate",
-    "黨產資金": "Party Wealth",
-    "預估": "Est.",
-    "支持度": "Support",
-    "準確度": "Accuracy",
-    "經濟預估": "Economic Forecast",
-    "預估衰退值": "Est. Decay",
-    "變動": "Change",
-    "佔比": "Share",
-    "淨利": "Net Profit",
-    "真": "Real",
-    "去年估": "Last Est.",
-    "我方預估總收益": "Our Est Profit",
-    "對方預估總收益": "Opp Est Profit",
-    "新增支持量預估": "Est Support Points",
-    "衰退值判讀": "Drop Analysis",
-    "建設單價判讀": "Unit Cost Analysis",
-    "預期大環境政績 (未經媒體)": "Expected Base Perf (No Media)",
+class Party:
+    def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
+    def __init__(self, name, cfg):
+        self.name = name
+        self.wealth = cfg['INITIAL_WEALTH']
+        self.support = 50.0 
+        
+        self.build_ability = cfg.get('BUILD_ABILITY_DEFAULT', 6.0)
+        self.investigate_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.predict_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.stealth_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        
+        self.current_forecast = 0.0
+        self.poll_history = {'小型': [], '中型': [], '大型': []}
+        self.latest_poll = None
+        self.poll_count = 0
+        self.last_acts = {}
+
+class GameEngine:
+    def __init__(self, cfg):
+        self.year = 1
+        self.party_A = Party(cfg['PARTY_A_NAME'], cfg)
+        self.party_B = Party(cfg['PARTY_B_NAME'], cfg)
+        self.gdp = cfg['CURRENT_GDP']
+        self.total_budget = cfg['BASE_TOTAL_BUDGET'] + (self.gdp * cfg['HEALTH_MULTIPLIER'])
+        self.h_fund = cfg['H_FUND_DEFAULT']
+        
+        self.phase = 1
+        self.p1_step = 'draft_r' 
+        self.p1_proposals = {'R': None, 'H': None}
+        self.p1_selected_plan = None
+        self.ruling_party = self.party_A
+        self.r_role_party = self.party_A
+        self.h_role_party = self.party_B  
+        
+        self.sanity = cfg['SANITY_DEFAULT']
+        self.emotion = cfg['EMOTION_DEFAULT']
+        self.current_real_decay = 0.0
+        self.proposal_count = 1
+        self.proposing_party = self.party_A
+        self.history = []
+        self.swap_triggered_this_year = False
+        self.last_year_report = None
+        
+        self.support_queues = {
+            self.party_A.name: {'perf': [], 'camp': []},
+            self.party_B.name: {'perf': [], 'camp': []}
+        }
+
+    def update_support_queues(self, shifts):
+        a_name = self.party_A.name
+        b_name = self.party_B.name
+        
+        self.support_queues[a_name]['perf'].append({'val': shifts[a_name]['perf'], 'age': 0})
+        self.support_queues[b_name]['perf'].append({'val': shifts[b_name]['perf'], 'age': 0})
+        self.support_queues[a_name]['camp'].append({'val': shifts[a_name]['camp'], 'age': 0})
+        self.support_queues[b_name]['camp'].append({'val': shifts[b_name]['camp'], 'age': 0})
+        
+        a_sup_amt = 5000.0; b_sup_amt = 5000.0 
+        
+        for p_name in [a_name, b_name]:
+            for q in self.support_queues[p_name]['perf']: q['age'] += 1
+            for q in self.support_queues[p_name]['camp']: q['age'] += 1
+            
+            self.support_queues[p_name]['perf'] = [x for x in self.support_queues[p_name]['perf'] if x['age'] <= 6]
+            self.support_queues[p_name]['camp'] = [x for x in self.support_queues[p_name]['camp'] if x['age'] <= 2]
+            
+            for x in self.support_queues[p_name]['perf']: 
+                val = x['val'] * (1.0 - (x['age']/7.0))
+                if p_name == a_name: a_sup_amt += val
+                else: b_sup_amt += val
+                
+            for x in self.support_queues[p_name]['camp']: 
+                val = x['val'] * (1.0 - (x['age']/3.0))
+                if p_name == a_name: a_sup_amt += val
+                else: b_sup_amt += val
+
+        a_sup_amt += shifts[a_name]['backlash']
+        b_sup_amt += shifts[b_name]['backlash']
+        
+        a_sup_amt = max(0.0, a_sup_amt)
+        b_sup_amt = max(0.0, b_sup_amt)
+        
+        total = max(1.0, a_sup_amt + b_sup_amt)
+        self.party_A.support = (a_sup_amt / total) * 100.0
+        self.party_B.support = 100.0 - self.party_A.support
+        
+        return a_sup_amt, b_sup_amt
+
+    def record_history(self, is_election):
+        self.history.append({
+            'Year': self.year, 'GDP': self.gdp, 'Sanity': self.sanity, 'Emotion': self.emotion,
+            'A_Support': self.party_A.support, 'B_Support': self.party_B.support,
+            'A_Wealth': self.party_A.wealth, 'B_Wealth': self.party_B.wealth,
+            'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year,
+            'Ruling': self.ruling_party.name, 'H_Party': self.h_role_party.name,
+            'R_Party': self.r_role_party.name,
+            'A_Edu': float(self.party_A.last_acts.get('edu_amt', 0)),
+            'B_Edu': float(self.party_B.last_acts.get('edu_amt', 0)),
+            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
+            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
+        })
+        self.swap_triggered_this_year = False
+
+def execute_poll(game, view_party, cost):
+    view_party.wealth -= cost
+    error_margin = max(0.0, 15.0 - (view_party.predict_ability * 0.5) - (cost * 0.4))
+    a_actual = game.party_A.support
+    a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
     
-    "中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)": "🟡 Med Risk (Slight discrepancy in drop, affects psychological expectation)",
-    "差異極小 (公告衰退率誠實，無心理預期操弄空間)": "🟢 Low Risk (Honest drop claim, no expectation manipulation)",
-    "研判對手惡意高估衰退率。企圖製造恐慌降低施政期望，藉此收割反差紅利！": "🔴 High Risk (Exaggerating drop to lower expectations & harvest contrast bonus)",
-    "研判對手低估衰退率粉飾太平。若最終施政未達標將遭民意反噬！": "🔴 High Risk (Understating drop to paint a rosy picture, risks backlash)",
+    poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
+    game.party_A.latest_poll = a_poll
+    game.party_A.poll_history[poll_type].append(a_poll)
+    b_poll = 100.0 - a_poll
+    game.party_B.latest_poll = b_poll
+    game.party_B.poll_history[poll_type].append(b_poll)
+    view_party.poll_count += 1
 
-    "研判對手惡意高估單價，企圖浮報預算與墊高門檻！": "🔴 High Risk (Opp. inflating unit cost for higher budget)",
-    "研判對手惡意高估單價，意圖套取過高工程款！": "🔴 High Risk (Opp. inflating unit cost for more funds)",
-    "研判對手低估單價，企圖壓榨我方建設量！": "🔴 High Risk (Opp. low-balling unit cost to exploit construction)",
-    "研判對手低估單價，企圖掩飾低效能！": "🔴 High Risk (Opp. low-balling unit cost to hide low efficiency)",
-    "中度風險 (單價略有出入，需留意工程品質或超支)": "🟡 Med Risk (Slight unit cost discrepancy)",
-    "差異極小 (公告單價與情報處估算相符，屬正常估值)": "🟢 Low Risk (Unit cost matches intel)",
+def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
+    game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
+    game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
+    game.swap_triggered_this_year = True
+    game.emotion = min(100.0, game.emotion + 30.0) 
     
-    "建設估價": "Construction Valuation",
-    "判讀": "Analysis",
-    "情報": "Intel",
-    "防貪污能力估算": "Anti-Corruption Estimate",
-    "穩定維持": "Stable",
-    "維護費": "Maint",
-    "小民調 ($5)": "Small Poll ($5)",
-    "中民調 ($10)": "Med Poll ($10)",
-    "大民調 ($20)": "Big Poll ($20)"
-}
-
-def t(zh_text, en_text=None):
-    lang = st.session_state.get('lang', 'ZH')
-    if lang == 'ZH': return zh_text
-    if en_text is not None: return en_text
-    return TRANSLATIONS.get(zh_text, zh_text)
+    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各繳納 {penalty_amt:.1f} 資金給第三方慈善團體，觸發換位！"
+    st.session_state.anim = 'snow'
+    game.phase = 2
