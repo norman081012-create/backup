@@ -43,6 +43,14 @@ TRANSLATIONS = {
     "監管出資": "R-Pays",
     "執行出資": "H-Pays",
     "總額": "Total",
+    "出資總額": "Total Req. Cost",
+    "模擬執行方出資": "Simulated H-System Pays",
+    "監管補貼": "R-Subsidy",
+    "工程成本": "Act. Fund",
+    "國庫剩餘": "Treasury Remainder",
+    "提案出資": "Proposal Pays",
+    "模擬如果發生倒閣換位 (依據新定位試算)": "Toggle: Simulate if Swap Happens (Calculated by new roles)",
+    "切換以 公告衰退 試算 (預設為智庫衰退)": "Toggle to use Claimed Decay (Default: Think Tank)",
     "📤 送出常規草案": "📤 Submit Draft",
     "💥 發布最後通牒": "💥 Issue Ultimatum",
     "🔄 強制通過並換位": "🔄 Force Pass & Swap",
@@ -87,6 +95,7 @@ TRANSLATIONS = {
     "#### 🧠 社會與民意": "#### 🧠 Society & Opinion",
     "施政滿意度位移 (執行/監管)": "Performance Shift (H / R)",
     "⏩ 確認報告並進入下一年": "⏩ Confirm & Next Year",
+    "🏁 遊戲結束！共生內閣軌跡總結算": "🏁 Game Over! Final History Report",
     "👑 當權": "👑 Ruling",
     "🎯 候選": "🎯 Candidate",
     "黨產資金": "Party Wealth",
@@ -107,30 +116,23 @@ TRANSLATIONS = {
     "衰退值判讀": "Decay Analysis",
     "中等差異 (數據略有出入)": "🟡 Med Risk",
     "差異極小 (基準比對)": "🟢 Low Risk",
+    "差異極大 (說對方誇大景氣不好是為了騙支持度)": "🔴 High Risk (Opp. exaggerating bad economy for support)",
+    "差異極大 (說對方誇大景氣不好是為了騙更多標案資金維持現有GDP)": "🔴 High Risk (Opp. exaggerating bad economy for funds)",
+    "差異極大 (說對手誇大景氣好是為了減少標案資金)": "🔴 High Risk (Opp. exaggerating good economy to cut funds)",
+    "差異極大 (說對手誇大景氣好是為了騙標案資金利用景氣提升GDP)": "🔴 High Risk (Opp. exaggerating good economy to ride the wave)",
     "📈 升級花費": "📈 Upgrade Cost",
     "維護費將達": "Maint reaches",
-    "📉 免費降級": "📉 Free Downgrade",
+    "📉 降級退回": "📉 Downgrade",
     "維護費降至": "Maint drops to",
     "穩定維持": "Stable",
     "維護費": "Maint",
     "小民調 ($5)": "Small Poll ($5)",
     "中民調 ($10)": "Med Poll ($10)",
-    "大民調 ($20)": "Big Poll ($20)",
-    "切換以 公告衰退 試算 (預設為智庫衰退)": "Toggle to use Claimed Decay (Default: Think Tank)"
+    "大民調 ($20)": "Big Poll ($20)"
 }
 
 def t(zh_text, en_text=None):
-    """
-    根據當前語言回傳對應字串。
-    支援 1 個參數 (查字典) 或 2 個參數 (直接回傳英文變數) 的彈性寫法。
-    """
     lang = st.session_state.get('lang', 'ZH')
-    if lang == 'ZH':
-        return zh_text
-    
-    # 若有傳入第二個參數 (動態 f-string)，直接使用
-    if en_text is not None:
-        return en_text
-        
-    # 否則查字典
+    if lang == 'ZH': return zh_text
+    if en_text is not None: return en_text
     return TRANSLATIONS.get(zh_text, zh_text)
