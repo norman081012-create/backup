@@ -32,8 +32,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
         
     req_cost = bid_cost * unit_cost
-    
-    # [修正] 可動用資金必須包含監管系統給的補貼
     available_fund = max(0.0, proj_fund + r_pays - corr_amt)
     
     if req_cost <= available_fund:
@@ -50,8 +48,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
-    
-    # [修正] H黨的專案淨利潤 = 收到的獎勵 + 收到的補貼 - 實際付給工程的費用
     h_project_profit = payout_h + r_pays - act_fund
     
     return {
@@ -61,92 +57,52 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def calc_support_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, ha, ra, claimed_decay, sanity, emotion, bid_cost, c_net, eval_decay):
-    crit_think = sanity / 100.0       
-    canned_edu = 1.0 - crit_think     
-    emo_val = emotion / 100.0         
-    S = max(0.0, 1.0 + crit_think - emo_val) 
+# [核心重構] 取代舊的支持量計算，改為純淨的「政績 (Performance)」計算
+def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
+    # 1. 預期經濟跌幅與實際跌幅
+    expected_drop_pct = claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
+    expected_drop_amt = curr_gdp * expected_drop_pct
+    actual_drop_amt = curr_gdp - new_gdp
     
-    h_media_raw = hp.media_ability / 10.0
-    r_media_raw = rp.media_ability / 10.0
-    h_media = h_media_raw * (1.0 + canned_edu)
-    r_media = r_media_raw * (1.0 + canned_edu)
+    perf_const = 0.01 # 基礎常數 (例如 5000 GDP 掉 100% = 扣 50 點)
     
-    true_drop_pct = eval_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
-    public_drop_pct = claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
-    true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * true_drop_pct))
-    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * public_drop_pct))
-
-    claimed_gdp_change = public_expected_gdp - curr_gdp
-    actual_gdp_change = new_gdp - curr_gdp
-    perf_ruling = (actual_gdp_change - claimed_gdp_change) / max(1.0, abs(claimed_gdp_change))
-    
-    perf_exec = (c_net - bid_cost) / max(1.0, bid_cost)
-    
-    weight = 1000.0
-    def get_perf_score(perf, media, is_exec):
-        bonus = 1.2 if is_exec else 1.0
-        return perf * weight * S * (1.0 + media) * max(0.1, 1.0 - canned_edu) * (1.0 + crit_think) * bonus
-    
-    ruling_score_raw = get_perf_score(perf_ruling, r_media if rp.name == ruling_party_name else h_media, False)
-    exec_score_raw = get_perf_score(perf_exec, h_media, True)
-    
-    h_perf_final = exec_score_raw
-    r_perf_final = ruling_score_raw if rp.name == ruling_party_name else 0.0
-    
-    if hp.name == ruling_party_name: h_perf_final += ruling_score_raw
-    
-    if h_perf_final < 0: 
-        scapegoat_rate = min(1.0, h_media * emo_val * max(0.0, 1.0 - crit_think))
-        blamed = abs(h_perf_final) * scapegoat_rate
-        h_perf_final += blamed
-        r_perf_final -= blamed
-    elif h_perf_final > 0 and hp.name != ruling_party_name and ruling_score_raw > 0: 
-        steal_rate = min(1.0, h_media * emo_val)
-        stolen = ruling_score_raw * steal_rate
-        h_perf_final += stolen
-        r_perf_final -= stolen
+    # 2. GDP政績基準: - (實際跌幅 / 預期跌幅) * GDP * 常數
+    if expected_drop_amt > 0.001:
+        gdp_perf_base = - (actual_drop_amt / expected_drop_amt) * curr_gdp * perf_const
+    else:
+        # 防呆：如果完全沒公告衰退，就直接扣實際跌幅
+        gdp_perf_base = - actual_drop_amt * perf_const
         
-    if r_perf_final < 0: 
-        scapegoat_rate = min(1.0, r_media * emo_val * max(0.0, 1.0 - crit_think))
-        blamed = abs(r_perf_final) * scapegoat_rate
-        r_perf_final += blamed
-        h_perf_final -= blamed
-        
-    def get_camp_score(budget, media):
-        return budget * media * (1.0 + emo_val) * max(0.0, 1.0 + canned_edu - crit_think)
+    # 3. 思辨與情緒矯正 (S濾鏡)
+    crit_think = sanity / 100.0
+    emo_val = emotion / 100.0
+    # 情緒會削弱思辨的判斷力
+    s_filter = max(0.0, min(1.0, crit_think * (1.0 - emo_val * 0.5))) 
     
-    h_camp = get_camp_score(float(ha.get('camp', 0)), h_media)
-    r_camp = get_camp_score(float(ra.get('camp', 0)), r_media)
+    # 4. 歸戶準備
+    shifts = {hp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
+              rp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}}
+              
+    # 5. 分配 GDP 政績 (當權拿 S, 執行拿 1-S)
+    ruling_gdp_perf = gdp_perf_base * s_filter
+    exec_gdp_perf = gdp_perf_base * (1.0 - s_filter)
     
-    censor_budget = float(ra.get('judicial', 0))
-    r_intel = rp.investigate_ability / 10.0
-    censor_param = max(0.1, 1.0 - ((censor_budget / max(1.0, rp.wealth)) * (1.0 + r_intel)))
+    shifts[ruling_party_name]['perf'] += ruling_gdp_perf
+    shifts[hp.name]['perf'] += exec_gdp_perf
     
-    if h_perf_final > 0: h_perf_final *= censor_param
-    h_camp *= censor_param
-    
-    h_total_support = (hp.support / 100.0) * 10000.0 
-    backlash_r = 0.0
-    if censor_budget > 0:
-        backlash_r = -(h_total_support * 0.05 * (1.0 - censor_param) * max(0.1, 1.0 + emo_val + crit_think - canned_edu))
-
-    shifts = {
-        hp.name: {'perf': h_perf_final, 'camp': h_camp, 'backlash': 0.0},
-        rp.name: {'perf': r_perf_final, 'camp': r_camp, 'backlash': backlash_r}
-    }
+    # 6. 標案達標政績 (執行系統專屬: 達成率 * GDP * 常數)
+    project_perf_base = (c_net / max(1.0, bid_cost)) * curr_gdp * perf_const
+    shifts[hp.name]['perf'] += project_perf_base
     
     return shifts
 
 def get_formula_explanation(game, view_party, plan, cfg):
     tt_drop = view_party.current_forecast
     build_abi = game.h_role_party.build_ability
-    
     res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop, r_pays=plan.get('r_pays', 0.0))
     
     lines = []
-    lines.append(f"**我方預估試算完成。由於民意系統已轉為支持量遞減陣列，詳細的 S濾鏡與搶功甩鍋結算，請參考年度結算報告。**")
+    lines.append(f"**我方預估試算完成。**")
     lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f}`")
     lines.append(f"> 估算建設淨值 (C_net): {res['c_net']:.1f} / 標案承諾 (Bid_cost): {plan['bid_cost']:.1f}")
-    
     return lines
