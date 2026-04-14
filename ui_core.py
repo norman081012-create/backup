@@ -75,9 +75,13 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         
-        equiv_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
+        # [修改點] 計算達到 GDP 損益兩平所需的「建設量」
+        conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
+        gdp_loss = game.gdp * (fc * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+        req_infra_to_balance = gdp_loss / conv_rate
+        
         st.write(f"預估衰退值: `{fc:.3f}`")
-        st.write(f"預估建設損失: `{equiv_loss:.1f}`")
+        st.write(f"平抑衰退所需建設量: `{req_infra_to_balance:.1f}`")
         
         if rep:
             my_is_h = view_party.name == rep['h_party_name']
@@ -303,7 +307,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         eval_decay = view_party.current_forecast
         override_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, eval_decay), 2)
 
-    # [修正] 將 r_pays 傳入 calc_economy 確保引擎能認知到這筆補貼
     res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'])
     
     eval_req_cost = res['req_cost']          
@@ -312,9 +315,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     eval_h_pays = eval_req_cost - eval_r_pays 
     
     with c1:
-        equiv_loss = game.gdp * (plan.get('claimed_decay', 0.0) * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
-        st.write(f"**{t('公告衰退率(0~1)')}:** {plan.get('claimed_decay', 0.0):.3f}")
-        st.write(f"**(相當於 {equiv_loss:.1f} 建設損失)**")
+        # [修改點] 預覽區顯示亦同步換算
+        conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
+        claimed_val = plan.get('claimed_decay', 0.0)
+        equiv_infra_loss = (game.gdp * (claimed_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
+        
+        st.write(f"**{t('公告衰退率(0~1)')}:** {claimed_val:.3f}")
+        st.write(f"**(相當於 {equiv_infra_loss:.1f} 建設損失)**")
         st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
         if simulate_swap:
@@ -326,18 +333,15 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_h_party.name else 0))
         r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_r_party.name else 0))
         
-        # [修正] 專案淨利潤：嚴格排除底薪
         h_project_profit = res['h_project_profit']
         r_project_profit = res['payout_r'] - eval_r_pays
         
-        # [修正] 計算真正的 ROI：專案淨利 / 各自承擔的出資額
         o_h_roi = (h_project_profit / float(eval_h_pays)) * 100.0 if eval_h_pays > 0 else float('inf')
         o_r_roi = (r_project_profit / float(eval_r_pays)) * 100.0 if eval_r_pays > 0 else float('inf')
         
         my_roi = o_h_roi if my_is_h else o_r_roi
         opp_roi = o_r_roi if my_is_h else o_h_roi
         
-        # 計算加上底薪後的整體總淨收（為了讓玩家清楚年終會拿到多少）
         my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
         opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
         
@@ -358,7 +362,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
 
         st.markdown(t("### 📝 智庫分析報告"))
-        # 標籤改為「預估總收益」避免誤導，並附上純淨的「專案 ROI」
         st.markdown(f"1. {t('我方預估總收益')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
         st.markdown(f"2. {t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
         
