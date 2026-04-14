@@ -191,6 +191,40 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 if b2.button(t("中民調 ($10)"), key=f"p2_{party.name}"): engine.execute_poll(game, view_party, 10); st.rerun()
                 if b3.button(t("大民調 ($20)", "Big Poll ($20)"), key=f"p3_{party.name}"): engine.execute_poll(game, view_party, 20); st.rerun()
 
+# ---------------------------------------------------------
+# [新增核心函數]：統一計算「觀測到的對手能力」
+# 確保提案室、側邊欄、草案預覽的情報邏輯完全一致
+# ---------------------------------------------------------
+def get_observed_abilities(viewer, target, game, cfg):
+    if viewer.name == target.name or st.session_state.get('god_mode'):
+        return {
+            'predict': target.predict_ability,
+            'investigate': target.investigate_ability,
+            'media': target.media_ability,
+            'stealth': target.stealth_ability,
+            'build': target.build_ability
+        }
+    
+    opp_stl = target.stealth_ability / 10.0
+    my_inv = viewer.investigate_ability / 10.0
+    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
+    
+    # 確保 RNG 固定，同一回合看到的情報不會浮動
+    rng = random.Random(f"intel_{target.name}_{game.year}")
+    def get_obs(v):
+        if err_margin == 0.0: return v
+        true_cost = (2**v - 1) * 50
+        obs_cost = max(0.0, true_cost * (1 + rng.uniform(-err_margin, err_margin)))
+        return math.log2(obs_cost / 50.0 + 1)
+        
+    return {
+        'predict': get_obs(target.predict_ability),
+        'investigate': get_obs(target.investigate_ability),
+        'media': get_obs(target.media_ability),
+        'stealth': get_obs(target.stealth_ability),
+        'build': get_obs(target.build_ability)
+    }
+
 def render_sidebar_intel_audit(game, view_party, cfg):
     opp = game.party_B if view_party.name == game.party_A.name else game.party_A
     st.markdown("---")
@@ -199,30 +233,19 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     opp_stl = opp.stealth_ability / 10.0
     my_inv = view_party.investigate_ability / 10.0
     err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
-    blur = err_margin if not st.session_state.get('god_mode') else 0.0
     acc = max(0, min(100, int((1.0 - err_margin) * 100)))
     
     st.progress(acc / 100.0, text=f"{t('準確度')}: {acc}%")
-    rng = random.Random(f"intel_{opp.name}_{game.year}")
     
-    def get_obs_abi(val):
-        if blur == 0: return val
-        true_cost = (2**val - 1) * 50
-        obs_cost = max(0.0, true_cost * (1 + rng.uniform(-blur, blur)))
-        return math.log2(obs_cost / 50.0 + 1)
-        
-    obs_pre = get_obs_abi(opp.predict_ability)
-    obs_inv = get_obs_abi(opp.investigate_ability)
-    obs_med = get_obs_abi(opp.media_ability)
-    obs_stl = get_obs_abi(opp.stealth_ability)
-    obs_bld = get_obs_abi(opp.build_ability)
-
-    st.write(f"{t('智庫')}: {obs_pre*10:.1f}% | {t('情報處')}: {obs_inv*10:.1f}%")
-    st.write(f"{t('黨媒')}: {obs_med*10:.1f}% | {t('反情報處')}: {obs_stl*10:.1f}%")
+    # [修改] 使用統一函數獲取能力值
+    obs_abis = get_observed_abilities(view_party, opp, game, cfg)
+    
+    st.write(f"{t('智庫')}: {obs_abis['predict']*10:.1f}% | {t('情報處')}: {obs_abis['investigate']*10:.1f}%")
+    st.write(f"{t('黨媒')}: {obs_abis['media']*10:.1f}% | {t('反情報處')}: {obs_abis['stealth']*10:.1f}%")
     
     my_inv_pct = view_party.investigate_ability / 10.0
     r_bonus = cfg['R_INV_BONUS'] if view_party.name == game.r_role_party.name else 1.0
-    obs_stl_pct = obs_stl / 10.0
+    obs_stl_pct = obs_abis['stealth'] / 10.0
     
     catch_mult = max(0.1, (my_inv_pct * r_bonus) - obs_stl_pct + 1.0)
     
@@ -237,9 +260,9 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.caption(f"*(若對手貪污 10% $\\rightarrow$ 查獲率約 `{catch_10:.1f}%` | 貪 30% $\\rightarrow$ `{catch_30:.1f}%`)*")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    st.write(f"{t('工程處')}: {obs_bld*10:.1f}%")
+    st.write(f"{t('工程處')}: {obs_abis['build']*10:.1f}%")
     
-    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_bld, view_party.current_forecast)
+    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
     inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
@@ -265,9 +288,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     c1, c2 = st.columns(2)
     
-    eval_decay = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
-    override_cost = plan.get('claimed_cost') if use_claimed else None
-    
     if simulate_swap:
         sim_h_party = game.r_role_party
         sim_r_party = game.h_role_party
@@ -279,13 +299,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
+    # [修復點]：強制取得「觀測」到的對方工程能力
+    obs_abis = get_observed_abilities(view_party, sim_h_party, game, cfg)
+    obs_bld = obs_abis['build']
+
+    if use_claimed:
+        eval_decay = plan.get('claimed_decay', 0.0)
+        override_cost = plan.get('claimed_cost', 1.0)
+    else:
+        eval_decay = view_party.current_forecast
+        # [修復點]：智庫必須使用觀測到的「觀測單價」，並強制 round(..., 2)，保證算出 132.6，絕不產生小數點誤差
+        override_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, eval_decay), 2)
+
     res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost)
     
-    eval_req_cost = res['req_cost']
+    # [修復點]：重新推導真實的出資結構與投報比
+    eval_req_cost = res['req_cost']          # 這個數字現在絕對會是 170 * 0.78 = 132.6
     eval_unit_cost = res.get('unit_cost', 1.0)
-    
-    eval_r_pays = plan['r_pays']
-    eval_h_pays = eval_req_cost - eval_r_pays
+    eval_r_pays = plan['r_pays']             # 監管補貼是固定的
+    eval_h_pays = eval_req_cost - eval_r_pays # 執行方必須負擔動態更新後的出資總額落差
     
     with c1:
         equiv_loss = game.gdp * (plan.get('claimed_decay', 0.0) * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
@@ -305,6 +337,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         h_net = h_base + res['payout_h'] - res['act_fund'] + eval_r_pays
         r_net = r_base + res['payout_r'] - eval_r_pays
         
+        # [修復點]：ROI 會直接使用被觀測單價校正後的 eval_h_pays 進行計算
         o_h_roi = (h_net / max(1.0, float(eval_h_pays))) * 100.0 if eval_h_pays > 0 else 0.0
         o_r_roi = (r_net / max(1.0, float(eval_r_pays))) * 100.0 if eval_r_pays > 0 else 0.0
         
