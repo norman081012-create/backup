@@ -10,6 +10,7 @@ import ui_core
 import phase1
 import phase2
 import phase3
+import phase4
 import i18n
 
 st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
@@ -37,9 +38,8 @@ elif st.session_state.get('anim') == 'snow':
     st.snow()
     st.session_state.anim = None
 
-if game.year > cfg['END_YEAR']:
-    ui_core.render_endgame_charts(game.history, cfg)
-    if st.button(t("🔄 重新開始全新遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
+if game.phase == 4:
+    phase4.render(game, cfg)
     st.stop()
 
 if 'turn_initialized' not in st.session_state:
@@ -79,8 +79,7 @@ st.subheader(t(f"📅 {cfg['CALENDAR_NAME']} {game.year} 年 ({elec_status})", f
 if god_mode: st.error(t(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**", f"👁️ **God Mode:** Real Decay is **{game.current_real_decay:.2f}**"))
 
 if game.phase == 1 or game.phase == 2:
-    if game.phase == 1:
-        ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
+    if game.phase == 1: ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
     ui_core.render_message_board(game)
     ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
 
@@ -91,5 +90,5 @@ elif game.phase == 2:
 elif game.phase == 3:
     phase3.render(game, cfg)
 
-# 修正：補上 view_party 解決 TypeError
-ui_core.render_formula_panel(game, view_party, cfg)
+if game.phase != 4:
+    ui_core.render_formula_panel(game, view_party, cfg)
