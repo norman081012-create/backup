@@ -42,18 +42,21 @@ def render(game, view_party, cfg):
             proj_fund = st.slider(t("標案總額 (最高不超過當年總預算)", "Total Bid Amount (Max=Budget)"), 0.0, max_p, float(min(1000.0, max_p)), 10.0)
             bid_cost = st.slider(t("標案成本 (要求之建設產出值，留點利潤給對手賺)", "Bid Cost (Required construction)"), 1.0, max(1.0, float(proj_fund)), max(1.0, float(proj_fund * 0.8)), 10.0)
             
-            safe_req = max(1.0, float(proj_fund))
-            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0.0, safe_req, float(safe_req * 0.5))
-            h_pays = proj_fund - r_pays
-            r_pct = (r_pays / max(1.0, proj_fund)) * 100
-            h_pct = (h_pays / max(1.0, proj_fund)) * 100
+            # [修正] 出資總額是基於標案成本及執行方工程能力反推的金額
+            res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, claimed_decay)
+            req_cost = res_for_req['req_cost']
             
-            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 總額: {proj_fund:.1f} / <span style='font-size: 1.2em'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Total: {proj_fund:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
+            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0.0, float(req_cost), float(req_cost * 0.5))
+            h_pays = req_cost - r_pays
+            r_pct = (r_pays / max(1.0, req_cost)) * 100
+            h_pct = (h_pays / max(1.0, req_cost)) * 100
+            
+            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 出資總額: {req_cost:.1f} / <span style='font-size: 1.2em'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Req. Cost: {req_cost:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
                 'r_pays': r_pays, 'h_pays': h_pays, 'claimed_decay': claimed_decay,
-                'author': active_role
+                'author': active_role, 'req_cost': req_cost
             }
 
             c_btn1, c_btn2, c_btn3 = st.columns(3)
