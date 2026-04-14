@@ -33,7 +33,8 @@ def render(game, view_party, cfg):
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
             if input_decay_key not in st.session_state: st.session_state[input_decay_key] = float(view_party.current_forecast)
             
-            suggested_unit_cost = 10.0 / max(0.1, game.h_role_party.build_ability)
+            # [修改] 使用新的指數模型給出預設的建設估價
+            suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, game.h_role_party.build_ability, view_party.current_forecast)
             if input_cost_key not in st.session_state: st.session_state[input_cost_key] = round(suggested_unit_cost, 2)
             
             c_ann1, c_ann2 = st.columns(2)
@@ -57,7 +58,6 @@ def render(game, view_party, cfg):
             bid_cost = st.slider(t("計畫總效益 (預期增加之 GDP 與基礎建設)", "Plan Total Benefit"), 0.0, max_budget * 1.5, float(min(800.0, max_budget * 1.5)), 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, float(min(500.0, max_budget)), 10.0)
             
-            # [修改] UI 端的出資總額直接依照 "計畫總效益 × 公告建設單價" 進行即時試算與展示
             req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
             
