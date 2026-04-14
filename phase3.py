@@ -1,99 +1,127 @@
 # ==========================================
-# config.py
-# 負責管理遊戲全域設定與判讀邏輯
+# phase3.py
+# 負責 第三階段 (年度總結算報告與視覺化)
 # ==========================================
-import i18n
-t = i18n.t
+import streamlit as st
+import random
+import formulas
 
-DEFAULT_CONFIG = {
-    'CALENDAR_NAME': "星曆", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
-    'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
-    'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
-    'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.2, 'DECAY_MAX': 1.2,  
-    'RESISTANCE_MULT': 1.0, 
-    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
-    'CURRENT_GDP': 5000.0, 
-    'HEALTH_MULTIPLIER': 0.2, 
-    'BASE_TOTAL_BUDGET': 0.0,  
-    'RULING_BONUS': 50.0, 'DEFAULT_BONUS': 100.0, 
-    'H_FUND_DEFAULT': 600.0, 
-    'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
-    'CORRUPTION_PENALTY': 2.0,
-    'MAX_ABILITY': 10.0, 
-    'ABILITY_DEFAULT': 3.0,          
-    'BUILD_ABILITY_DEFAULT': 6.0,    
-    'MAINTENANCE_RATE': 10.0,        
-    'TRUST_BREAK_PENALTY_RATIO': 0.05,
-    'ELECTION_CYCLE': 4,
-    'SANITY_DEFAULT': 60.0, 
-    'EMOTION_DEFAULT': 30.0,
-    'SUPPORT_CONVERSION_RATE': 0.05, 
-    'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.2  # 觀測誤差基數
-}
+def render(game, cfg):
+    st.header("⚖️ Phase 3: 年度結算報告")
+    
+    if not game.last_year_report:
+        rp, hp = game.r_role_party, game.h_role_party
+        ra = st.session_state.get(f"{rp.name}_acts", {})
+        ha = st.session_state.get(f"{hp.name}_acts", {})
+        d = st.session_state.get('turn_data', {})
+        
+        returned_to_r = 0.0; confiscated_to_budget = 0.0
+        corr_support_penalty = 0.0
+        corr_caught = False; crony_caught = False
+        
+        proj_fund = d.get('proj_fund', 0.0)
+        corr_amt = proj_fund * (ha.get('corr', 0) / 100.0)
+        crony_base = proj_fund * (ha.get('crony', 0) / 100.0)
+        crony_income = crony_base * 0.1
+        
+        catch_prob_base = max(0.1, (rp.investigate_ability - hp.stealth_ability)) * 2.0
+        
+        if corr_amt > 0 and random.random() < min(1.0, catch_prob_base * (corr_amt / max(1.0, proj_fund))):
+            returned_to_r += corr_amt; confiscated_to_budget += corr_amt * 0.4
+            corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, proj_fund) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
+            corr_caught = True; corr_amt = 0
 
-def get_config_translations():
-    return {
-        'CALENDAR_NAME': "紀元名稱", 'PARTY_A_COLOR': "A黨代表色", 'PARTY_B_COLOR': "B黨代表色",
-        'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
-        'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
-        'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-        'RESISTANCE_MULT': "建設阻力倍率",
-        'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
-        'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
-        'RULING_BONUS': "當權紅利", 'DEFAULT_BONUS': "基本補助金", 
-        'H_FUND_DEFAULT': "初始執行獎勵基金", 
-        'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
-        'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 
-        'ABILITY_DEFAULT': "一般部門初始能力", 'BUILD_ABILITY_DEFAULT': "工程處初始能力", 
-        'MAINTENANCE_RATE': "維護費倍率",
-        'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
-        'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現影響量權重",
-        'OBS_ERR_BASE': "觀測誤差基數"
-    }
+        if crony_base > 0 and random.random() < min(1.0, catch_prob_base * (crony_base / max(1.0, proj_fund))):
+            returned_to_r += crony_base; confiscated_to_budget += crony_base * 0.5
+            crony_caught = True; crony_base = 0; crony_income = 0
+            
+        res_exec = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, d.get('bid_cost', 1.0), hp.build_ability, game.current_real_decay, corr_amt)
+        budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
+        
+        hp_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0)
+        rp_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0)
+        
+        hp_inc = hp_base + res_exec['payout_h'] + corr_amt + crony_income
+        rp_inc = rp_base + res_exec['payout_r'] + returned_to_r
+        
+        shift = formulas.calc_support_shift(cfg, hp, rp, res_exec['payout_h'], res_exec['est_gdp'], proj_fund, game.gdp, ha, ra, res_exec['h_idx'], d.get('claimed_decay', 0.0), game.sanity, game.emotion)
+        hp_sup_new = max(0.0, min(100.0, hp.support + shift['actual_shift'] - corr_support_penalty))
+        
+        gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
+        emotion_delta = (ha.get('incite', 0) + ra.get('incite', 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
+        new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
+        
+        f_target_san = max(0.0, min(100.0, 50.0 + (ra.get('edu_amt', 0) / 500.0) * 50.0))
+        f_san_move = (f_target_san - game.sanity) * 0.2
+        new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
+        
+        game.last_year_report = {
+            'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
+            'h_party_name': hp.name, 'h_perf': shift['h_perf'], 'r_perf': shift['r_perf'],
+            'h_inc': hp_inc, 'r_inc': rp_inc, 
+            'h_base': hp_base, 'r_base': rp_base, 'h_payout': res_exec['payout_h'], 'r_payout': res_exec['payout_r'],
+            'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
+            'h_pol_cost': ha.get('tot_action', 0) + ha.get('legal', 0), 'r_pol_cost': ra.get('tot_action', 0) + ra.get('legal', 0),
+            'h_maint': ha.get('tot_maint', 0), 'r_maint': ra.get('tot_maint', 0),
+            'real_decay': game.current_real_decay, 
+            'corr_caught': corr_caught, 'crony_caught': crony_caught
+        }
 
-def get_economic_forecast_text(decay_val):
-    if decay_val <= 0.35: return "🌟 景氣極佳"
-    elif decay_val <= 0.65: return "📈 穩定成長"
-    elif decay_val <= 0.95: return "⚖️ 持平放緩"
-    elif decay_val <= 1.15: return "📉 衰退警報"
-    else: return "⚠️ 經濟風暴"
+        hp.support, rp.support = hp_sup_new, 100.0 - hp_sup_new
+        if game.year % cfg['ELECTION_CYCLE'] == 1:
+            winner = hp if hp.support > rp.support else rp
+            st.session_state.news_flash = f"🎉 **【大選結果】** {winner.name} 取勝，成為當權派！"
+            st.session_state.anim = 'balloons'
+            game.ruling_party = winner
 
-def get_civic_index_text(score):
-    if score < 15: return f"易受灌輸 ({score:.1f})"
-    elif score < 30: return f"較易受灌輸 ({score:.1f})"
-    elif score < 45: return f"略受灌輸 ({score:.1f})"
-    elif score < 60: return f"理性中等 ({score:.1f})"
-    elif score < 75: return f"略具思辨 ({score:.1f})"
-    elif score < 90: return f"思辨成熟 ({score:.1f})"
-    else: return f"高度獨立思考 ({score:.1f})"
+        game.gdp = res_exec['est_gdp']
+        game.h_fund = res_exec['payout_h']
+        game.total_budget = budg + confiscated_to_budget
+        
+        hp.wealth += hp_inc - game.last_year_report['h_pol_cost'] - game.last_year_report['h_maint']
+        rp.wealth += rp_inc - game.last_year_report['r_pol_cost'] - game.last_year_report['r_maint']
 
-def get_emotion_text(emotion_val):
-    if emotion_val < 20: return f"平穩冷靜 ({emotion_val:.1f})"
-    elif emotion_val < 50: return f"些微躁動 ({emotion_val:.1f})"
-    elif emotion_val < 80: return f"群情激憤 ({emotion_val:.1f})"
-    else: return f"陷入狂熱 ({emotion_val:.1f})"
+        rp.investigate_ability = ra.get('t_inv', rp.investigate_ability)
+        rp.predict_ability = ra.get('t_pre', rp.predict_ability)
+        rp.media_ability = ra.get('t_med', rp.media_ability)
+        rp.stealth_ability = ra.get('t_stl', rp.stealth_ability)
+        rp.build_ability = ra.get('t_bld', rp.build_ability)
+        
+        hp.investigate_ability = ha.get('t_inv', hp.investigate_ability)
+        hp.predict_ability = ha.get('t_pre', hp.predict_ability)
+        hp.media_ability = ha.get('t_med', hp.media_ability)
+        hp.stealth_ability = ha.get('t_stl', hp.stealth_ability)
+        hp.build_ability = ha.get('t_bld', hp.build_ability)
+        
+        hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
+        game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
+    
+    rep = game.last_year_report
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### 💰 經濟與財政")
+        st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
+        
+        st.write(f"**執行系統收益總結:** `(基礎 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} + 業外 {rep['h_extra']:.1f}) - (花費 {rep['h_pol_cost']:.1f} + 維護 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
+        st.write(f"**監管系統收益總結:** `(基礎 {rep['r_base']:.1f} + 標案 {rep['r_payout']:.1f} + 業外 {rep['r_extra']:.1f}) - (花費 {rep['r_pol_cost']:.1f} + 維護 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
+        
+        if rep.get('corr_caught'): st.error("🚨 貪污醜聞爆發！貪污被情報處查獲，沒收所有非法所得並重挫民意。")
+        if rep.get('crony_caught'): st.error("🚨 圖利爭議！圖利親信遭舉發，強制沒收資金返還國庫與監管系統。")
 
-def get_election_icon(year, cycle):
-    rem = year % cycle
-    if rem == 1: return "🗳️ 大選年"
-    elif rem == 2: return "🌱 施政元年"
-    elif rem == cycle - 1: return "⏳ 距選舉 2 年"
-    elif rem == 0: return "🚨 明年選舉"
-    else: return f"距大選 {cycle - rem + 1} 年"
+    with c2:
+        st.markdown("#### 🧠 社會與民意")
+        st.write(f"資訊辨識: `{rep['old_san']:.1f} ➔ {game.sanity:.1f}`")
+        st.write(f"選民情緒: `{rep['old_emo']:.1f} ➔ {game.emotion:.1f}`")
+        st.write(f"施政滿意度位移 (執行/監管): `{rep['h_perf']:.1f}% / {rep['r_perf']:.1f}%`")
 
-def get_party_logo(name):
-    if name == "Prosperity": return "🦅"
-    elif name == "Equity": return "🤝"
-    return "🚩"
-
-def get_thinktank_eval(ability, diff):
-    abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
-    acc_lvl = "high" if diff <= 0.1 else "med" if diff <= 0.25 else "low"
-    matrix = {
-        ('high', 'high'): "頂尖發揮，完美預判", ('high', 'med'): "微幅誤差，戰略可控", ('high', 'low'): "黑天鵝事件！未能看透劇變",
-        ('med', 'high'): "表現超常，精準命中", ('med', 'med'): "中規中矩，誤差預期內", ('med', 'low'): "嚴重誤判，建議升級",
-        ('low', 'high'): "瞎貓碰死耗子，幸運猜中", ('low', 'med'): "表現尚可，參考價值低", ('low', 'low'): "完全失能，嚴重誤導決策！"
-    }
-    return matrix.get((abi_lvl, acc_lvl), "運作異常")
+    st.markdown("---")
+    if st.button("⏩ 確認報告並進入下一年", type="primary", use_container_width=True):
+        game.year += 1
+        game.phase = 1
+        game.p1_step = 'draft_r'
+        game.p1_proposals = {'R': None, 'H': None}
+        game.p1_selected_plan = None
+        for k in list(st.session_state.keys()):
+            if k.endswith('_acts'): del st.session_state[k]
+        if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
+        st.rerun()
