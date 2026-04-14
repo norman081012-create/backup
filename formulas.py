@@ -30,7 +30,7 @@ def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_a
         
     req_amt = a_t - a_base
     discount_factor = 1.0 - (build_ability * 0.02)
-    # 同樣乘上 0.1 的經濟規模轉換率
+    # 乘上 0.1 的經濟規模轉換率
     return req_amt * max(0.1, discount_factor) * 0.1
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
