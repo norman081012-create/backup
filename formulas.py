@@ -39,9 +39,14 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         h_idx = c_net / max(1.0, float(bid_cost))
 
     payout_h = min(budget_t, proj_fund * h_idx)
-    payout_r = max(0.0, budget_t - payout_h)
+    
+    # [已修改] 監管方收益：總預算減去政黨基本及執政紅利後，扣除標案總額
+    total_bonus_deduction = (cfg['DEFAULT_BONUS'] * 2) + cfg['RULING_BONUS']
+    payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
+    
     est_gdp = max(0.0, gdp - l_gdp + c_net)
     
+    # [已確認] 執行方專案收益：標案總額去減推估的工程成本
     h_project_profit = payout_h - act_fund
     
     return {
@@ -118,8 +123,19 @@ def get_formula_explanation(game, view_party, plan, cfg):
     my_profit = h_profit if my_is_h else r_profit
     opp_profit = r_profit if my_is_h else h_profit
     
-    my_roi = (my_profit / max(1.0, float(plan['h_pays'] if my_is_h else plan['r_pays']))) * 100.0
-    opp_roi = (opp_profit / max(1.0, float(plan['r_pays'] if my_is_h else plan['h_pays']))) * 100.0
+    lines = []
+    
+    lines.append(f"**我方預估收益:** `{my_profit:.1f}`")
+    if my_is_h:
+        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案總額 {plan['proj_fund']:.1f} - 工程成本 {res['act_fund']:.1f}) - 提案出資 {plan['h_pays']:.1f} = {my_profit:.1f}")
+    else:
+        lines.append(f"> 公式: (基礎金 {r_base:.1f} + (總預算 {game.total_budget:.1f} - 政黨輔助總和) - 標案總額 {plan['proj_fund']:.1f}) - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
+
+    lines.append(f"**對方預估收益:** `{opp_profit:.1f}`")
+    if not my_is_h:
+        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案總額 {plan['proj_fund']:.1f} - 工程成本 {res['act_fund']:.1f}) - 對方出資 {plan['h_pays']:.1f} = {opp_profit:.1f}")
+    else:
+        lines.append(f"> 公式: (基礎金 {r_base:.1f} + (總預算 {game.total_budget:.1f} - 政黨輔助總和) - 標案總額 {plan['proj_fund']:.1f}) - 對方出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
 
     ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
@@ -127,31 +143,10 @@ def get_formula_explanation(game, view_party, plan, cfg):
     my_sup = shift['actual_shift'] if my_is_h else -shift['actual_shift']
     gdp_diff = res['est_gdp'] - game.gdp
 
-    lines = []
-    lines.append("### 📝 智庫分析 (公式與計算推演)")
-    
-    lines.append(f"**1. 我方預估收益:** `{my_profit:.1f}` (ROI: `{my_roi:.1f}%`)")
-    if my_is_h:
-        lines.append(f"*(公式: 基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 實際需花費 {res['act_fund']:.1f} - 提案出資 {plan['h_pays']:.1f} = {my_profit:.1f})*")
-    else:
-        lines.append(f"*(公式: 基礎金 {r_base:.1f} + 國庫剩餘殘值 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f})*")
+    lines.append(f"**支持度變化預估:** `{my_sup:+.2f}%`")
+    lines.append(f"> 公式: [H政績 {shift['h_perf']:.1f} 與 R政績 {shift['r_perf']:.1f} + 雙方媒體/競選攻防估算 {shift['norm_M_H']:.2f}] × 理智乘數S {shift['S']:.2f} × 轉換率 {cfg['SUPPORT_CONVERSION_RATE']}")
 
-    lines.append(f"**2. 對方預估收益:** `{opp_profit:.1f}` (ROI: `{opp_roi:.1f}%`)")
-    if not my_is_h:
-        lines.append(f"*(公式: 基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 實際需花費 {res['act_fund']:.1f} - 對方出資 {plan['h_pays']:.1f} = {opp_profit:.1f})*")
-    else:
-        lines.append(f"*(公式: 基礎金 {r_base:.1f} + 國庫剩餘殘值 {res['payout_r']:.1f} - 對方出資 {plan['r_pays']:.1f} = {opp_profit:.1f})*")
-
-    lines.append(f"**3. 支持度變化預估:** `{my_sup:+.2f}%`")
-    lines.append(f"*(公式: [H政績 {shift['h_perf']:.1f} 與 R政績 {shift['r_perf']:.1f} + 雙方媒體/競選攻防估算 {shift['norm_M_H']:.2f}] × 理智乘數S {shift['S']:.2f} × 轉換率 {cfg['SUPPORT_CONVERSION_RATE']})*")
-
-    lines.append(f"**4. 預期 GDP 變化:** `{gdp_diff:+.1f}`")
-    lines.append(f"*(公式: 淨建設量 {res['c_net']:.1f} - [當前GDP {game.gdp:.1f} × 觀測衰退 {tt_decay:.2f} × 0.072] = {gdp_diff:+.1f})*")
-
-    diff = abs(plan.get('claimed_decay', 0.0) - tt_decay)
-    if diff > 0.3: light, risk_txt = "🔴", "高"
-    elif diff > 0.1: light, risk_txt = "🟡", "中"
-    else: light, risk_txt = "🟢", "低"
-    lines.append(f"**5. 衰退值差異:** {light} 風險{risk_txt} (公告: `{plan.get('claimed_decay', 0.0):.2f}` / 智庫: `{tt_decay:.2f}`)")
+    lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f} ({gdp_diff:+.1f})`")
+    lines.append(f"> 公式: 當前GDP {game.gdp:.1f} - 自然衰退量 {res['l_gdp']:.1f} + 淨建設量 {res['c_net']:.1f} = {res['est_gdp']:.1f}")
 
     return lines
