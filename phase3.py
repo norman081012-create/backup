@@ -24,20 +24,26 @@ def render(game, cfg):
         
         proj_fund = float(d.get('proj_fund') or 0.0)
         bid_cost = float(d.get('bid_cost') or 1.0)
-        claimed_drop = float(d.get('claimed_decay') or 0.0)
+        claimed_decay = float(d.get('claimed_decay') or 0.0)
         r_pays = float(d.get('r_pays') or 0.0)
         h_pays = float(d.get('h_pays') or 0.0)
         
-        corr_pct = float(ha.get('corr') or 0) / 100.0
-        crony_pct = float(ha.get('crony') or 0) / 100.0
+        corr_pct_val = float(ha.get('corr') or 0)
+        crony_pct_val = float(ha.get('crony') or 0)
         
-        corr_amt = proj_fund * corr_pct
-        crony_base = proj_fund * crony_pct
+        corr_amt = proj_fund * (corr_pct_val / 100.0)
+        crony_base = proj_fund * (crony_pct_val / 100.0)
         crony_income = crony_base * 0.1  
         
-        catch_prob_mult = max(0.1, rp.investigate_ability / max(0.1, hp.stealth_ability))
-        catch_prob_corr = min(1.0, catch_prob_mult * corr_pct * 3.0) 
-        catch_prob_crony = min(1.0, catch_prob_mult * crony_pct * 3.0) 
+        rp_inv_pct = rp.investigate_ability / 10.0
+        hp_stl_pct = hp.stealth_ability / 10.0
+        actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
+        
+        rolls_corr = corr_pct_val * actual_catch_mult
+        catch_prob_corr = 1.0 - (1.0 - cfg['CATCH_RATE_PER_PERCENT'])**rolls_corr
+        
+        rolls_crony = crony_pct_val * actual_catch_mult
+        catch_prob_crony = 1.0 - (1.0 - cfg['CRONY_CATCH_RATE_PER_PERCENT'])**rolls_crony
         
         if corr_amt > 0 and random.random() < catch_prob_corr:
             returned_to_r += corr_amt
@@ -64,13 +70,11 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # [核心呼叫] 產生新的支持量並進入列隊
         shifts = formulas.calc_support_amounts(
             cfg, hp, rp, game.ruling_party.name, res_exec['est_gdp'], game.gdp, 
-            ha, ra, claimed_drop, game.sanity, game.emotion, bid_cost, res_exec['c_net']
+            ha, ra, claimed_decay, game.sanity, game.emotion, bid_cost, res_exec['c_net'], game.current_real_decay
         )
         
-        # 更新陣列並取得新的總支持量
         a_sup_amt, b_sup_amt = game.update_support_queues({
             game.party_A.name: shifts[game.party_A.name],
             game.party_B.name: shifts[game.party_B.name]
@@ -92,7 +96,7 @@ def render(game, cfg):
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
             'h_party_name': hp.name,
-            'shifts': shifts, # 儲存供 UI 顯示
+            'shifts': shifts, 
             'h_inc': hp_inc, 'r_inc': rp_inc, 
             'h_base': hp_base, 'r_base': rp_base, 
             'h_payout': res_exec['payout_h'], 'r_payout': res_exec['payout_r'],
@@ -130,7 +134,7 @@ def render(game, cfg):
     with c1:
         st.markdown(t("#### 💰 經濟與財政"))
         st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
-        if rep.get('corr_caught'): st.error(t("🚨 貪污醜聞爆發！執行系統貪污被查獲，重挫民意。"))
+        if rep.get('corr_caught'): st.error(t("🚨 貪污醜聞爆發！執行系統貪污被查獲，沒收非法所得。"))
         if rep.get('crony_caught'): st.error(t("🚨 圖利爭議！執行系統圖利遭舉發，強制沒收資金。"))
 
     with c2:
