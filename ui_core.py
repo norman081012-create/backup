@@ -57,7 +57,7 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         gdp_diff = disp_gdp - gdp_base
         gdp_pct = (gdp_diff / max(1.0, gdp_base)) * 100.0
         g_color = "green" if gdp_diff > 0 else "red" if gdp_diff < 0 else "gray"
-        label_gdp = t("預期 GDP") if is_preview else t("當前 GDP")
+        label_gdp = t("預估 GDP") if is_preview else t("當前 GDP")
         st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` <span style='color:{g_color}'>*({gdp_diff:+.1f}, {gdp_pct:+.2f}%)*</span>", unsafe_allow_html=True)
 
     with c2:
@@ -111,7 +111,10 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(t("### 📊 智庫評估報告"))
                 st.markdown(f"{t('我方預估收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估收益')}: **{opp_net:.1f}**")
-
+                
+                sup_c = "green" if preview_data['my_sup_shift'] > 0 else "red"
+                # [修復點] 改為顯示支持量 (點數) 而非 %
+                st.markdown(f"{t('新增支持量預估')}: <span style='color:{sup_c}'>**{preview_data['my_sup_shift']:+.1f} 點**</span>", unsafe_allow_html=True)
     st.markdown("---")
 
 def render_message_board(game):
@@ -301,12 +304,28 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
         opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
         
+        ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
+        ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
+        
+        # [修復點] 改用新的 calc_support_amounts 算點數
+        shift_preview = formulas.calc_support_amounts(
+            cfg, sim_h_party, sim_r_party, sim_ruling_name,
+            res['est_gdp'], game.gdp, 
+            ha_dummy, ra_dummy, 
+            plan.get('claimed_decay', 0.0), game.sanity, game.emotion, plan['bid_cost'], res['c_net'], eval_decay
+        )
+        my_shifts = shift_preview[view_party.name]
+        my_sup = my_shifts['perf'] + my_shifts['camp'] + my_shifts['backlash']
+        
+        o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
+
         st.markdown(t("### 📝 智庫分析報告"))
         st.markdown(f"1. {t('我方預估收益')}: **{my_net:.1f}** (ROI: {my_roi:.1f}%)")
         st.markdown(f"2. {t('對方預估收益')}: **{opp_net:.1f}** (ROI: {opp_roi:.1f}%)")
-        
-        o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
-        st.markdown(f"3. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
+        sup_c = "green" if my_sup > 0 else "red"
+        # [修復點] 顯示支持量 (點數) 而非 %
+        st.markdown(f"3. {t('新增支持量預估')}: <span style='color:{sup_c}'>**{my_sup:+.1f} 點**</span>", unsafe_allow_html=True)
+        st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
         tt_decay = view_party.current_forecast
         cl_decay = plan.get('claimed_decay', 0.0)
@@ -330,7 +349,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         else: 
             light, risk_txt = "🟢", t("差異極小 (公告衰退率誠實，無心理預期操弄空間)")
             
-        st.markdown(f"4. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
+        st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
         
         cl_cost = plan.get('claimed_cost', eval_unit_cost)
         diff_c = cl_cost - eval_unit_cost
@@ -351,7 +370,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         else:
             light_c, risk_txt_c = "🟢", t("差異極小 (公告單價與情報處估算相符，屬正常估值)")
 
-        st.markdown(f"5. {t('建設單價判讀')}: {light_c} {risk_txt_c} ({t('公告')}: {cl_cost:.2f} / {t('情報')}: {eval_unit_cost:.2f})")
+        st.markdown(f"6. {t('建設單價判讀')}: {light_c} {risk_txt_c} ({t('公告')}: {cl_cost:.2f} / {t('情報')}: {eval_unit_cost:.2f})")
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     current_pct = current_val * 10.0
