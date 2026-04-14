@@ -23,7 +23,9 @@ class Party:
         self.poll_history = {'小型': [], '中型': [], '大型': []}
         self.latest_poll = None
         self.poll_count = 0
-        self.last_acts = {'policy': 0, 'legal': 0, 'maint': 0}
+        
+        # 初始化詳細的 last_acts 供 Phase 1 智庫預估使用
+        self.last_acts = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0, 'edu_amt': 0, 'tot_action': 0, 'legal': 0, 'tot_maint': 0}
 
 class GameEngine:
     def __init__(self, cfg):
