@@ -10,14 +10,15 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.8,  # [修改] 預設衰退改為 0.1~0.8
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.8,  
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
+    'GDP_INFLATION_DIVISOR': 10000.0, # [新增] 大國通膨係數，GDP每多一萬，成本翻倍
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
-    'BASE_INCOME_RATIO': 0.05,    # [新增] 每黨基本錢為總預算 0.05
-    'RULING_BONUS_RATIO': 0.10,   # [新增] 執政黨額外領取 0.10
+    'BASE_INCOME_RATIO': 0.05,    
+    'RULING_BONUS_RATIO': 0.10,   
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
@@ -43,7 +44,7 @@ def get_config_translations():
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'RESISTANCE_MULT': "建設阻力倍率",
         'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
-        'CURRENT_GDP': "初始 GDP", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
+        'CURRENT_GDP': "初始 GDP", 'GDP_INFLATION_DIVISOR': "通膨基數(越小越快通膨)", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
         'BASE_INCOME_RATIO': "基本政黨補助比例", 'RULING_BONUS_RATIO': "執政額外補助比例", 
         'H_FUND_DEFAULT': "初始執行獎勵基金", 
         'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
@@ -54,6 +55,14 @@ def get_config_translations():
         'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現影響量權重",
         'OBS_ERR_BASE': "觀測誤差基數", 'CLAIMED_DECAY_WEIGHT': "公告衰退操弄權重"
     }
+
+def get_intel_market_eval(unit_cost):
+    # [新增] 情報部門的專業市場分析
+    if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
+    elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
+    elif unit_cost < 1.8: return "🟡 通膨溢價浮現 (原物料與勞動力緊繃，成本開始攀升)"
+    elif unit_cost < 2.5: return "🔴 市場過熱警報 (系統性阻力高，預算消耗劇烈)"
+    else: return "💀 經濟結構惡化 (成本呈現毀滅性通膨，建議暫緩非必要開發)"
 
 def get_economic_forecast_text(decay_val):
     if decay_val <= 0.35: return "🌟 景氣極佳"
