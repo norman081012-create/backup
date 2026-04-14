@@ -33,11 +33,11 @@ def render(game, view_party, opponent_party, cfg):
             h_crony_pct = st.slider(t("🏢 圖利自身廠商 (%)"), 0, max(0, 100 - h_corr_pct), 0)
         else:
             judicial_amt = st.slider(t("⚖️ 司法審查 (投入資金)(降低全體黨媒效果，引起高思辯選民反感)"), 0.0, cw, 0.0)
-            edu_policy_amt = st.slider(t("🎓 教育方針 (投入資金)(左:填鴨 右:思辨)"), -cw, cw, 0.0)
+            edu_policy_amt = st.slider(t("🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))"), -cw, cw, 0.0)
             
-        media_ctrl = st.slider(t("📺 媒體操控 (投入資金)(改變施政產生的影響力)"), 0.0, cw, 0.0)
-        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)(無腦砸錢洗腦，理智越低越有效)"), 0.0, cw, 0.0)
-        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒降低思辨力/生產力，時效短)"), 0.0, cw, 0.0)
+        media_ctrl = st.slider(t("📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)"), 0.0, cw, 0.0)
+        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)"), 0.0, cw, 0.0)
+        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)"), 0.0, cw, 0.0)
         
     with c2:
         st.markdown(t("#### 🔒 內部部門投資"))
@@ -80,8 +80,10 @@ def render(game, view_party, opponent_party, cfg):
     orig_corr_amt = d.get('proj_fund', 0) * (act_ha.get('corr', 0) / 100.0)
     res_prev = formulas.calc_economy(cfg, game.gdp, game.total_budget, d.get('proj_fund', 0), d.get('bid_cost', 1), game.h_role_party.build_ability, view_party.current_forecast, orig_corr_amt)
     
-    hp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res_prev['payout_h'] - d.get('h_pays',0)
-    rp_inc_est = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res_prev['payout_r'] - d.get('r_pays',0)
+    h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
+    r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
+    hp_inc_est = h_base + res_prev['h_project_profit'] - d.get('h_pays',0)
+    rp_inc_est = r_base + res_prev['payout_r'] - d.get('r_pays',0)
 
     shift_preview = formulas.calc_support_shift(cfg, game.h_role_party, game.r_role_party, res_prev['payout_h'], res_prev['est_gdp'], d.get('proj_fund', 10), game.gdp, act_ha, act_ra, res_prev['h_idx'], d.get('claimed_decay', 0.0), game.sanity, game.emotion)
     
