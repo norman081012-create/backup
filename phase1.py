@@ -37,8 +37,10 @@ def render(game, view_party, cfg):
             widget_decay_key = f"num_{input_decay_key}"
             widget_cost_key = f"num_{input_cost_key}"
             
+            # [修復點]：強制取得「觀測」到的對方工程能力作為建議單價的基準
+            obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
             tt_decay = float(view_party.current_forecast)
-            suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, game.h_role_party.build_ability, view_party.current_forecast)
+            suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
             tt_cost = round(suggested_unit_cost, 2)
             
             if widget_decay_key not in st.session_state: st.session_state[widget_decay_key] = tt_decay
@@ -55,7 +57,6 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = t(f"對手公告: {opp_claimed_decay:.3f}", f"Opp. Claimed: {opp_claimed_decay:.3f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
                 
-                # 計算相當於多少建設量
                 current_val = st.session_state.get(widget_decay_key, tt_decay)
                 equiv_infra = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
                 
@@ -80,6 +81,7 @@ def render(game, view_party, cfg):
             bid_cost = st.slider(t("計畫總效益 (計畫100%完成時產生之建設量)", "Plan Total Benefit (Construction Volume)"), 0.0, max_budget * 1.5, def_bid, 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, def_rpays, 10.0)
             
+            # [邏輯確認]：這裡算出來的 132.6 會一路傳到底下被完美比對
             req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
             
