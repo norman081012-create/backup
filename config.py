@@ -1,6 +1,5 @@
 # ==========================================
 # config.py
-# 負責管理遊戲全域設定與判讀邏輯
 # ==========================================
 import i18n
 t = i18n.t
@@ -12,20 +11,15 @@ DEFAULT_CONFIG = {
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
     'DECAY_MIN': 0.0, 'DECAY_MAX': 1.0,  
-    'DECAY_WEIGHT_MULT': 0.05,  
-    'BASE_DECAY_RATE': 0.0,     
+    'DECAY_WEIGHT_MULT': 0.05,
+    'BASE_DECAY_RATE': 0.0,
     
-    'CATCH_RATE_PER_PERCENT': 0.02,       
-    'CRONY_CATCH_RATE_PER_PERCENT': 0.01, 
+    # [新增] 絕對衰退物理極限參數
+    'DECAY_AMOUNT_DEFAULT': 1500.0,  # 軟體部門(智庫/情報/媒體等)每年最大萎縮量
+    'DECAY_AMOUNT_BUILD': 500.0,     # 硬體部門(工程)每年最大萎縮量
     
-    # [核心新增] 各部門的每年最大衰變「量」(點數)
-    'DEPT_MAX_DECAY_AMT': {
-        'predict': 150.0,     # 智庫
-        'media': 150.0,       # 黨媒
-        'investigate': 100.0, # 情報處
-        'stealth': 100.0,     # 反情報處
-        'build': 50.0         # 工程處有實體資產，掉最慢
-    },
+    'CATCH_RATE_PER_PERCENT': 0.02,
+    'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
     
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
@@ -49,8 +43,6 @@ DEFAULT_CONFIG = {
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
-    'DECAY_AMOUNT_DEFAULT': 1500.0,  # 智庫、情報、媒體等軟實力的每年最大衰退量
-    'DECAY_AMOUNT_BUILD': 500.0,     # 工程處(硬體)的每年最大衰退量
     'OBS_ERR_BASE': 0.7,      
     'CLAIMED_DECAY_WEIGHT': 0.2  
 }
@@ -58,23 +50,10 @@ DEFAULT_CONFIG = {
 def get_config_translations():
     return {
         'DECAY_MIN': "最小衰退率 (0~1)", 'DECAY_MAX': "最大衰退率 (0~1)",  
-        'DECAY_WEIGHT_MULT': "衰退率GDP權重", 'BASE_DECAY_RATE': "最低衰退下限",
+        'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
-        'RESISTANCE_MULT': "建設阻力倍率",
-        'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
-        'CURRENT_GDP': "初始 GDP", 'GDP_INFLATION_DIVISOR': "通膨基數(越小越快通膨)", 
-        'GDP_CONVERSION_RATE': "建設量轉化GDP倍率", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
-        'BASE_INCOME_RATIO': "基本政黨補助比例", 'RULING_BONUS_RATIO': "執政額外補助比例", 
-        'H_FUND_DEFAULT': "初始執行獎勵基金", 
-        'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
-        'CORRUPTION_PENALTY': "貪污罰金倍率", 'MAX_ABILITY': "能力上限", 
-        'ABILITY_DEFAULT': "一般部門初始能力", 'BUILD_ABILITY_DEFAULT': "工程處初始能力", 
-        'MAINTENANCE_RATE': "維護費倍率",
-        'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
-        'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現影響量權重",
-        'OBS_ERR_BASE': "觀測誤差基數", 'CLAIMED_DECAY_WEIGHT': "公告衰退操弄權重"
     }
-
+    
 def get_intel_market_eval(unit_cost):
     if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
     elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
@@ -82,12 +61,12 @@ def get_intel_market_eval(unit_cost):
     elif unit_cost < 2.5: return "🔴 市場過熱警報 (系統性阻力高，預算消耗劇烈)"
     else: return "💀 經濟結構惡化 (成本呈現毀滅性通膨，建議暫緩非必要開發)"
 
-def get_economic_forecast_text(decay_val):
-    if decay_val <= 0.1: return "🌟 景氣極佳"
-    elif decay_val <= 0.3: return "📈 穩定成長"
-    elif decay_val <= 0.5: return "⚖️ 持平放緩"
-    elif decay_val <= 0.7: return "📉 衰退警報"
-    else: return "⚠️ 經濟風暴"
+def get_economic_forecast_text(drop_val):
+    if drop_val <= 10.0: return "🌟 景氣極佳 (跌幅微小)"
+    elif drop_val <= 30.0: return "📈 穩定成長 (跌幅可控)"
+    elif drop_val <= 50.0: return "⚖️ 持平放緩 (面臨衰退)"
+    elif drop_val <= 70.0: return "📉 衰退警報 (百業蕭條)"
+    else: return "⚠️ 經濟風暴 (系統性崩潰)"
 
 def get_civic_index_text(score):
     if score < 15: return f"易受灌輸 ({score:.1f})"
@@ -119,7 +98,7 @@ def get_party_logo(name):
 
 def get_thinktank_eval(ability, diff):
     abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
-    acc_lvl = "high" if diff <= 0.05 else "med" if diff <= 0.15 else "low"
+    acc_lvl = "high" if diff <= 5.0 else "med" if diff <= 15.0 else "low" 
     matrix = {
         ('high', 'high'): "頂尖發揮，完美預判", ('high', 'med'): "微幅誤差，戰略可控", ('high', 'low'): "黑天鵝事件！未能看透劇變",
         ('med', 'high'): "表現超常，精準命中", ('med', 'med'): "中規中矩，誤差預期內", ('med', 'low'): "嚴重誤判，建議升級",
