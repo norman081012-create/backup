@@ -52,7 +52,6 @@ class GameEngine:
         self.swap_triggered_this_year = False
         self.last_year_report = None
         
-        # 實裝支持量遞減列隊 (政績 6 年，造勢 2 年)
         self.support_queues = {
             self.party_A.name: {'perf': [], 'camp': []},
             self.party_B.name: {'perf': [], 'camp': []}
@@ -62,14 +61,13 @@ class GameEngine:
         a_name = self.party_A.name
         b_name = self.party_B.name
         
-        # 加入今年的新分數
-        self.support_queues[a_name]['perf'].append({'val': shifts['A']['perf'], 'age': 0})
-        self.support_queues[b_name]['perf'].append({'val': shifts['B']['perf'], 'age': 0})
-        self.support_queues[a_name]['camp'].append({'val': shifts['A']['camp'], 'age': 0})
-        self.support_queues[b_name]['camp'].append({'val': shifts['B']['camp'], 'age': 0})
+        # [修復] 將寫死的 'A' 和 'B' 改為對應政黨的動態名稱變數
+        self.support_queues[a_name]['perf'].append({'val': shifts[a_name]['perf'], 'age': 0})
+        self.support_queues[b_name]['perf'].append({'val': shifts[b_name]['perf'], 'age': 0})
+        self.support_queues[a_name]['camp'].append({'val': shifts[a_name]['camp'], 'age': 0})
+        self.support_queues[b_name]['camp'].append({'val': shifts[b_name]['camp'], 'age': 0})
         
-        # 老化與清理
-        a_sup_amt = 5000.0; b_sup_amt = 5000.0 # 基礎盤 50% = 5000 點
+        a_sup_amt = 5000.0; b_sup_amt = 5000.0 
         
         for p_name in [a_name, b_name]:
             for q in self.support_queues[p_name]['perf']: q['age'] += 1
@@ -78,7 +76,6 @@ class GameEngine:
             self.support_queues[p_name]['perf'] = [x for x in self.support_queues[p_name]['perf'] if x['age'] <= 6]
             self.support_queues[p_name]['camp'] = [x for x in self.support_queues[p_name]['camp'] if x['age'] <= 2]
             
-            # 計算殘值 (線性遞減)
             for x in self.support_queues[p_name]['perf']: 
                 if p_name == a_name: a_sup_amt += x['val'] * (1.0 - (x['age']/7.0))
                 else: b_sup_amt += x['val'] * (1.0 - (x['age']/7.0))
@@ -87,9 +84,9 @@ class GameEngine:
                 if p_name == a_name: a_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
                 else: b_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
 
-        # 審查反噬 (直接扣底層支持量)
-        a_sup_amt += shifts['A']['backlash']
-        b_sup_amt += shifts['B']['backlash']
+        # [修復] 同樣更新反噬的 Key
+        a_sup_amt += shifts[a_name]['backlash']
+        b_sup_amt += shifts[b_name]['backlash']
         
         a_sup_amt = max(0.0, a_sup_amt)
         b_sup_amt = max(0.0, b_sup_amt)
