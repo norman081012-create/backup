@@ -87,8 +87,9 @@ def render(game, view_party, opponent_party, cfg):
     
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), orig_corr_amt)
     
-    h_base = float(cfg['DEFAULT_BONUS']) + (float(cfg['RULING_BONUS']) if game.ruling_party.name == game.h_role_party.name else 0.0)
-    r_base = float(cfg['DEFAULT_BONUS']) + (float(cfg['RULING_BONUS']) if game.ruling_party.name == game.r_role_party.name else 0.0)
+    # [修改] 使用新的總預算比例參數
+    h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
     hp_net_est = h_base + res_prev['payout_h'] - res_prev['act_fund'] + r_pays
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
