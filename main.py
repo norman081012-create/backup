@@ -7,7 +7,7 @@ import random
 import config
 import engine
 import ui_core
-import ui_panels
+import ui_proposal  # 新增引用
 import phase1
 import phase2
 import phase3
@@ -77,7 +77,7 @@ is_election_year = (game.year % cfg['ELECTION_CYCLE'] == 1)
 
 with st.sidebar:
     ui_core.render_global_settings(cfg, game)
-    ui_panels.render_sidebar_intel_audit(game, view_party, cfg)
+    ui_core.render_sidebar_intel_audit(game, view_party, cfg)
     god_mode = st.toggle(t("👁️ 上帝視角", "👁️ God Mode"), False)
     if st.button(t("🔄 重新開始遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
 
@@ -91,8 +91,8 @@ if god_mode:
     st.error(t(f"👁️ **上帝視角：** 真實衰退值為 **{game.current_real_decay:.3f}** (損失建設量: {real_loss:.1f})"))
 
 if game.phase == 1 or game.phase == 2:
-    if game.phase == 1: ui_panels.render_dashboard(game, view_party, cfg, is_preview=False)
-    ui_panels.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
+    if game.phase == 1: ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
+    ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
     ui_core.render_message_board(game)
 
 if game.phase == 1:
@@ -103,4 +103,4 @@ elif game.phase == 3:
     phase3.render(game, cfg)
 
 if game.phase != 4:
-    ui_core.render_formula_panel(game, view_party, cfg)
+    ui_proposal.render_formula_panel(game, view_party, cfg)
