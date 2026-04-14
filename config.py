@@ -15,17 +15,16 @@ DEFAULT_CONFIG = {
     'DECAY_WEIGHT_MULT': 0.05,  
     'BASE_DECAY_RATE': 0.0,     
     
-    # 貪污防線：每一 % 的獨立擲骰機率
     'CATCH_RATE_PER_PERCENT': 0.02,       
     'CRONY_CATCH_RATE_PER_PERCENT': 0.01, 
     
-    # 部門物理慣性：每年最大衰變「量」(點數/資金)
+    # [核心新增] 各部門的每年最大衰變「量」(點數)
     'DEPT_MAX_DECAY_AMT': {
-        'predict': 150.0,     
-        'media': 150.0,       
-        'investigate': 100.0, 
-        'stealth': 100.0,     
-        'build': 50.0         
+        'predict': 150.0,     # 智庫
+        'media': 150.0,       # 黨媒
+        'investigate': 100.0, # 情報處
+        'stealth': 100.0,     # 反情報處
+        'build': 50.0         # 工程處有實體資產，掉最慢
     },
     
     'RESISTANCE_MULT': 1.0, 
