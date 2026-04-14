@@ -17,15 +17,25 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
     discount_factor = 1.0 - (build_ability * 0.02)
     return base_cost * max(0.1, discount_factor)
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0):
-    r_decay = forecast_decay * 0.072
-    l_gdp = gdp * r_decay
-    res_mult = cfg.get('RESISTANCE_MULT', 1.0)
-    resistance = l_gdp * res_mult
+def calc_unit_cost(cfg, gdp, build_abi, decay):
+    # [新增] 全新的指數型大國通膨公式
+    b_norm = max(0.01, build_abi / 10.0)
+    inflation = gdp / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)
+    base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
+    return base_cost * (1 + inflation)
+
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
+    # 自然衰退照舊
+    l_gdp = gdp * forecast_decay * 0.072
     
+    # 決定使用的單位產出成本
+    if override_unit_cost is not None:
+        unit_cost = override_unit_cost
+    else:
+        unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
+        
+    req_cost = bid_cost * unit_cost
     available_fund = max(0.0, proj_fund - corr_amt)
-    
-    req_cost = (bid_cost + resistance) / max(0.01, (build_abi / 10.0))
     
     if req_cost <= available_fund:
         act_fund = req_cost
@@ -33,12 +43,10 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         h_idx = 1.0
     else:
         act_fund = available_fund
-        gross = act_fund * (build_abi / 10.0)
-        c_net = max(0.0, gross - resistance)
+        c_net = act_fund / max(0.01, unit_cost)
         h_idx = c_net / max(1.0, float(bid_cost))
 
     payout_h = min(budget_t, proj_fund * h_idx)
-    # [修改] 套用新的基礎與執政獎金比例
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
@@ -48,7 +56,7 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     return {
         'est_gdp': est_gdp, 'payout_h': payout_h, 'payout_r': payout_r,
         'h_idx': h_idx, 'c_net': c_net, 'l_gdp': l_gdp, 
-        'resistance': resistance, 'act_fund': act_fund, 
+        'unit_cost': unit_cost, 'act_fund': act_fund, 
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
@@ -120,7 +128,6 @@ def get_formula_explanation(game, view_party, plan, cfg):
     
     my_is_h = (view_party.name == game.h_role_party.name)
     
-    # [修改] 使用新的總預算比例參數
     h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
