@@ -9,14 +9,33 @@ t = i18n.t
 def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
-def get_ability_maintenance(ability, cfg):
-    return max(0.0, ability * cfg['MAINTENANCE_RATE'])
-
-def calculate_upgrade_cost(current, target, build_ability=0.0):
-    base_cost = max(0.0, (2**(target - current) - 1) * 50) if target > current else 0.0
+def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0):
+    # 取得當前總規模(Amount)
+    amount = (2**current_val - 1) * 50.0
+    # 套用最大衰減物理極限
+    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
+    # 維護費 = 將今年衰退的部分補齊所需的花費
+    decay_amt = min(amount, max_decay)
+    
     discount_factor = 1.0 - (build_ability * 0.02)
-    return base_cost * max(0.1, discount_factor)
+    return decay_amt * max(0.1, discount_factor)
 
+def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_ability=0.0):
+    a_c = (2**current_val - 1) * 50.0
+    a_t = (2**target_val - 1) * 50.0
+    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
+    
+    # 計算斷炊後的物理底線 (A_base)
+    a_base = max(0.0, a_c - max_decay)
+    
+    # 如果目標值低於或等於斷炊底線，代表放任其萎縮，花費為 0
+    if a_t <= a_base:
+        return 0.0
+        
+    # 需要補足的絕對資金 = 目標總量 - 斷炊後的殘值
+    req_amt = a_t - a_base
+    discount_factor = 1.0 - (build_ability * 0.02)
+    return req_amt * max(0.1, discount_factor)
 def calc_unit_cost(cfg, gdp, build_abi, decay):
     b_norm = max(0.01, build_abi / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
