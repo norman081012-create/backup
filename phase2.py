@@ -80,6 +80,17 @@ def render(game, view_party, opponent_party, cfg):
     if tot > cw:
         st.error(f"{t('🚨 資金不足！當前行動預算已超支')} {tot - cw:.1f} 元，請降低投入資金。")
     
+    ra_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'edu_amt': edu_policy_amt, 'judicial': judicial_amt}
+    ha_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'corr': h_corr_pct, 'crony': h_crony_pct}
+    
+    act_ra = ra_dummy if not is_h else {'media': 0, 'camp': 0, 'incite': 0, 'edu_amt': 0, 'judicial': 0}
+    act_ha = ha_dummy if is_h else {'media': 0, 'camp': 0, 'incite': 0, 'corr': 0, 'crony': 0}
+    
+    if f"{opponent_party.name}_acts" in st.session_state:
+        opp_acts = st.session_state[f"{opponent_party.name}_acts"]
+        if is_h: act_ra = opp_acts
+        else: act_ha = opp_acts
+
     proj_fund = float(d.get('proj_fund') or 0.0)
     bid_cost = float(d.get('bid_cost') or 1.0)
     claimed_decay = float(d.get('claimed_decay') or 0.0)
@@ -98,19 +109,20 @@ def render(game, view_party, opponent_party, cfg):
     hp_net_est = h_base + res_prev['h_project_profit'] + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
-    # [修改點] 使用新的政績預估
     shift_preview = formulas.calc_performance_amounts(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
         res_prev['est_gdp'], game.gdp, 
         claimed_decay, game.sanity, game.emotion, bid_cost, res_prev['c_net']
     )
     
+    # 傳入包含 project_perf 在內的完整數據
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
         'h_inc': hp_net_est, 'r_inc': rp_net_est,
         'my_perf': shift_preview[view_party.name]['perf'],
-        'opp_perf': shift_preview[opponent_party.name]['perf']
+        'opp_perf': shift_preview[opponent_party.name]['perf'],
+        'project_perf': shift_preview['project_perf']
     }
     
     ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
