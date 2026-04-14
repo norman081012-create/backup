@@ -10,7 +10,7 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.9,  # [修改] 衰退值區間 0.1 ~ 0.9
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.9,  
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
@@ -26,12 +26,12 @@ DEFAULT_CONFIG = {
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
-    'SANITY_DEFAULT': 60.0, 
+    'SANITY_DEFAULT': 50.0,   # [已修改] 初始資訊辨識改為 50.0
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.4,
-    'CLAIMED_DECAY_WEIGHT': 0.2  # [新增] 公告衰退影響的權重
+    'OBS_ERR_BASE': 0.7,      # [已修改] 調整此權重讓初始準確度落在 30%
+    'CLAIMED_DECAY_WEIGHT': 0.2  
 }
 
 def get_config_translations():
