@@ -6,7 +6,7 @@ import streamlit as st
 import formulas
 import engine
 import ui_core
-import ui_proposal  # 新增引用
+import ui_proposal  
 import i18n
 t = i18n.t
 
@@ -73,11 +73,11 @@ def render(game, view_party, cfg):
                 claimed_cost = st.number_input("公告建設單價", step=0.01, key=widget_cost_key, label_visibility="collapsed")
                 st.session_state[input_cost_key] = claimed_cost
             
+            # [修復] 嚴格限制預設值不能超出 min/max 邊界，避免滑桿變成紅點報錯
             max_budget = max(10.0, float(game.total_budget))
-            
-            def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
-            def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
-            def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
+            def_proj = min(max_budget, max(0.0, float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0))
+            def_bid = max(0.0, float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0)
+            def_rpays = min(max_budget, max(0.0, float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0))
             
             proj_fund = st.slider(t("計畫獎勵金 (執行方100%完成計畫之獎勵金，最高不超過當年總預算)", "Total Plan Reward (Max=Budget)"), 0.0, max_budget, def_proj, 10.0)
             bid_cost = st.slider(t("計畫總效益 (計畫100%完成時產生之建設量)", "Plan Total Benefit (Construction Volume)"), 0.0, max_budget * 1.5, def_bid, 10.0)
