@@ -97,7 +97,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
             if rep:
                 my_is_h = view_party.name == rep['h_party_name']
                 real_inc = rep['h_inc'] if my_is_h else rep['r_inc']
-                est_inc = rep['est_h_inc'] if my_is_h else rep['est_r_inc']
+                # [修改] 修復 KeyError
+                est_inc = rep.get('est_h_inc', 0.0) if my_is_h else rep.get('est_r_inc', 0.0)
                 st.write(f"{t('淨利')}: {t('真')}:**{real_inc:.1f}** ({t('去年估')}:{est_inc:.1f})")
         else:
             if is_preview:
@@ -148,8 +149,9 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
             st.markdown(f"## {eye}{logo} {party.name} {crown_str}")
             st.markdown(f"#### {role_badge}")
 
+            # [修改] 放大了黨產資金字體
             if party.name == view_party.name:
-                st.markdown(f"**{t('黨產資金')}:** `${party.wealth:.1f}`")
+                st.markdown(f"### 💰 **{t('黨產資金')}:** `${party.wealth:.1f}`")
             else:
                 rng = random.Random(f"wealth_{party.name}_{game.year}")
                 opp_stl = party.stealth_ability / 10.0
@@ -157,7 +159,7 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
                 blur = err_margin if not god_mode else 0.0
                 est_wealth = party.wealth * (1 + rng.uniform(-blur, blur))
-                st.markdown(f"**{t('黨產資金')}:** `${est_wealth:.1f}` *({t('預估')})*")
+                st.markdown(f"### 💰 **{t('黨產資金')}:** `${est_wealth:.1f}` *({t('預估')})*")
 
             if is_election_year or god_mode: 
                 disp_sup = f"{party.support:.1f}%" + (" 🏆(當選!)" if is_winner else " 💀(落選)")
@@ -202,7 +204,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     obs_build = max(0.1, opp.build_ability * (1 + rng.uniform(-blur, blur)))
     st.write(f"{t('工程處')}: {obs_build*10:.1f}%")
     
-    # [修改] 導入全新的情報處專屬經濟判讀
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_build, view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     st.write(f"**{t('建設估價')}**: {eval_txt}")
@@ -239,7 +240,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
-    # [修改] 傳入 override_unit_cost 以支援切換功能
     res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost)
     
     eval_req_cost = res['req_cost']
@@ -307,6 +307,24 @@ def render_proposal_component(title, plan, game, view_party, cfg):
             light, risk_txt = "🟢", t("差異極小 (公告與智庫基準相符，屬正常估值)")
             
         st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
+        
+        # [新增] 建設單價判讀
+        cl_cost = plan.get('claimed_cost', eval_unit_cost)
+        diff_c = cl_cost - eval_unit_cost
+        abs_diff_c = abs(diff_c)
+
+        if abs_diff_c > 0.5:
+            light_c = "🔴"
+            if cl_cost > eval_unit_cost:
+                risk_txt_c = t("研判對手惡意高估單價，企圖浮報預算與墊高門檻！") if opp_role == 'R' else t("研判對手惡意高估單價，意圖套取過高工程款！")
+            else:
+                risk_txt_c = t("研判對手低估單價，企圖壓榨我方建設量！") if opp_role == 'R' else t("研判對手低估單價，企圖掩飾低效能！")
+        elif abs_diff_c > 0.2:
+            light_c, risk_txt_c = "🟡", t("中度風險 (單價略有出入，需留意工程品質或超支)")
+        else:
+            light_c, risk_txt_c = "🟢", t("差異極小 (公告單價與情報處估算相符，屬正常估值)")
+
+        st.markdown(f"6. {t('建設單價判讀')}: {light_c} {risk_txt_c} ({t('公告')}: {cl_cost:.2f} / {t('情報')}: {eval_unit_cost:.2f})")
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     current_pct = current_val * 10.0
