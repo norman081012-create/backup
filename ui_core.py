@@ -116,8 +116,10 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                # [修改] 改為顯示未經媒體影響的「純淨政績」
+                # Phase 2 儀表板：包含履約政績 (因為正在設定貪污)
                 st.markdown(f"{t('預期政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
+                if 'project_perf' in preview_data:
+                    st.caption(f"*(包含執行方當前貪污設定下的履約政績: `{preview_data['project_perf']:+.1f}`)*")
     st.markdown("---")
 
 def render_message_board(game):
@@ -280,7 +282,9 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"#### {title}")
     
     c_tog1, c_tog2 = st.columns(2)
-    use_claimed = c_tog1.toggle(t("切換以 公告數字 試算 (預設為智庫/真實預估)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
+    # [反轉預設值] 預設關閉(False) = 使用公告數字。文字改為「切換至智庫預估」
+    use_tt = c_tog1.toggle(t("切換至 智庫預估 試算 (預設為公告數值)"), False, key=f"tg_tt_{title}_{plan.get('author', 'sys')}")
+    use_claimed = not use_tt
     simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (依據新定位試算)"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
     
     c1, c2 = st.columns(2)
@@ -343,25 +347,33 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
         opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
         
-        # [核心修正] 呼叫新的 calc_performance_amounts
+        ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
+        ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
+        
         shift_preview = formulas.calc_performance_amounts(
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['est_gdp'], game.gdp, 
             plan.get('claimed_decay', 0.0), game.sanity, game.emotion, plan['bid_cost'], res['c_net']
         )
+        
         my_perf = shift_preview[view_party.name]['perf']
-        opp_perf = shift_preview[sim_h_party.name if my_is_h else sim_r_party.name]['perf']
+        opp_perf = shift_preview[sim_r_party.name if my_is_h else sim_h_party.name]['perf']
+        proj_perf = shift_preview['project_perf']
+        
+        # [核心剝離] Phase 1 的預覽只顯示「大環境政績」，扣除必定歸屬執行方的履約紅利
+        base_my_perf = my_perf - (proj_perf if my_is_h else 0.0)
+        base_opp_perf = opp_perf - (proj_perf if not my_is_h else 0.0)
         
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
-
         def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
 
         st.markdown(t("### 📝 智庫分析報告"))
         st.markdown(f"1. {t('我方預估總收益')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
         st.markdown(f"2. {t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
         
-        # [修改點] 清楚標示我方與對手的純淨政績
-        st.markdown(f"3. {t('預期政績 (未經媒體換算)')}: 我方 **{my_perf:+.1f}** / 對手 **{opp_perf:+.1f}**")
+        st.markdown(f"3. {t('預期大環境政績 (未經媒體)')}: 我方 **{base_my_perf:+.1f}** / 對手 **{base_opp_perf:+.1f}**")
+        st.caption(f"*(⚠️ 草案階段不預設完工。若執行方 100% 履約，將於 Phase 2 額外獲得 `{proj_perf:+.1f}` 點)*")
+        
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
         tt_decay = view_party.current_forecast
