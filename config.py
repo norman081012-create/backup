@@ -49,6 +49,8 @@ DEFAULT_CONFIG = {
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
+    'DECAY_AMOUNT_DEFAULT': 1500.0,  # 智庫、情報、媒體等軟實力的每年最大衰退量
+    'DECAY_AMOUNT_BUILD': 500.0,     # 工程處(硬體)的每年最大衰退量
     'OBS_ERR_BASE': 0.7,      
     'CLAIMED_DECAY_WEIGHT': 0.2  
 }
