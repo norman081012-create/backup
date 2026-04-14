@@ -227,4 +227,39 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     maint = formulas.get_ability_maintenance(t_val, cfg)
     
     if t_val > current_val:
-        st.caption(f"
+        st.caption(f"📈 {t('📈 升級花費')}: ${cost:.1f} | {t('維護費將達')} ${maint:.1f}")
+    elif t_val < current_val:
+        st.caption(f"📉 {t('📉 免費降級')} | {t('維護費降至')} ${maint:.1f}")
+    else:
+        st.caption(f"{t('穩定維持')} | {t('維護費')} ${maint:.1f}")
+    return t_val, cost
+
+def add_event_vlines(fig, history_df):
+    for _, row in history_df.iterrows():
+        y = row['Year']
+        if row['Is_Swap']: fig.add_vline(x=y, line_dash="dot", line_color="red", annotation_text="倒閣!", annotation_position="top left")
+        if row['Is_Election']: fig.add_vline(x=y, line_dash="dash", line_color="green", annotation_text="選舉", annotation_position="bottom right")
+
+def render_endgame_charts(history_data, cfg):
+    st.balloons()
+    st.title("🏁 遊戲結束！共生內閣軌跡總結算")
+    df = pd.DataFrame(history_data)
+    fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig1.add_trace(go.Scatter(x=df['Year'], y=df['GDP'], name="總 GDP", line=dict(color='blue', width=3)), secondary_y=False)
+    fig1.add_trace(go.Scatter(x=df['Year'], y=df['Sanity'], name="資訊辨識 (0-100)", line=dict(color='purple', width=3)), secondary_y=True)
+    add_event_vlines(fig1, df)
+    st.plotly_chart(fig1, use_container_width=True)
+
+def render_formula_panel(game, view_party, cfg):
+    with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)"), expanded=False):
+        plan = None
+        if game.phase == 1 and getattr(game, 'p1_selected_plan', None):
+            plan = game.p1_selected_plan
+        elif game.phase >= 2:
+            plan = st.session_state.get('turn_data')
+            
+        if plan and 'proj_fund' in plan:
+            lines = formulas.get_formula_explanation(game, view_party, plan, cfg)
+            for line in lines: st.markdown(line)
+        else:
+            st.info("目前階段尚無具體標案數據可供計算。")
