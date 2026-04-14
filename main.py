@@ -13,7 +13,7 @@ import phase2
 import phase3
 import phase4
 import i18n
-
+import ui_formulas
 st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
 st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
 
@@ -103,4 +103,4 @@ elif game.phase == 3:
     phase3.render(game, cfg)
 
 if game.phase != 4:
-    ui_proposal.render_formula_panel(game, view_party, cfg)
+    ui_formulas.render_formula_panel(game, view_party, cfg)
