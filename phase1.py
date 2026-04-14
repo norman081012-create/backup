@@ -37,7 +37,7 @@ def render(game, view_party, cfg):
             widget_decay_key = f"num_{input_decay_key}"
             widget_cost_key = f"num_{input_cost_key}"
             
-            # [修復點]：強制取得「觀測」到的對方工程能力作為建議單價的基準
+            # 取得觀測到的對手能力
             obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
             tt_decay = float(view_party.current_forecast)
             suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
@@ -57,10 +57,14 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = t(f"對手公告: {opp_claimed_decay:.3f}", f"Opp. Claimed: {opp_claimed_decay:.3f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
                 
+                # [核心修正] 計算達到 GDP 損益兩平所需的「建設量」
+                # 公式: (GDP * (衰退率 * 權重)) / GDP 轉換率
                 current_val = st.session_state.get(widget_decay_key, tt_decay)
-                equiv_infra = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+                conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
+                gdp_loss = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+                req_infra_to_balance = gdp_loss / conv_rate
                 
-                st.markdown(t(f"**公告衰退值 (當前公告: {current_val:.3f}) (相當於 {equiv_infra:.1f} 建設量)** | {opp_txt1}"))
+                st.markdown(t(f"**公告衰退值 (當前公告: {current_val:.3f}) (相當於 {req_infra_to_balance:.1f} 建設量)** | {opp_txt1}"))
                 claimed_decay = st.number_input("公告衰退值", step=0.001, min_value=0.0, max_value=1.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
@@ -81,7 +85,6 @@ def render(game, view_party, cfg):
             bid_cost = st.slider(t("計畫總效益 (計畫100%完成時產生之建設量)", "Plan Total Benefit (Construction Volume)"), 0.0, max_budget * 1.5, def_bid, 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, def_rpays, 10.0)
             
-            # [邏輯確認]：這裡算出來的 132.6 會一路傳到底下被完美比對
             req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
             
