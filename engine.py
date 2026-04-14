@@ -41,7 +41,6 @@ class GameEngine:
         self.history = []; self.swap_triggered_this_year = False
         self.last_year_report = None
 
-    # [修改] 增加許多給 Phase 4 繪圖用的紀錄
     def record_history(self, is_election):
         self.history.append({
             'Year': self.year, 'GDP': self.gdp, 'Sanity': self.sanity, 'Emotion': self.emotion,
@@ -54,30 +53,4 @@ class GameEngine:
             'A_Edu': float(self.party_A.last_acts.get('edu_amt', 0)),
             'B_Edu': float(self.party_B.last_acts.get('edu_amt', 0)),
             'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
-            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
-        })
-        self.swap_triggered_this_year = False
-
-def execute_poll(game, view_party, cost):
-    view_party.wealth -= cost
-    error_margin = max(0.0, 15.0 - (view_party.predict_ability * 0.5) - (cost * 0.4))
-    a_actual = game.party_A.support
-    a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
-    
-    poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
-    game.party_A.latest_poll = a_poll
-    game.party_A.poll_history[poll_type].append(a_poll)
-    b_poll = 100.0 - a_poll
-    game.party_B.latest_poll = b_poll
-    game.party_B.poll_history[poll_type].append(b_poll)
-    view_party.poll_count += 1
-
-def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
-    game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
-    game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
-    game.swap_triggered_this_year = True
-    game.emotion = min(100.0, game.emotion + 30.0) 
-    
-    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各繳納 {penalty_amt:.1f} 資金給第三方慈善團體，觸發換位！"
-    st.session_state.anim = 'snow'
-    game.phase = 2
+            'B_Avg_Abi': (self.party_B.build_ability + self.party_B
