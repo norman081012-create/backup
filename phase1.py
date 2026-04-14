@@ -37,20 +37,39 @@ def render(game, view_party, cfg):
             st.markdown(t(f"**公告衰退值 (當前估算: {st.session_state[input_key]:.2f})** | {opp_txt}", f"**Claimed Decay (Current: {st.session_state[input_key]:.2f})** | {opp_txt}"))
             claimed_decay = st.number_input(t("公告衰退值", "Claimed Decay"), value=float(st.session_state[input_key]), step=0.01, key=f"num_{input_key}", label_visibility="collapsed")
             st.session_state[input_key] = claimed_decay
-                
-            max_p = max(10.0, float(game.total_budget))
-            proj_fund = st.slider(t("標案總額 (最高不超過當年總預算)", "Total Bid Amount (Max=Budget)"), 0.0, max_p, float(min(1000.0, max_p)), 10.0)
-            bid_cost = st.slider(t("標案成本 (要求之建設產出值，留點利潤給對手賺)", "Bid Cost (Required construction)"), 1.0, max(1.0, float(proj_fund)), max(1.0, float(proj_fund * 0.8)), 10.0)
+            
+            # [修改] 拉桿解綁：各自擁有獨立最大值，不再互相牽制
+            max_budget = max(10.0, float(game.total_budget))
+            
+            proj_fund = st.slider(t("標案總額 (提供給執行方的總預算)", "Total Bid Amount"), 0.0, max_budget, float(min(1000.0, max_budget)), 10.0)
+            bid_cost = st.slider(t("標案成本 (要求執行方達成的建設產出值)", "Bid Cost (Required construction)"), 0.0, max_budget * 1.5, float(min(800.0, max_budget)), 10.0)
+            r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, float(min(500.0, max_budget)), 10.0)
+            
+            h_pays = proj_fund - r_pays
+            
+            # [新增] 邏輯防護鎖定：如果設定不合理，鎖死按鈕並顯示警告
+            is_invalid = False
+            warning_msg = ""
+            if r_pays > proj_fund:
+                is_invalid = True
+                warning_msg = t("⚠️ 錯誤：監管出資額不能大於標案總額！", "⚠️ Error: R-Pays cannot exceed Total Bid Amount!")
+            elif proj_fund <= 0:
+                is_invalid = True
+                warning_msg = t("⚠️ 錯誤：標案總額必須大於 0！", "⚠️ Error: Total Bid Amount must be > 0!")
+            elif bid_cost <= 0:
+                is_invalid = True
+                warning_msg = t("⚠️ 錯誤：標案成本必須大於 0！", "⚠️ Error: Bid Cost must be > 0!")
+
+            r_pct = (r_pays / max(1.0, proj_fund)) * 100 if proj_fund > 0 else 0
+            h_pct = (h_pays / max(1.0, proj_fund)) * 100 if proj_fund > 0 else 0
+            
+            if is_invalid:
+                st.error(warning_msg)
+            else:
+                st.markdown(t(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 總額: {proj_fund:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Total: {proj_fund:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, claimed_decay)
             req_cost = res_for_req['req_cost']
-            
-            r_pays = st.slider(t(f"💰 資金分配調整 (監管出資額)", f"💰 Funding Distribution (R-Pays)"), 0.0, float(req_cost), float(req_cost * 0.5))
-            h_pays = req_cost - r_pays
-            r_pct = (r_pays / max(1.0, req_cost)) * 100
-            h_pct = (h_pays / max(1.0, req_cost)) * 100
-            
-            st.markdown(t(f"<h4><span style='font-size: 1.2em'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 出資總額: {req_cost:.1f} / <span style='font-size: 1.2em'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Req. Cost: {req_cost:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
@@ -58,8 +77,9 @@ def render(game, view_party, cfg):
                 'author': active_role, 'req_cost': req_cost
             }
 
+            st.markdown("<br>", unsafe_allow_html=True)
             c_btn1, c_btn2, c_btn3 = st.columns(3)
-            if c_btn1.button(t("📤 送出常規草案", "📤 Submit Draft"), use_container_width=True, type="primary"):
+            if c_btn1.button(t("📤 送出常規草案", "📤 Submit Draft"), use_container_width=True, type="primary", disabled=is_invalid):
                 if game.p1_step == 'ultimatum_draft_r':
                     game.p1_selected_plan = plan_dict; game.p1_step = 'ultimatum_resolve_h'; game.proposing_party = game.h_role_party
                 else:
@@ -69,7 +89,7 @@ def render(game, view_party, cfg):
                 st.rerun()
                 
             if active_role == 'R' and game.p1_step == 'draft_r':
-                if c_btn2.button(t("💥 發布最後通牒", "💥 Issue Ultimatum"), use_container_width=True):
+                if c_btn2.button(t("💥 發布最後通牒", "💥 Issue Ultimatum"), use_container_width=True, disabled=is_invalid):
                     game.p1_selected_plan = plan_dict
                     game.p1_step = 'ultimatum_resolve_h'
                     game.proposing_party = game.h_role_party
@@ -77,13 +97,14 @@ def render(game, view_party, cfg):
                     st.rerun()
                 
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
-                if c_btn3.button(t(f"🔄 強制通過並換位 (費用: {swap_cost:.1f})", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True):
+                if c_btn3.button(t(f"🔄 強制通過並換位 (費用: {swap_cost:.1f})", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
                     st.session_state.turn_data.update(plan_dict)
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
 
-            st.markdown("---")
-            ui_core.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
+            if not is_invalid:
+                st.markdown("---")
+                ui_core.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
 
             if opp_plan:
                 st.markdown("---")
