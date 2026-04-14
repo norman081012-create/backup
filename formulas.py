@@ -40,13 +40,11 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
 
     payout_h = min(budget_t, proj_fund * h_idx)
     
-    # [已修改] 監管方收益：總預算減去政黨基本及執政紅利後，扣除標案總額
     total_bonus_deduction = (cfg['DEFAULT_BONUS'] * 2) + cfg['RULING_BONUS']
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
     est_gdp = max(0.0, gdp - l_gdp + c_net)
     
-    # [已確認] 執行方專案收益：標案總額去減推估的工程成本
     h_project_profit = payout_h - act_fund
     
     return {
@@ -117,7 +115,8 @@ def get_formula_explanation(game, view_party, plan, cfg):
     h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
     r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
     
-    h_profit = h_base + res['h_project_profit'] - plan['h_pays']
+    # [修正] 真實驗證：執行系統淨利 = 標案收益 - 實際工程花費 + 監管出資
+    h_profit = h_base + res['payout_h'] - res['act_fund'] + plan['r_pays']
     r_profit = r_base + res['payout_r'] - plan['r_pays']
     
     my_profit = h_profit if my_is_h else r_profit
@@ -127,15 +126,15 @@ def get_formula_explanation(game, view_party, plan, cfg):
     
     lines.append(f"**我方預估收益:** `{my_profit:.1f}`")
     if my_is_h:
-        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案總額 {plan['proj_fund']:.1f} - 工程成本 {res['act_fund']:.1f}) - 提案出資 {plan['h_pays']:.1f} = {my_profit:.1f}")
+        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {my_profit:.1f}")
     else:
-        lines.append(f"> 公式: (基礎金 {r_base:.1f} + (總預算 {game.total_budget:.1f} - 政黨輔助總和) - 標案總額 {plan['proj_fund']:.1f}) - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
+        lines.append(f"> 公式: 基礎金 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
 
     lines.append(f"**對方預估收益:** `{opp_profit:.1f}`")
     if not my_is_h:
-        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案總額 {plan['proj_fund']:.1f} - 工程成本 {res['act_fund']:.1f}) - 對方出資 {plan['h_pays']:.1f} = {opp_profit:.1f}")
+        lines.append(f"> 公式: (基礎金 {h_base:.1f} + 標案收益 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {opp_profit:.1f}")
     else:
-        lines.append(f"> 公式: (基礎金 {r_base:.1f} + (總預算 {game.total_budget:.1f} - 政黨輔助總和) - 標案總額 {plan['proj_fund']:.1f}) - 對方出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
+        lines.append(f"> 公式: 基礎金 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
 
     ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
