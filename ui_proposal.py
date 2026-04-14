@@ -1,6 +1,6 @@
 # ==========================================
 # ui_proposal.py
-# 負責 提案草案渲染 與 公式計算監控面板
+# 負責 提案草案渲染
 # ==========================================
 import streamlit as st
 import formulas
@@ -30,17 +30,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
+    # === [修復核心：情報基準嚴格脫鉤] ===
+    # 永遠保留情報處的原始評估值，不受玩家切換 Toggle 影響，專供下方紅綠燈判讀使用
+    tt_decay = view_party.current_forecast
     obs_abis = ui_core.get_observed_abilities(view_party, sim_h_party, game, cfg)
     obs_bld = obs_abis['build']
+    tt_unit_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, tt_decay), 2)
+    
+    cl_decay = plan.get('claimed_decay', tt_decay)
+    cl_cost = plan.get('claimed_cost', tt_unit_cost)
 
+    # Toggle 僅影響「餵給經濟系統試算」的數值
     if use_claimed:
-        eval_decay = plan.get('claimed_decay', 0.0)
-        override_cost = plan.get('claimed_cost', 1.0)
+        eval_decay = cl_decay
+        eval_cost = cl_cost
     else:
-        eval_decay = view_party.current_forecast
-        override_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, eval_decay), 2)
+        eval_decay = tt_decay
+        eval_cost = tt_unit_cost
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=eval_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)
     
     eval_req_cost = res['req_cost']          
     eval_unit_cost = res.get('unit_cost', 1.0)
@@ -49,10 +57,9 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     with c1:
         conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-        claimed_val = plan.get('claimed_decay', 0.0)
-        equiv_infra_loss = (game.gdp * (claimed_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
+        equiv_infra_loss = (game.gdp * (cl_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
         
-        st.write(f"**{t('公告衰退率(0~1)')}:** {claimed_val:.3f}")
+        st.write(f"**{t('公告衰退率')}:** {cl_decay:.3f}")
         st.write(f"**(相當於 {equiv_infra_loss:.1f} 建設損失)**")
         st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
@@ -80,7 +87,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         shift_preview = formulas.calc_performance_amounts(
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['est_gdp'], game.gdp, 
-            plan.get('claimed_decay', 0.0), game.sanity, game.emotion, plan['bid_cost'], res['c_net']
+            cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net']
         )
         
         my_perf = shift_preview[view_party.name]['perf']
@@ -102,8 +109,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
-        tt_decay = view_party.current_forecast
-        cl_decay = plan.get('claimed_decay', 0.0)
+        # [判讀區] 嚴格使用 cl_decay 減去 tt_decay，不受 toggle 影響
         diff = cl_decay - tt_decay
         abs_diff = abs(diff)
         
@@ -126,17 +132,17 @@ def render_proposal_component(title, plan, game, view_party, cfg):
             
         st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.3f} / {t('智庫')}: {tt_decay:.3f})")
         
-        cl_cost = plan.get('claimed_cost', eval_unit_cost)
-        diff_c = cl_cost - eval_unit_cost
+        # [判讀區] 嚴格使用 cl_cost 減去 tt_unit_cost，不受 toggle 影響
+        diff_c = cl_cost - tt_unit_cost
         abs_diff_c = abs(diff_c)
 
         if abs_diff_c > 0.5:
             light_c = "🔴"
             if is_self:
-                if cl_cost > eval_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的操作空間。")
+                if cl_cost > tt_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的操作空間。")
                 else: risk_txt_c = t("長官，刻意低報單價能展現行政效率，但過度壓榨預算恐引發工程隱患。")
             else:
-                if cl_cost > eval_unit_cost:
+                if cl_cost > tt_unit_cost:
                     risk_txt_c = t("對手（執行）意圖套取超額工程款！") if author_role == 'H' else t("對手（監管）惡意墊高基準單價建立預算門檻！")
                 else:
                     risk_txt_c = t("對手（執行）企圖掩飾低效能！") if author_role == 'H' else t("對手（監管）正惡意低估單價剝削我們的預算！")
@@ -145,18 +151,4 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         else:
             light_c, risk_txt_c = "🟢", t("差異極小 (公告單價與情報處估算相符，屬正常估值)")
 
-        st.markdown(f"6. {t('建設單價判讀')}: {light_c} {risk_txt_c} ({t('公告')}: {cl_cost:.2f} / {t('情報')}: {eval_unit_cost:.2f})")
-
-def render_formula_panel(game, view_party, cfg):
-    with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)"), expanded=False):
-        plan = None
-        if game.phase == 1 and getattr(game, 'p1_selected_plan', None):
-            plan = game.p1_selected_plan
-        elif game.phase >= 2:
-            plan = st.session_state.get('turn_data')
-            
-        if plan and 'proj_fund' in plan:
-            lines = formulas.get_formula_explanation(game, view_party, plan, cfg)
-            for line in lines: st.markdown(line)
-        else:
-            st.info("目前階段尚無具體標案數據可供計算。")
+        st.markdown(f"6. {t('建設單價判讀')}: {light_c} {risk_txt_c} ({t('公告')}: {cl_cost:.2f} / {t('情報')}: {tt_unit_cost:.2f})")
