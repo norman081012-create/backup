@@ -14,6 +14,7 @@ import phase4
 import i18n
 
 st.set_page_config(page_title="Symbiocracy 共生民主模擬器 v3.0.0", layout="wide")
+st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
 
 if 'lang' not in st.session_state: st.session_state.lang = 'ZH'
 t = i18n.t
@@ -30,34 +31,47 @@ if 'game' not in st.session_state:
 
 game = st.session_state.game
 
+if st.session_state.get('anim') == 'balloons':
+    st.balloons()
+    st.session_state.anim = None
+elif st.session_state.get('anim') == 'snow':
+    st.snow()
+    st.session_state.anim = None
+
+if game.phase == 4:
+    phase4.render(game, cfg)
+    st.stop()
+
 if 'turn_initialized' not in st.session_state:
     # 1. 決定真實衰退率 (0~1.0)
     game.current_real_decay = max(0.0, round(random.uniform(cfg['DECAY_MIN'], cfg['DECAY_MAX']), 3))
     
     # 2. [新增邏輯] 智庫觀測先換算成「損失建設量」
-    # 損失建設量公式：GDP * (衰退率 * 權重 + 基礎率)
     real_infra_loss = game.gdp * (game.current_real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     
     for p in [game.party_A, game.party_B]:
-        # 誤差根據建設量規模縮放
         error_range = (cfg['PREDICT_DIFF'] / max(0.1, p.predict_ability)) * (game.gdp * 0.01)
         observed_loss = max(0.0, real_infra_loss + random.uniform(-error_range, error_range))
         
-        # 觀測後反推回衰退值，供後續公式使用
-        # 反推：衰退值 = ((損失量 / GDP) - 基礎率) / 權重
+        # 反推回衰退值，供後續公式使用
         p.current_forecast = max(0.0, round(((observed_loss / max(1.0, game.gdp)) - cfg['BASE_DECAY_RATE']) / cfg['DECAY_WEIGHT_MULT'], 3))
         
         p.poll_history = {'小型': [], '中型': [], '大型': []}
         p.latest_poll = None
         p.poll_count = 0 
     
-    game.p1_step = 'draft_r'
-    game.p1_proposals = {'R': None, 'H': None}
-    game.p1_selected_plan = None
+    if not hasattr(game, 'p1_step'):
+        game.p1_step = 'draft_r'
+        game.p1_proposals = {'R': None, 'H': None}
+        game.p1_selected_plan = None
+
     for k in list(st.session_state.keys()):
-        if k.endswith('_acts'): del st.session_state[k]
+        if k.startswith('ui_decay_') or k.endswith('_acts'): del st.session_state[k]
     
     st.session_state.turn_initialized = True
+    
+    if game.year == 1:
+        st.session_state.news_flash = f"🎉 **【建國大選：勢均力敵】** 遊戲開始！{game.ruling_party.name} 黨獲得初代執政權，將優先負責分配國家資源！"
 
 view_party = game.proposing_party
 opponent_party = game.party_B if view_party.name == game.party_A.name else game.party_A
@@ -79,7 +93,7 @@ if god_mode:
     st.error(t(f"👁️ **上帝視角：** 真實衰退值為 **{game.current_real_decay:.3f}** (損失建設量: {real_loss:.1f})"))
 
 if game.phase == 1 or game.phase == 2:
-    ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
+    if game.phase == 1: ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
     ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
     ui_core.render_message_board(game)
 
