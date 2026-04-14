@@ -25,22 +25,19 @@ def render(game, view_party, opponent_party, cfg):
         if is_h: st.caption(t("💡 **執行系統特性**: 媒體操控值 1.2 倍加成"))
         else: st.caption(t("💡 **監管系統特性**: 調查能力值 1.2 倍加成"))
         
-        # 拆解 if else 避免語法解析錯誤
-        h_corr_pct = 0
-        h_crony_pct = 0
-        judicial_amt = 0.0
-        edu_policy_amt = 0.0
+        h_corr_pct = 0; h_crony_pct = 0
+        judicial_amt = 0.0; edu_policy_amt = 0.0
         
         if is_h:
             h_corr_pct = st.slider(t("💸 秘密貪污 (%)"), 0, 100, 0)
             h_crony_pct = st.slider(t("🏢 圖利自身廠商 (%)"), 0, max(0, 100 - h_corr_pct), 0)
         else:
-            judicial_amt = st.slider(t("⚖️ 司法審查 (降低全體黨媒效果，但會引起高思辯選民反感)"), 0.0, cw, 0.0)
-            edu_policy_amt = st.slider(t("🎓 教育方針 (左:填鴨 右:思辨, 投入資金)"), -cw, cw, 0.0)
+            judicial_amt = st.slider(t("⚖️ 司法審查 (投入資金)(降低全體黨媒效果，引起高思辯選民反感)"), 0.0, cw, 0.0)
+            edu_policy_amt = st.slider(t("🎓 教育方針 (投入資金)(左:填鴨 右:思辨)"), -cw, cw, 0.0)
             
-        media_ctrl = st.slider(t("📺 媒體操控 (提升競選與煽動效果)"), 0.0, cw, 0.0)
-        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)"), 0.0, cw, 0.0)
-        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)"), 0.0, cw, 0.0)
+        media_ctrl = st.slider(t("📺 媒體操控 (投入資金)(改變施政產生的影響力)"), 0.0, cw, 0.0)
+        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)(無腦砸錢洗腦，理智越低越有效)"), 0.0, cw, 0.0)
+        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒降低思辨力/生產力，時效短)"), 0.0, cw, 0.0)
         
     with c2:
         st.markdown(t("#### 🔒 內部部門投資"))
@@ -53,11 +50,11 @@ def render(game, view_party, opponent_party, cfg):
             st.session_state['up_bld'] = view_party.build_ability * 10.0
             st.rerun()
 
-        t_pre, c_pre = ui_core.ability_slider(t("智庫"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability)
-        t_inv, c_inv = ui_core.ability_slider(t("情報處"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability)
-        t_med, c_med = ui_core.ability_slider(t("黨媒"), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability)
-        t_stl, c_stl = ui_core.ability_slider(t("反情報處"), "up_stl", view_party.stealth_ability, cw, cfg, view_party.build_ability)
-        t_bld, c_bld = ui_core.ability_slider(t("工程處"), "up_bld", view_party.build_ability, cw, cfg, view_party.build_ability)
+        t_pre, c_pre = ui_core.ability_slider(t("智庫 (精準預測衰退，降低施政誤差)"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability)
+        t_inv, c_inv = ui_core.ability_slider(t("情報處 (抓包對手貪污圖利，提升觀測準確度)"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability)
+        t_med, c_med = ui_core.ability_slider(t("黨媒 (放大媒體操控、煽動與競選效果)"), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability)
+        t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護自身貪污圖利，干擾對手觀測)"), "up_stl", view_party.stealth_ability, cw, cfg, view_party.build_ability)
+        t_bld, c_bld = ui_core.ability_slider(t("工程處 (提升建設產出，降低各部門升級成本)"), "up_bld", view_party.build_ability, cw, cfg, view_party.build_ability)
 
     tot_action = media_ctrl + camp_amt + incite_emo + abs(edu_policy_amt) + judicial_amt
     tot_maint = c_inv + c_pre + c_med + c_stl + c_bld
@@ -66,10 +63,9 @@ def render(game, view_party, opponent_party, cfg):
     st.write(f"**法定專案款:** `{req_pay:.1f}` / **政策與媒體:** `{tot_action:.1f}` / **內部部門投資:** `{tot_maint:.1f}` / **剩餘可用淨值:** `{cw - tot:.1f}`")
     
     if tot > cw:
-        msg = t("🚨 資金不足！當前行動預算已超支")
-        st.error(f"{msg} {tot - cw:.1f} 元，請降低投入資金。")
+        st.error(f"{t('🚨 資金不足！當前行動預算已超支')} {tot - cw:.1f} 元，請降低投入資金。")
     
-    # 建立預覽用 Dummy 字典
+    # 預覽用的 Dummy 字典
     ra_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'edu_amt': edu_policy_amt, 'judicial': judicial_amt}
     ha_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'corr': h_corr_pct, 'crony': h_crony_pct}
     
@@ -78,10 +74,8 @@ def render(game, view_party, opponent_party, cfg):
     
     if f"{opponent_party.name}_acts" in st.session_state:
         opp_acts = st.session_state[f"{opponent_party.name}_acts"]
-        if is_h:
-            act_ra = opp_acts
-        else:
-            act_ha = opp_acts
+        if is_h: act_ra = opp_acts
+        else: act_ha = opp_acts
 
     orig_corr_amt = d.get('proj_fund', 0) * (act_ha.get('corr', 0) / 100.0)
     res_prev = formulas.calc_economy(cfg, game.gdp, game.total_budget, d.get('proj_fund', 0), d.get('bid_cost', 1), game.h_role_party.build_ability, view_party.current_forecast, orig_corr_amt)
