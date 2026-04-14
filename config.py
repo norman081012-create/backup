@@ -8,13 +8,14 @@ t = i18n.t
 DEFAULT_CONFIG = {
     'CALENDAR_NAME': "星曆", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
-    'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
+    'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     'DECAY_MIN': 0.1, 'DECAY_MAX': 0.8,  
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
-    'GDP_INFLATION_DIVISOR': 10000.0, # [新增] 大國通膨係數，GDP每多一萬，成本翻倍
+    'GDP_INFLATION_DIVISOR': 10000.0, 
+    'GDP_CONVERSION_RATE': 0.2,   # [新增] 建設量轉化為GDP的倍率，避免1:1互換
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
     'BASE_INCOME_RATIO': 0.05,    
@@ -44,7 +45,8 @@ def get_config_translations():
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'RESISTANCE_MULT': "建設阻力倍率",
         'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
-        'CURRENT_GDP': "初始 GDP", 'GDP_INFLATION_DIVISOR': "通膨基數(越小越快通膨)", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
+        'CURRENT_GDP': "初始 GDP", 'GDP_INFLATION_DIVISOR': "通膨基數(越小越快通膨)", 
+        'GDP_CONVERSION_RATE': "建設量轉化GDP倍率", 'HEALTH_MULTIPLIER': "GDP轉預算乘數", 'BASE_TOTAL_BUDGET': "基礎預算",  
         'BASE_INCOME_RATIO': "基本政黨補助比例", 'RULING_BONUS_RATIO': "執政額外補助比例", 
         'H_FUND_DEFAULT': "初始執行獎勵基金", 
         'H_MEDIA_BONUS': "執行系統媒體加成", 'R_INV_BONUS': "監管系統調查加成",
@@ -57,7 +59,6 @@ def get_config_translations():
     }
 
 def get_intel_market_eval(unit_cost):
-    # [新增] 情報部門的專業市場分析
     if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
     elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
     elif unit_cost < 1.8: return "🟡 通膨溢價浮現 (原物料與勞動力緊繃，成本開始攀升)"
