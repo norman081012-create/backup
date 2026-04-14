@@ -28,43 +28,47 @@ def render(game, view_party, cfg):
             
             opp_role = 'H' if active_role == 'R' else 'R'
             opp_plan = game.p1_proposals.get(opp_role)
-            opp_claimed = opp_plan['claimed_decay'] if opp_plan else None
             
-            input_key = f"ui_decay_val_{game.year}_{active_role}"
-            if input_key not in st.session_state: st.session_state[input_key] = float(view_party.current_forecast)
+            input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
+            input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
+            if input_decay_key not in st.session_state: st.session_state[input_decay_key] = float(view_party.current_forecast)
             
-            opp_txt = t(f"對手公告: {opp_claimed:.2f}", f"Opp. Claimed: {opp_claimed:.2f}") if opp_claimed is not None else t("等待對手公告", "Awaiting Opp.")
-            st.markdown(t(f"**公告衰退值 (當前估算: {st.session_state[input_key]:.2f})** | {opp_txt}", f"**Claimed Decay (Current: {st.session_state[input_key]:.2f})** | {opp_txt}"))
-            claimed_decay = st.number_input(t("公告衰退值", "Claimed Decay"), value=float(st.session_state[input_key]), step=0.01, key=f"num_{input_key}", label_visibility="collapsed")
-            st.session_state[input_key] = claimed_decay
+            suggested_unit_cost = 10.0 / max(0.1, game.h_role_party.build_ability)
+            if input_cost_key not in st.session_state: st.session_state[input_cost_key] = round(suggested_unit_cost, 2)
+            
+            c_ann1, c_ann2 = st.columns(2)
+            with c_ann1:
+                opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
+                opp_txt1 = t(f"對手公告: {opp_claimed_decay:.2f}", f"Opp. Claimed: {opp_claimed_decay:.2f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
+                st.markdown(t(f"**公告衰退值 (當前公告: {st.session_state[input_decay_key]:.2f})** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告衰退值", value=float(st.session_state[input_decay_key]), step=0.01, key=f"num_{input_decay_key}", label_visibility="collapsed")
+                st.session_state[input_decay_key] = claimed_decay
+                
+            with c_ann2:
+                opp_claimed_cost = opp_plan.get('claimed_cost') if opp_plan else None
+                opp_txt2 = t(f"對手公告: {opp_claimed_cost:.2f}", f"Opp. Claimed: {opp_claimed_cost:.2f}") if opp_claimed_cost is not None else t("等待對手公告", "Awaiting Opp.")
+                st.markdown(t(f"**公告建設單價 (當前公告: {st.session_state[input_cost_key]:.2f})** | {opp_txt2}"))
+                claimed_cost = st.number_input("公告建設單價", value=float(st.session_state[input_cost_key]), step=0.01, key=f"num_{input_cost_key}", label_visibility="collapsed")
+                st.session_state[input_cost_key] = claimed_cost
             
             max_budget = max(10.0, float(game.total_budget))
             
-            # 拉桿完全解綁
-            proj_fund = st.slider(t("標案總額 (提供給執行方的總預算)", "Total Bid Amount"), 0.0, max_budget, float(min(1000.0, max_budget)), 10.0)
-            bid_cost = st.slider(t("標案成本 (要求執行方達成的建設產出值)", "Bid Cost (Required construction)"), 0.0, max_budget * 1.5, float(min(800.0, max_budget * 1.5)), 10.0)
+            proj_fund = st.slider(t("計畫達成獎勵金 (提供給執行方的總預算，最高不超過當年總預算)", "Total Plan Reward"), 0.0, max_budget, float(min(1000.0, max_budget)), 10.0)
+            bid_cost = st.slider(t("計畫總效益 (預期增加之 GDP 與基礎建設)", "Plan Total Benefit"), 0.0, max_budget * 1.5, float(min(800.0, max_budget * 1.5)), 10.0)
             r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, float(min(500.0, max_budget)), 10.0)
             
-            # [修正] 出資總額必須由「智庫預估衰退值」與「執行方工程值」來精算，不能被公告衰退影響
-            tt_decay = float(view_party.current_forecast)
-            res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, tt_decay)
-            req_cost = res_for_req['req_cost']
-            
-            # 執行出資 = 總工程所需成本 - 監管補貼
+            # [修改] UI 端的出資總額直接依照 "計畫總效益 × 公告建設單價" 進行即時試算與展示
+            req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
             
             is_invalid = False
             warning_msg = ""
             if proj_fund <= 0:
-                is_invalid = True
-                warning_msg = t("⚠️ 異常：標案總額必須大於 0！", "⚠️ Error: Total Bid Amount must be > 0!")
+                is_invalid = True; warning_msg = t("⚠️ 異常：獎勵金必須大於 0！", "⚠️ Error: Reward must be > 0!")
             elif bid_cost <= 0:
-                is_invalid = True
-                warning_msg = t("⚠️ 異常：標案成本必須大於 0！", "⚠️ Error: Bid Cost must be > 0!")
-            # [修正] 異常防護機制：監管出資不能大於「出資總額(req_cost)」，而不是標案總額
+                is_invalid = True; warning_msg = t("⚠️ 異常：總效益必須大於 0！", "⚠️ Error: Benefit must be > 0!")
             elif r_pays > req_cost:
-                is_invalid = True
-                warning_msg = t("⚠️ 異常：監管出資額不能大於出資總額！", "⚠️ Error: R-Pays cannot exceed Total Req. Cost!")
+                is_invalid = True; warning_msg = t("⚠️ 異常：監管出資額不能大於出資總額！", "⚠️ Error: R-Pays cannot exceed Total Req. Cost!")
 
             r_pct = (r_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
             h_pct = (h_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
@@ -76,7 +80,8 @@ def render(game, view_party, cfg):
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
-                'r_pays': r_pays, 'h_pays': h_pays, 'claimed_decay': claimed_decay,
+                'r_pays': r_pays, 'h_pays': h_pays, 
+                'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
                 'author': active_role, 'req_cost': req_cost
             }
 
