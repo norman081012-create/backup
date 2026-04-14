@@ -11,31 +11,37 @@ t = i18n.t
 def render(game, cfg):
     st.header(t("⚖️ Phase 3: 年度結算報告"))
     
-    # === 確保 Phase 3 結算只執行一次 ===
     if not game.last_year_report:
         rp, hp = game.r_role_party, game.h_role_party
         ra, ha = st.session_state[f"{rp.name}_acts"], st.session_state[f"{hp.name}_acts"]
         d = st.session_state.turn_data
         
-        returned_to_r = 0.0; confiscated_to_budget = 0.0
+        returned_to_r = 0.0
+        confiscated_to_budget = 0.0
         corr_support_penalty = 0.0
-        corr_caught = False; crony_caught = False
+        corr_caught = False
+        crony_caught = False
         
         proj_fund = d.get('proj_fund', 0)
-        corr_amt = proj_fund * (ha['corr'] / 100.0)
-        crony_base = proj_fund * (ha['crony'] / 100.0)
+        corr_amt = proj_fund * (ha.get('corr', 0) / 100.0)
+        crony_base = proj_fund * (ha.get('crony', 0) / 100.0)
         crony_income = crony_base * 0.1
         
         catch_prob_base = max(0.1, (rp.investigate_ability - hp.stealth_ability)) * 2.0
         
         if corr_amt > 0 and random.random() < min(1.0, catch_prob_base * (corr_amt / max(1.0, proj_fund))):
-            returned_to_r += corr_amt; confiscated_to_budget += corr_amt * 0.4
+            returned_to_r += corr_amt
+            confiscated_to_budget += corr_amt * 0.4
             corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, proj_fund) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
-            corr_caught = True; corr_amt = 0
+            corr_caught = True
+            corr_amt = 0
 
         if crony_base > 0 and random.random() < min(1.0, catch_prob_base * (crony_base / max(1.0, proj_fund))):
-            returned_to_r += crony_base; confiscated_to_budget += crony_base * 0.5
-            crony_caught = True; crony_base = 0; crony_income = 0
+            returned_to_r += crony_base
+            confiscated_to_budget += crony_base * 0.5
+            crony_caught = True
+            crony_base = 0
+            crony_income = 0
             
         res_exec = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, d.get('bid_cost', 1), hp.build_ability, game.current_real_decay, corr_amt)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -50,7 +56,7 @@ def render(game, cfg):
         hp_sup_new = max(0.0, min(100.0, hp.support + shift['actual_shift'] - corr_support_penalty))
         
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
-        emotion_delta = (ha['incite'] + ra['incite']) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
+        emotion_delta = (ha.get('incite', 0) + ra.get('incite', 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
         
         f_target_san = max(0.0, min(100.0, 50.0 + (ra.get('edu_amt', 0) / 500.0) * 50.0))
@@ -63,8 +69,8 @@ def render(game, cfg):
             'h_inc': hp_inc, 'r_inc': rp_inc, 
             'h_base': hp_base, 'r_base': rp_base, 'h_payout': res_exec['payout_h'], 'r_payout': res_exec['payout_r'],
             'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
-            'h_pol_cost': ha['tot_action'] + ha['legal'], 'r_pol_cost': ra['tot_action'] + ra['legal'],
-            'h_maint': ha['tot_maint'], 'r_maint': ra['tot_maint'],
+            'h_pol_cost': ha.get('tot_action', 0) + ha.get('legal', 0), 'r_pol_cost': ra.get('tot_action', 0) + ra.get('legal', 0),
+            'h_maint': ha.get('tot_maint', 0), 'r_maint': ra.get('tot_maint', 0),
             'real_decay': game.current_real_decay, 
             'corr_caught': corr_caught, 'crony_caught': crony_caught
         }
@@ -83,8 +89,18 @@ def render(game, cfg):
         hp.wealth += hp_inc - game.last_year_report['h_pol_cost'] - game.last_year_report['h_maint']
         rp.wealth += rp_inc - game.last_year_report['r_pol_cost'] - game.last_year_report['r_maint']
 
-        rp.investigate_ability = ra['t_inv']; rp.predict_ability = ra['t_pre']; rp.media_ability = ra['t_med']; rp.stealth_ability = ra['t_stl']; rp.build_ability = ra['t_bld']
-        hp.investigate_ability = ha['t_inv']; hp.predict_ability = ha['t_pre']; hp.media_ability = ha['t_med']; hp.stealth_ability = ha['t_stl']; hp.build_ability = ha['t_bld']
+        rp.investigate_ability = ra.get('t_inv', rp.investigate_ability)
+        rp.predict_ability = ra.get('t_pre', rp.predict_ability)
+        rp.media_ability = ra.get('t_med', rp.media_ability)
+        rp.stealth_ability = ra.get('t_stl', rp.stealth_ability)
+        rp.build_ability = ra.get('t_bld', rp.build_ability)
+        
+        hp.investigate_ability = ha.get('t_inv', hp.investigate_ability)
+        hp.predict_ability = ha.get('t_pre', hp.predict_ability)
+        hp.media_ability = ha.get('t_med', hp.media_ability)
+        hp.stealth_ability = ha.get('t_stl', hp.stealth_ability)
+        hp.build_ability = ha.get('t_bld', hp.build_ability)
+        
         game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
     
     rep = game.last_year_report
@@ -93,7 +109,6 @@ def render(game, cfg):
         st.markdown(t("#### 💰 經濟與財政"))
         st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
         
-        # 透明財報展示
         st.write(f"**執行系統收益總結:** `(基礎 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} + 業外 {rep['h_extra']:.1f}) - (政策花費 {rep['h_pol_cost']:.1f} + 維護費 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
         st.write(f"**監管系統收益總結:** `(基礎 {rep['r_base']:.1f} + 標案 {rep['r_payout']:.1f} + 業外 {rep['r_extra']:.1f}) - (政策花費 {rep['r_pol_cost']:.1f} + 維護費 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
         
