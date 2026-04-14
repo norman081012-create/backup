@@ -57,42 +57,41 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-# [核心重構] 取代舊的支持量計算，改為純淨的「政績 (Performance)」計算
 def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
     # 1. 預期經濟跌幅與實際跌幅
     expected_drop_pct = claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
     expected_drop_amt = curr_gdp * expected_drop_pct
     actual_drop_amt = curr_gdp - new_gdp
     
-    perf_const = 0.01 # 基礎常數 (例如 5000 GDP 掉 100% = 扣 50 點)
+    perf_const = 0.01 # 基礎常數
     
-    # 2. GDP政績基準: - (實際跌幅 / 預期跌幅) * GDP * 常數
+    # 2. GDP政績基準
     if expected_drop_amt > 0.001:
         gdp_perf_base = - (actual_drop_amt / expected_drop_amt) * curr_gdp * perf_const
     else:
-        # 防呆：如果完全沒公告衰退，就直接扣實際跌幅
         gdp_perf_base = - actual_drop_amt * perf_const
         
     # 3. 思辨與情緒矯正 (S濾鏡)
     crit_think = sanity / 100.0
     emo_val = emotion / 100.0
-    # 情緒會削弱思辨的判斷力
     s_filter = max(0.0, min(1.0, crit_think * (1.0 - emo_val * 0.5))) 
     
-    # 4. 歸戶準備
     shifts = {hp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
               rp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}}
               
-    # 5. 分配 GDP 政績 (當權拿 S, 執行拿 1-S)
+    # 4. 分配 GDP 大環境政績
     ruling_gdp_perf = gdp_perf_base * s_filter
     exec_gdp_perf = gdp_perf_base * (1.0 - s_filter)
     
     shifts[ruling_party_name]['perf'] += ruling_gdp_perf
     shifts[hp.name]['perf'] += exec_gdp_perf
     
-    # 6. 標案達標政績 (執行系統專屬: 達成率 * GDP * 常數)
+    # 5. 標案達標政績 (記錄並疊加)
     project_perf_base = (c_net / max(1.0, bid_cost)) * curr_gdp * perf_const
     shifts[hp.name]['perf'] += project_perf_base
+    
+    # 暴露出履約政績，讓 UI 可以在 Phase 1 選擇將它剝離顯示
+    shifts['project_perf'] = project_perf_base
     
     return shifts
 
