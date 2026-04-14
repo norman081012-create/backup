@@ -65,11 +65,11 @@ def render(game, view_party, opponent_party, cfg):
             st.session_state['up_bld'] = view_party.build_ability * 10.0
             st.rerun()
 
-        t_pre, c_pre = ui_core.ability_slider(t("智庫 (精準預測衰退，降低施政誤差)"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability)
-        t_inv, c_inv = ui_core.ability_slider(t("情報處 (抓包對手貪污圖利，提升觀測準確度)"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability)
-        t_med, c_med = ui_core.ability_slider(t("黨媒 (放大媒體操控、煽動與競選效果)"), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability)
-        t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護自身貪污圖利，干擾對手觀測)"), "up_stl", view_party.stealth_ability, cw, cfg, view_party.build_ability)
-        t_bld, c_bld = ui_core.ability_slider(t("工程處 (提升建設產出，降低各部門升級成本)"), "up_bld", view_party.build_ability, cw, cfg, view_party.build_ability)
+        t_pre, c_pre = ui_core.ability_slider(t("智庫 (精準預測衰退，降低施政誤差)"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_inv, c_inv = ui_core.ability_slider(t("情報處 (抓包對手貪污圖利，提升觀測準確度)"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_med, c_med = ui_core.ability_slider(t("黨媒 (放大媒體操控、煽動與競選效果)"), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護自身貪污圖利，干擾對手觀測)"), "up_stl", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_bld, c_bld = ui_core.ability_slider(t("工程處 (提升建設產出，降低各部門升級成本)"), "up_bld", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
     tot_action = float(media_ctrl) + float(camp_amt) + float(incite_emo) + abs(float(edu_policy_amt)) + float(judicial_amt)
     tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld)
@@ -114,7 +114,6 @@ def render(game, view_party, opponent_party, cfg):
         claimed_decay, game.sanity, game.emotion, bid_cost, res_prev['c_net']
     )
     
-    # 傳入包含 project_perf 在內的完整數據
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
