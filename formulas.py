@@ -15,7 +15,8 @@ def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0)
     decay_amt = min(amount, max_decay)
     
     discount_factor = 1.0 - (build_ability * 0.02)
-    return decay_amt * max(0.1, discount_factor)
+    # 乘上 0.1 的經濟規模轉換率，將龐大的物理點數轉化為合理的遊戲資金
+    return decay_amt * max(0.1, discount_factor) * 0.1
 
 def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_ability=0.0):
     a_c = (2**current_val - 1) * 50.0
@@ -29,7 +30,8 @@ def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_a
         
     req_amt = a_t - a_base
     discount_factor = 1.0 - (build_ability * 0.02)
-    return req_amt * max(0.1, discount_factor)
+    # 同樣乘上 0.1 的經濟規模轉換率
+    return req_amt * max(0.1, discount_factor) * 0.1
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
     b_norm = max(0.01, build_abi / 10.0)
