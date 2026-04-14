@@ -8,8 +8,9 @@ t = i18n.t
 DEFAULT_CONFIG = {
     'CALENDAR_NAME': "星曆", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
+    'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.2, 'DECAY_MAX': 1.2,  # 衰退值預設 0.2~1.2
+    'DECAY_MIN': 0.2, 'DECAY_MAX': 1.2,  
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
@@ -28,7 +29,7 @@ DEFAULT_CONFIG = {
     'SANITY_DEFAULT': 60.0, 
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
-    'PERF_IMPACT_BASE': 1000.0   # 施政表現影響量權重調高2倍
+    'PERF_IMPACT_BASE': 1000.0
 }
 
 def get_config_translations():
