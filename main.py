@@ -61,7 +61,6 @@ if 'turn_initialized' not in st.session_state:
     
     st.session_state.turn_initialized = True
     
-    # [新增] 開局(首年)的選舉播報
     if game.year == 1:
         st.session_state.news_flash = f"🎉 **【建國大選：勢均力敵】** 遊戲開始！{game.ruling_party.name} 黨獲得初代執政權，將優先負責分配國家資源！"
 
@@ -82,10 +81,11 @@ st.subheader(t(f"📅 {cfg['CALENDAR_NAME']} {game.year} 年 ({elec_status})", f
 
 if god_mode: st.error(t(f"👁️ **上帝視角：** 真實衰退率為 **{game.current_real_decay:.2f}**", f"👁️ **God Mode:** Real Decay is **{game.current_real_decay:.2f}**"))
 
+# [修改] 調整了這區塊的順序，將 Message board 移至 Party cards 之後
 if game.phase == 1 or game.phase == 2:
     if game.phase == 1: ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
-    ui_core.render_message_board(game)
     ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
+    ui_core.render_message_board(game)
 
 if game.phase == 1:
     phase1.render(game, view_party, cfg)
