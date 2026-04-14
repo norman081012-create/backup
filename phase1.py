@@ -55,8 +55,8 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = t(f"對手公告: -{opp_claimed_decay:.1f}%", f"Opp. Claimed: -{opp_claimed_decay:.1f}%") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
                 # [修改] 全面替換字眼與顯示邏輯
-                st.markdown(t(f"**公告無施政跌幅 (當前公告: -{st.session_state.get(widget_decay_key, tt_decay):.1f}%)** | {opp_txt1}"))
-                claimed_decay = st.number_input("公告無施政跌幅 (%)", step=1.0, min_value=0.0, max_value=100.0, key=widget_decay_key, label_visibility="collapsed")
+                st.markdown(t(f"**公告衰退值 (當前公告: -{st.session_state.get(widget_decay_key, tt_decay):.1f}%)** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告衰退值 (%)", step=1.0, min_value=0.0, max_value=100.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
