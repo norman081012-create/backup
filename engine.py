@@ -24,8 +24,7 @@ class Party:
         self.latest_poll = None
         self.poll_count = 0
         
-        # 初始化詳細的 last_acts 供 Phase 1 智庫預估使用
-        self.last_acts = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0, 'edu_amt': 0, 'tot_action': 0, 'legal': 0, 'tot_maint': 0}
+        self.last_acts = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0, 'edu_amt': 0, 'tot_action': 0, 'legal': 0, 'tot_maint': 0, 'corr': 0, 'crony': 0}
 
 class GameEngine:
     def __init__(self, cfg):
@@ -42,12 +41,20 @@ class GameEngine:
         self.history = []; self.swap_triggered_this_year = False
         self.last_year_report = None
 
+    # [修改] 增加許多給 Phase 4 繪圖用的紀錄
     def record_history(self, is_election):
         self.history.append({
             'Year': self.year, 'GDP': self.gdp, 'Sanity': self.sanity, 'Emotion': self.emotion,
             'A_Support': self.party_A.support, 'B_Support': self.party_B.support,
             'A_Wealth': self.party_A.wealth, 'B_Wealth': self.party_B.wealth,
-            'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year
+            'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year,
+            'Ruling': self.ruling_party.name,
+            'H_Party': self.h_role_party.name,
+            'R_Party': self.r_role_party.name,
+            'A_Edu': float(self.party_A.last_acts.get('edu_amt', 0)),
+            'B_Edu': float(self.party_B.last_acts.get('edu_amt', 0)),
+            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
+            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
         })
         self.swap_triggered_this_year = False
 
@@ -71,6 +78,6 @@ def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
     game.swap_triggered_this_year = True
     game.emotion = min(100.0, game.emotion + 30.0) 
     
-    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt:.1f} 資金給第三政黨，觸發換位！"
+    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各繳納 {penalty_amt:.1f} 資金給第三方慈善團體，觸發換位！"
     st.session_state.anim = 'snow'
     game.phase = 2
