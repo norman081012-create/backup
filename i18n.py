@@ -119,8 +119,18 @@ TRANSLATIONS = {
     "大民調 ($20)": "Big Poll ($20)"
 }
 
-def t(zh_text):
+def t(zh_text, en_text=None):
+    """
+    根據當前語言回傳對應字串。
+    支援 1 個參數 (查字典) 或 2 個參數 (直接回傳英文變數) 的彈性寫法。
+    """
     lang = st.session_state.get('lang', 'ZH')
     if lang == 'ZH':
         return zh_text
+    
+    # 若有傳入第二個參數 (動態 f-string)，直接使用
+    if en_text is not None:
+        return en_text
+        
+    # 否則查字典
     return TRANSLATIONS.get(zh_text, zh_text)
