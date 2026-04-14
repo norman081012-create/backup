@@ -20,13 +20,11 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
 def calc_unit_cost(cfg, gdp, build_abi, drop_rate_pct):
     b_norm = max(0.01, build_abi / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-    # [修改] 將 0~90 的跌幅百分比標準化供單價公式使用
     decay_norm = drop_rate_pct / 100.0
     base_cost = (0.5 / b_norm) * (2 ** (2 * decay_norm - 1))
     return base_cost * (1 + inflation)
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_drop, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
-    # [修改] 自然衰退量直接依照無施政跌幅 % 計算
     l_gdp = gdp * (forecast_drop / 100.0)
     
     if override_unit_cost is not None:
@@ -60,110 +58,100 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_dr
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_drop, eval_drop, sanity, emotion):
-    # [修改] 直接套用百分比跌幅推算預期基準
-    true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * (eval_drop / 100.0)))
-    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * (claimed_drop / 100.0)))
-
-    base_ruling_perf = (new_gdp - true_expected_gdp) / max(1.0, curr_gdp)
-    claimed_weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
-    claim_bonus = (true_expected_gdp - public_expected_gdp) / max(1.0, curr_gdp) * claimed_weight
+def calc_support_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, ha, ra, claimed_drop, sanity, emotion, bid_cost, c_net):
+    # 1. 社會基底濾鏡
+    crit_think = sanity / 100.0       # 思辨度
+    canned_edu = 1.0 - crit_think     # 填鴨度
+    emo_val = emotion / 100.0         # 情緒度
+    S = max(0.0, 1.0 + crit_think - emo_val) # 理智濾鏡
     
-    ruling_perf_val = base_ruling_perf + claim_bonus
-    h_perf_val = h_idx - 1.0
+    # 2. 黨媒能力 (受填鴨度絕對放大)
+    h_media_raw = hp.media_ability / 10.0
+    r_media_raw = rp.media_ability / 10.0
+    h_media = h_media_raw * (1.0 + canned_edu)
+    r_media = r_media_raw * (1.0 + canned_edu)
     
-    h_raw_perf = h_perf_val + (ruling_perf_val if hp.name == ruling_party_name else 0)
-    r_raw_perf = ruling_perf_val if rp.name == ruling_party_name else 0
-
-    r_judicial = ra.get('judicial', 0); h_judicial = ha.get('judicial', 0)
-    opp_media_penalty_r = min(0.8, r_judicial / 1000.0) 
-    opp_media_penalty_h = min(0.8, h_judicial / 1000.0) 
+    # 3. 達標率計算 (當權看GDP，執行看標案)
+    claimed_gdp_change = -curr_gdp * (claimed_drop / 100.0)
+    actual_gdp_change = new_gdp - curr_gdp
+    perf_ruling = (actual_gdp_change - claimed_gdp_change) / max(1.0, abs(claimed_gdp_change))
     
-    effective_h_media = hp.media_ability * (1.0 - opp_media_penalty_r)
-    effective_r_media = rp.media_ability * (1.0 - opp_media_penalty_h)
-
-    S = (sanity / 100.0) * (1.0 - (emotion / 100.0))
-    S = max(0.0, min(1.0, S))
-
-    h_media_power = ha.get('media', 0) * effective_h_media * cfg['H_MEDIA_BONUS']
-    r_media_power = ra.get('media', 0) * effective_r_media
-    norm_M_H = (h_media_power - r_media_power) / 1000.0
-    norm_M_R = -norm_M_H
-
-    base_h_perf = h_raw_perf * cfg['PERF_IMPACT_BASE']
-    base_r_perf = r_raw_perf * cfg['PERF_IMPACT_BASE']
-
-    h_gain = 0.0; r_gain = 0.0
-    if base_h_perf >= 0:
-        if norm_M_H >= 0: h_gain += base_h_perf * (1.0 + norm_M_H)
-        else: r_gain += base_h_perf * abs(norm_M_H) 
-    else: 
-        if norm_M_R >= 0: r_gain += abs(base_h_perf) * (1.0 + norm_M_R) 
-        else: h_gain += abs(base_h_perf) * abs(norm_M_H) 
-
-    if base_r_perf >= 0: 
-        if norm_M_R >= 0: r_gain += base_r_perf * (1.0 + norm_M_R) 
-        else: h_gain += base_r_perf * abs(norm_M_H) 
-    else: 
-        if norm_M_H >= 0: h_gain += abs(base_r_perf) * (1.0 + norm_M_H) 
-        else: r_gain += abs(base_r_perf) * abs(norm_M_R) 
-
-    total_perf_shift_H = (h_gain - r_gain) * S
-
-    h_camp_pow = ha.get('camp', 0) * effective_h_media
-    r_camp_pow = ra.get('camp', 0) * effective_r_media
-    camp_shift_H = (h_camp_pow - r_camp_pow) * (1.0 - S) * 0.05 
-
-    r_jud_penalty = r_judicial * 0.05 * (hp.support / 100.0)
-    h_jud_penalty = h_judicial * 0.05 * (rp.support / 100.0)
+    perf_exec = (c_net - bid_cost) / max(1.0, bid_cost)
     
-    net_shift_H = (total_perf_shift_H + camp_shift_H + r_jud_penalty - h_jud_penalty) * cfg['SUPPORT_CONVERSION_RATE']
-    act_h_shift = net_shift_H * ((100.0 - hp.support) / 100.0) if net_shift_H > 0 else net_shift_H * (hp.support / 100.0)
+    # 4. 基礎政績支持量
+    weight = 1000.0
+    def get_perf_score(perf, media, is_exec):
+        bonus = 1.2 if is_exec else 1.0
+        return perf * weight * S * (1.0 + media) * max(0.1, 1.0 - canned_edu) * (1.0 + crit_think) * bonus
     
-    return {'actual_shift': act_h_shift, 'h_perf': h_perf_val * 100.0, 'r_perf': ruling_perf_val * 100.0, 'norm_M_H': norm_M_H, 'S': S}
+    ruling_score_raw = get_perf_score(perf_ruling, r_media if rp.name == ruling_party_name else h_media, False)
+    exec_score_raw = get_perf_score(perf_exec, h_media, True)
+    
+    h_perf_final = exec_score_raw
+    r_perf_final = ruling_score_raw if rp.name == ruling_party_name else 0.0
+    
+    # 若 H 也是執政黨，分數合併
+    if hp.name == ruling_party_name: h_perf_final += ruling_score_raw
+    
+    # 5. 搶功與甩鍋機制 (依賴情緒與黨媒)
+    # H 黨視角
+    if h_perf_final < 0: # 甩鍋給 R
+        scapegoat_rate = min(1.0, h_media * emo_val * max(0.0, 1.0 - crit_think))
+        blamed = abs(h_perf_final) * scapegoat_rate
+        h_perf_final += blamed
+        r_perf_final -= blamed
+    elif h_perf_final > 0 and hp.name != ruling_party_name and ruling_score_raw > 0: # 搶 R 的功勞
+        steal_rate = min(1.0, h_media * emo_val)
+        stolen = ruling_score_raw * steal_rate
+        h_perf_final += stolen
+        r_perf_final -= stolen
+        
+    # R 黨視角
+    if r_perf_final < 0: # 甩鍋給 H
+        scapegoat_rate = min(1.0, r_media * emo_val * max(0.0, 1.0 - crit_think))
+        blamed = abs(r_perf_final) * scapegoat_rate
+        r_perf_final += blamed
+        h_perf_final -= blamed
+        
+    # 6. 競選造勢 (吃情緒與填鴨紅利)
+    def get_camp_score(budget, media):
+        return budget * media * (1.0 + emo_val) * max(0.0, 1.0 + canned_edu - crit_think)
+    
+    h_camp = get_camp_score(float(ha.get('camp', 0)), h_media)
+    r_camp = get_camp_score(float(ra.get('camp', 0)), r_media)
+    
+    # 7. 監管媒體審查 (核彈級扼流圈)
+    censor_budget = float(ra.get('judicial', 0))
+    r_intel = rp.investigate_ability / 10.0
+    censor_param = max(0.1, 1.0 - ((censor_budget / max(1.0, rp.wealth)) * (1.0 + r_intel)))
+    
+    # 審查壓制 H 黨所有正向分數
+    if h_perf_final > 0: h_perf_final *= censor_param
+    h_camp *= censor_param
+    
+    # 8. 審查民意反噬 (作用力與反作用力)
+    h_total_support = (hp.support / 100.0) * 10000.0 # 粗估總體積
+    backlash_r = 0.0
+    if censor_budget > 0:
+        backlash_r = -(h_total_support * 0.05 * (1.0 - censor_param) * max(0.1, 1.0 + emo_val + crit_think - canned_edu))
+
+    shifts = {
+        hp.name: {'perf': h_perf_final, 'camp': h_camp, 'backlash': 0.0},
+        rp.name: {'perf': r_perf_final, 'camp': r_camp, 'backlash': backlash_r}
+    }
+    
+    return shifts
 
 def get_formula_explanation(game, view_party, plan, cfg):
     tt_drop = view_party.current_forecast
     build_abi = game.h_role_party.build_ability
     
     res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop)
-    
     my_is_h = (view_party.name == game.h_role_party.name)
     
-    h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
-    r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
-    
-    h_profit = h_base + res['payout_h'] - res['act_fund'] + plan['r_pays']
-    r_profit = r_base + res['payout_r'] - plan['r_pays']
-    
-    my_profit = h_profit if my_is_h else r_profit
-    opp_profit = r_profit if my_is_h else h_profit
-    
     lines = []
+    lines.append(f"**我方預估試算完成。由於民意系統已轉為支持量遞減陣列，詳細的 S濾鏡與搶功甩鍋結算，請參考年度結算報告。**")
+    lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f}`")
+    lines.append(f"> 估算建設淨值 (C_net): {res['c_net']:.1f} / 標案承諾 (Bid_cost): {plan['bid_cost']:.1f}")
     
-    lines.append(f"**我方預估收益:** `{my_profit:.1f}`")
-    if my_is_h:
-        lines.append(f"> 公式: (基本額 {h_base:.1f} + 計畫獎勵 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {my_profit:.1f}")
-    else:
-        lines.append(f"> 公式: 基本額 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {my_profit:.1f}")
-
-    lines.append(f"**對方預估收益:** `{opp_profit:.1f}`")
-    if not my_is_h:
-        lines.append(f"> 公式: (基本額 {h_base:.1f} + 計畫獎勵 {res['payout_h']:.1f} - 工程成本 {res['act_fund']:.1f}) + 監管補貼 {plan['r_pays']:.1f} = {opp_profit:.1f}")
-    else:
-        lines.append(f"> 公式: 基本額 {r_base:.1f} + 國庫剩餘 {res['payout_r']:.1f} - 提案出資 {plan['r_pays']:.1f} = {opp_profit:.1f}")
-
-    ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
-    ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
-    
-    shift = calc_support_shift(cfg, game.h_role_party, game.r_role_party, game.ruling_party.name, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan.get('claimed_decay', 0.0), tt_drop, game.sanity, game.emotion)
-    my_sup = shift['actual_shift'] if my_is_h else -shift['actual_shift']
-    gdp_diff = res['est_gdp'] - game.gdp
-
-    lines.append(f"**支持度變化預估:** `{my_sup:+.2f}%`")
-    lines.append(f"> 公式: [H政績 {shift['h_perf']:.1f} 與 R政績 {shift['r_perf']:.1f} + 雙方媒體/競選攻防估算 {shift['norm_M_H']:.2f}] × 理智乘數S {shift['S']:.2f} × 轉換率 {cfg['SUPPORT_CONVERSION_RATE']}")
-
-    lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f} ({gdp_diff:+.1f})`")
-    lines.append(f"> 公式: 當前GDP {game.gdp:.1f} - 自然衰退量 {res['l_gdp']:.1f} + (淨建設量 {res['c_net']:.1f} × 轉換倍率 {cfg.get('GDP_CONVERSION_RATE', 0.2)}) = {res['est_gdp']:.1f}")
-
     return lines
