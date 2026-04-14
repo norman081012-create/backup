@@ -42,7 +42,6 @@ def render(game, view_party, cfg):
             proj_fund = st.slider(t("標案總額 (最高不超過當年總預算)", "Total Bid Amount (Max=Budget)"), 0.0, max_p, float(min(1000.0, max_p)), 10.0)
             bid_cost = st.slider(t("標案成本 (要求之建設產出值，留點利潤給對手賺)", "Bid Cost (Required construction)"), 1.0, max(1.0, float(proj_fund)), max(1.0, float(proj_fund * 0.8)), 10.0)
             
-            # [修正] 出資總額是基於標案成本及執行方工程能力反推的金額
             res_for_req = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, bid_cost, game.h_role_party.build_ability, claimed_decay)
             req_cost = res_for_req['req_cost']
             
