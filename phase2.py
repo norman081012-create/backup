@@ -38,7 +38,6 @@ def render(game, view_party, opponent_party, cfg):
             last_crony = int(view_party.last_acts.get('crony', 0))
             h_corr_pct = st.slider(t("💸 秘密貪污 (%)"), 0, 100, last_corr)
             
-            # [修復] 強制 Clamp 防呆避免 min_value == max_value 且 value 越界導致的 Streamlit 崩潰
             max_crony = max(0, 100 - h_corr_pct)
             safe_crony = min(last_crony, max_crony)
             
@@ -97,7 +96,6 @@ def render(game, view_party, opponent_party, cfg):
     claimed_decay = float(d.get('claimed_decay') or 0.0)
     r_pays = float(d.get('r_pays') or 0.0)
 
-    # [修改] 將貪污與圖利的預覽收益加進智庫分析，讓玩家能清楚看到利潤
     corr_val = float(act_ha.get('corr') or 0.0)
     crony_val = float(act_ha.get('crony') or 0.0)
     orig_corr_amt = proj_fund * (corr_val / 100.0)
@@ -108,22 +106,28 @@ def render(game, view_party, opponent_party, cfg):
     h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
-    # 圖利與貪汙加進 h_net_est
     hp_net_est = h_base + res_prev['payout_h'] - res_prev['act_fund'] + r_pays + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
-    shift_preview = formulas.calc_support_shift(
+    # [修復點] 改用新的 calc_support_amounts 並計算預期獲得的支持量點數
+    shift_preview = formulas.calc_support_amounts(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
-        res_prev['payout_h'], res_prev['est_gdp'], proj_fund, game.gdp, 
-        act_ha, act_ra, res_prev['h_idx'], claimed_decay, float(view_party.current_forecast), game.sanity, game.emotion
+        res_prev['est_gdp'], game.gdp, 
+        act_ha, act_ra, claimed_decay, game.sanity, game.emotion, bid_cost, res_prev['c_net'], float(view_party.current_forecast)
     )
+    
+    my_shifts = shift_preview[view_party.name]
+    opp_shifts = shift_preview[opponent_party.name]
+    
+    my_total_pts = my_shifts['perf'] + my_shifts['camp'] + my_shifts['backlash']
+    opp_total_pts = opp_shifts['perf'] + opp_shifts['camp'] + opp_shifts['backlash']
     
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
         'h_inc': hp_net_est, 'r_inc': rp_net_est,
-        'my_sup_shift': shift_preview['actual_shift'] if is_h else -shift_preview['actual_shift'],
-        'opp_sup_shift': -shift_preview['actual_shift'] if is_h else shift_preview['actual_shift']
+        'my_sup_shift': my_total_pts,
+        'opp_sup_shift': opp_total_pts
     }
     
     ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
