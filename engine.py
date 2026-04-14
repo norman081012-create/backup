@@ -61,7 +61,6 @@ class GameEngine:
         a_name = self.party_A.name
         b_name = self.party_B.name
         
-        # [修復] 將寫死的 'A' 和 'B' 改為對應政黨的動態名稱變數
         self.support_queues[a_name]['perf'].append({'val': shifts[a_name]['perf'], 'age': 0})
         self.support_queues[b_name]['perf'].append({'val': shifts[b_name]['perf'], 'age': 0})
         self.support_queues[a_name]['camp'].append({'val': shifts[a_name]['camp'], 'age': 0})
@@ -84,7 +83,6 @@ class GameEngine:
                 if p_name == a_name: a_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
                 else: b_sup_amt += x['val'] * (1.0 - (x['age']/3.0))
 
-        # [修復] 同樣更新反噬的 Key
         a_sup_amt += shifts[a_name]['backlash']
         b_sup_amt += shifts[b_name]['backlash']
         
@@ -104,6 +102,7 @@ class GameEngine:
             'A_Wealth': self.party_A.wealth, 'B_Wealth': self.party_B.wealth,
             'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year,
             'Ruling': self.ruling_party.name, 'H_Party': self.h_role_party.name,
+            'R_Party': self.r_role_party.name,
             'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
             'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
         })
