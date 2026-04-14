@@ -5,7 +5,6 @@
 import streamlit as st
 
 TRANSLATIONS = {
-    # 系統與狀態
     "🎛️ 控制台": "🎛️ Control Panel",
     "📝 參數調整(即時)": "📝 Live Parameters",
     "🌐 國家總體現況": "🌐 National Status",
@@ -15,8 +14,6 @@ TRANSLATIONS = {
     "👤 玩家頁面": "👤 Player Dashboard",
     "🕵️ 情報處 - 對手機構指標": "🕵️ Intelligence - Opponent Stats",
     "📈 審計處 - 內部部門投資": "📈 Audit - Internal Dept. Investments",
-    
-    # 指標與欄位
     "資訊辨識": "Civic Literacy",
     "選民情緒": "Voter Emotion",
     "當前 GDP": "Current GDP",
@@ -32,8 +29,6 @@ TRANSLATIONS = {
     "黨媒": "Media Dept",
     "反情報處": "Counter-Intel",
     "工程處": "Engineering",
-    
-    # Phase 1 提案
     "🤝 Phase 1: 監管系統委託執行系統建設提案": "🤝 Phase 1: R-System Proposal",
     "🚨 **最後通牒啟動中：** 監管系統必須擬定最終裁決草案！": "🚨 **Ultimatum Active:** R-System must draft final resolution!",
     "⏳ 等待對手公布草案...": "⏳ Waiting for opponent's draft...",
@@ -64,8 +59,6 @@ TRANSLATIONS = {
     "🚨 最終方案決斷 (執行系統專屬)": "🚨 Final Decision (H-System Only)",
     "✅ 忍辱負重 (接受通牒)": "✅ Accept Ultimatum",
     "🔄 掀桌倒閣換位": "🔄 Flip Table & Swap",
-
-    # Phase 2 執行
     "🛠️ Phase 2: 政策執行與行動 - 輪到": "🛠️ Phase 2: Execution - Turn:",
     "🛡️ 執行系統": "🛡️ H-System",
     "⚖️ 監管系統": "⚖️ R-System",
@@ -84,8 +77,6 @@ TRANSLATIONS = {
     "當前": "Current",
     "確認行動/結算": "Confirm & Execute",
     "🚨 資金不足！當前行動預算已超支": "🚨 Insufficient Funds! Over budget by",
-
-    # Phase 3 結算
     "⚖️ Phase 3: 年度結算報告": "⚖️ Phase 3: Annual Report",
     "#### 💰 經濟與財政": "#### 💰 Economy & Finance",
     "GDP 變化": "GDP Shift",
@@ -96,8 +87,6 @@ TRANSLATIONS = {
     "#### 🧠 社會與民意": "#### 🧠 Society & Opinion",
     "施政滿意度位移 (執行/監管)": "Performance Shift (H / R)",
     "⏩ 確認報告並進入下一年": "⏩ Confirm & Next Year",
-
-    # 狀態與雜項
     "👑 當權": "👑 Ruling",
     "🎯 候選": "🎯 Candidate",
     "黨產資金": "Party Wealth",
@@ -131,9 +120,7 @@ TRANSLATIONS = {
 }
 
 def t(zh_text):
-    """根據當前語言回傳對應字串，預設為中文 (ZH)。"""
     lang = st.session_state.get('lang', 'ZH')
     if lang == 'ZH':
         return zh_text
-    # 若找不到對應翻譯，則回傳原字串的清除符號版本作為 Fallback
     return TRANSLATIONS.get(zh_text, zh_text)
