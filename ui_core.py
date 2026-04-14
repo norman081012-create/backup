@@ -110,8 +110,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 opp_net = preview_data['r_inc'] if my_is_h else preview_data['h_inc']
                 
                 st.markdown(t("### 📊 智庫評估報告"))
-                st.markdown(f"{t('我方預估收益')}: **{my_net:.1f}**")
-                st.markdown(f"{t('對方預估收益')}: **{opp_net:.1f}**")
+                st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
+                st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
                 sup_c = "green" if preview_data['my_sup_shift'] > 0 else "red"
                 st.markdown(f"{t('新增支持量預估')}: <span style='color:{sup_c}'>**{preview_data['my_sup_shift']:+.1f} 點**</span>", unsafe_allow_html=True)
@@ -191,10 +191,6 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 if b2.button(t("中民調 ($10)"), key=f"p2_{party.name}"): engine.execute_poll(game, view_party, 10); st.rerun()
                 if b3.button(t("大民調 ($20)", "Big Poll ($20)"), key=f"p3_{party.name}"): engine.execute_poll(game, view_party, 20); st.rerun()
 
-# ---------------------------------------------------------
-# [新增核心函數]：統一計算「觀測到的對手能力」
-# 確保提案室、側邊欄、草案預覽的情報邏輯完全一致
-# ---------------------------------------------------------
 def get_observed_abilities(viewer, target, game, cfg):
     if viewer.name == target.name or st.session_state.get('god_mode'):
         return {
@@ -209,7 +205,6 @@ def get_observed_abilities(viewer, target, game, cfg):
     my_inv = viewer.investigate_ability / 10.0
     err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
     
-    # 確保 RNG 固定，同一回合看到的情報不會浮動
     rng = random.Random(f"intel_{target.name}_{game.year}")
     def get_obs(v):
         if err_margin == 0.0: return v
@@ -237,7 +232,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     st.progress(acc / 100.0, text=f"{t('準確度')}: {acc}%")
     
-    # [修改] 使用統一函數獲取能力值
     obs_abis = get_observed_abilities(view_party, opp, game, cfg)
     
     st.write(f"{t('智庫')}: {obs_abis['predict']*10:.1f}% | {t('情報處')}: {obs_abis['investigate']*10:.1f}%")
@@ -299,7 +293,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
-    # [修復點]：強制取得「觀測」到的對方工程能力
     obs_abis = get_observed_abilities(view_party, sim_h_party, game, cfg)
     obs_bld = obs_abis['build']
 
@@ -308,16 +301,15 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         override_cost = plan.get('claimed_cost', 1.0)
     else:
         eval_decay = view_party.current_forecast
-        # [修復點]：智庫必須使用觀測到的「觀測單價」，並強制 round(..., 2)，保證算出 132.6，絕不產生小數點誤差
         override_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, eval_decay), 2)
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost)
+    # [修正] 將 r_pays 傳入 calc_economy 確保引擎能認知到這筆補貼
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'])
     
-    # [修復點]：重新推導真實的出資結構與投報比
-    eval_req_cost = res['req_cost']          # 這個數字現在絕對會是 170 * 0.78 = 132.6
+    eval_req_cost = res['req_cost']          
     eval_unit_cost = res.get('unit_cost', 1.0)
-    eval_r_pays = plan['r_pays']             # 監管補貼是固定的
-    eval_h_pays = eval_req_cost - eval_r_pays # 執行方必須負擔動態更新後的出資總額落差
+    eval_r_pays = plan['r_pays']             
+    eval_h_pays = eval_req_cost - eval_r_pays 
     
     with c1:
         equiv_loss = game.gdp * (plan.get('claimed_decay', 0.0) * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
@@ -334,15 +326,20 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_h_party.name else 0))
         r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_r_party.name else 0))
         
-        h_net = h_base + res['payout_h'] - res['act_fund'] + eval_r_pays
-        r_net = r_base + res['payout_r'] - eval_r_pays
+        # [修正] 專案淨利潤：嚴格排除底薪
+        h_project_profit = res['h_project_profit']
+        r_project_profit = res['payout_r'] - eval_r_pays
         
-        # [修復點]：ROI 會直接使用被觀測單價校正後的 eval_h_pays 進行計算
-        o_h_roi = (h_net / max(1.0, float(eval_h_pays))) * 100.0 if eval_h_pays > 0 else 0.0
-        o_r_roi = (r_net / max(1.0, float(eval_r_pays))) * 100.0 if eval_r_pays > 0 else 0.0
+        # [修正] 計算真正的 ROI：專案淨利 / 各自承擔的出資額
+        o_h_roi = (h_project_profit / float(eval_h_pays)) * 100.0 if eval_h_pays > 0 else float('inf')
+        o_r_roi = (r_project_profit / float(eval_r_pays)) * 100.0 if eval_r_pays > 0 else float('inf')
         
-        my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
-        opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
+        my_roi = o_h_roi if my_is_h else o_r_roi
+        opp_roi = o_r_roi if my_is_h else o_h_roi
+        
+        # 計算加上底薪後的整體總淨收（為了讓玩家清楚年終會拿到多少）
+        my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
+        opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
         
         ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
         ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
@@ -358,9 +355,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
 
+        def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
+
         st.markdown(t("### 📝 智庫分析報告"))
-        st.markdown(f"1. {t('我方預估收益')}: **{my_net:.1f}** (ROI: {my_roi:.1f}%)")
-        st.markdown(f"2. {t('對方預估收益')}: **{opp_net:.1f}** (ROI: {opp_roi:.1f}%)")
+        # 標籤改為「預估總收益」避免誤導，並附上純淨的「專案 ROI」
+        st.markdown(f"1. {t('我方預估總收益')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
+        st.markdown(f"2. {t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
+        
         sup_c = "green" if my_sup > 0 else "red"
         st.markdown(f"3. {t('新增支持量預估')}: <span style='color:{sup_c}'>**{my_sup:+.1f} 點**</span>", unsafe_allow_html=True)
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
@@ -387,7 +388,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         else: 
             light, risk_txt = "🟢", t("差異極小 (公告衰退率誠實，無心理預期操弄空間)")
             
-        st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
+        st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.3f} / {t('智庫')}: {tt_decay:.3f})")
         
         cl_cost = plan.get('claimed_cost', eval_unit_cost)
         diff_c = cl_cost - eval_unit_cost
