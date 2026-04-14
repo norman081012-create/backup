@@ -4,19 +4,27 @@
 # ==========================================
 import random
 import streamlit as st
+import i18n
+t = i18n.t
 
 class Party:
     def __eq__(self, other): return self.name == other.name if hasattr(other, 'name') else False
     def __init__(self, name, cfg):
         self.name = name; self.wealth = cfg['INITIAL_WEALTH']; self.support = 50.0 
+        
         self.build_ability = cfg.get('BUILD_ABILITY_DEFAULT', 6.0)
         self.investigate_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.predict_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.stealth_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        
         self.current_forecast = 0.0
+        
         self.poll_history = {'小型': [], '中型': [], '大型': []}
-        self.latest_poll = None; self.poll_count = 0
+        self.latest_poll = None
+        self.poll_count = 0
+        
+        # 初始化詳細的 last_acts 供 Phase 1 智庫預估使用
         self.last_acts = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0, 'edu_amt': 0, 'tot_action': 0, 'legal': 0, 'tot_maint': 0}
 
 class GameEngine:
@@ -48,6 +56,7 @@ def execute_poll(game, view_party, cost):
     error_margin = max(0.0, 15.0 - (view_party.predict_ability * 0.5) - (cost * 0.4))
     a_actual = game.party_A.support
     a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
+    
     poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
     game.party_A.latest_poll = a_poll
     game.party_A.poll_history[poll_type].append(a_poll)
@@ -61,6 +70,7 @@ def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
     game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
     game.swap_triggered_this_year = True
     game.emotion = min(100.0, game.emotion + 30.0) 
+    
     st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各強制捐款 {penalty_amt:.1f} 資金給第三政黨，觸發換位！"
     st.session_state.anim = 'snow'
     game.phase = 2
