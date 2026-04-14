@@ -5,21 +5,24 @@
 import streamlit as st
 import random
 import formulas
+import i18n
+t = i18n.t
 
 def render(game, cfg):
-    st.header("⚖️ Phase 3: 年度結算報告")
+    st.header(t("⚖️ Phase 3: 年度結算報告"))
     
     if not game.last_year_report:
         rp, hp = game.r_role_party, game.h_role_party
-        ra = st.session_state.get(f"{rp.name}_acts", {})
-        ha = st.session_state.get(f"{hp.name}_acts", {})
-        d = st.session_state.get('turn_data', {})
+        ra, ha = st.session_state[f"{rp.name}_acts"], st.session_state[f"{hp.name}_acts"]
+        d = st.session_state.turn_data
         
-        returned_to_r = 0.0; confiscated_to_budget = 0.0
+        returned_to_r = 0.0
+        confiscated_to_budget = 0.0
         corr_support_penalty = 0.0
-        corr_caught = False; crony_caught = False
+        corr_caught = False
+        crony_caught = False
         
-        proj_fund = d.get('proj_fund', 0.0)
+        proj_fund = d.get('proj_fund', 0)
         corr_amt = proj_fund * (ha.get('corr', 0) / 100.0)
         crony_base = proj_fund * (ha.get('crony', 0) / 100.0)
         crony_income = crony_base * 0.1
@@ -27,15 +30,20 @@ def render(game, cfg):
         catch_prob_base = max(0.1, (rp.investigate_ability - hp.stealth_ability)) * 2.0
         
         if corr_amt > 0 and random.random() < min(1.0, catch_prob_base * (corr_amt / max(1.0, proj_fund))):
-            returned_to_r += corr_amt; confiscated_to_budget += corr_amt * 0.4
+            returned_to_r += corr_amt
+            confiscated_to_budget += corr_amt * 0.4
             corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, proj_fund) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
-            corr_caught = True; corr_amt = 0
+            corr_caught = True
+            corr_amt = 0
 
         if crony_base > 0 and random.random() < min(1.0, catch_prob_base * (crony_base / max(1.0, proj_fund))):
-            returned_to_r += crony_base; confiscated_to_budget += crony_base * 0.5
-            crony_caught = True; crony_base = 0; crony_income = 0
+            returned_to_r += crony_base
+            confiscated_to_budget += crony_base * 0.5
+            crony_caught = True
+            crony_base = 0
+            crony_income = 0
             
-        res_exec = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, d.get('bid_cost', 1.0), hp.build_ability, game.current_real_decay, corr_amt)
+        res_exec = formulas.calc_economy(cfg, game.gdp, game.total_budget, proj_fund, d.get('bid_cost', 1), hp.build_ability, game.current_real_decay, corr_amt)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0)
@@ -93,29 +101,34 @@ def render(game, cfg):
         hp.stealth_ability = ha.get('t_stl', hp.stealth_ability)
         hp.build_ability = ha.get('t_bld', hp.build_ability)
         
-        hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
+        # 將對手動作完整記錄供明年的預估參考
+        hp.last_acts = ha.copy()
+        rp.last_acts = ra.copy()
+        
         game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
     
     rep = game.last_year_report
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### 💰 經濟與財政")
+        st.markdown(t("#### 💰 經濟與財政"))
         st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
         
-        st.write(f"**執行系統收益總結:** `(基礎 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} + 業外 {rep['h_extra']:.1f}) - (花費 {rep['h_pol_cost']:.1f} + 維護 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
-        st.write(f"**監管系統收益總結:** `(基礎 {rep['r_base']:.1f} + 標案 {rep['r_payout']:.1f} + 業外 {rep['r_extra']:.1f}) - (花費 {rep['r_pol_cost']:.1f} + 維護 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
+        st.write(f"**執行系統收益總結:** `(基礎 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} + 業外 {rep['h_extra']:.1f}) - (政策花費 {rep['h_pol_cost']:.1f} + 維護費 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
+        st.write(f"**監管系統收益總結:** `(基礎 {rep['r_base']:.1f} + 標案 {rep['r_payout']:.1f} + 業外 {rep['r_extra']:.1f}) - (政策花費 {rep['r_pol_cost']:.1f} + 維護費 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
         
-        if rep.get('corr_caught'): st.error("🚨 貪污醜聞爆發！貪污被情報處查獲，沒收所有非法所得並重挫民意。")
-        if rep.get('crony_caught'): st.error("🚨 圖利爭議！圖利親信遭舉發，強制沒收資金返還國庫與監管系統。")
+        if rep.get('corr_caught'):
+            st.error(t("🚨 貪污醜聞爆發！執行系統貪污被情報處查獲，沒收所有非法所得並重挫民意。"))
+        if rep.get('crony_caught'):
+            st.error(t("🚨 圖利爭議！執行系統圖利親信遭舉發，強制沒收資金返還國庫與監管系統。"))
 
     with c2:
-        st.markdown("#### 🧠 社會與民意")
-        st.write(f"資訊辨識: `{rep['old_san']:.1f} ➔ {game.sanity:.1f}`")
-        st.write(f"選民情緒: `{rep['old_emo']:.1f} ➔ {game.emotion:.1f}`")
-        st.write(f"施政滿意度位移 (執行/監管): `{rep['h_perf']:.1f}% / {rep['r_perf']:.1f}%`")
+        st.markdown(t("#### 🧠 社會與民意"))
+        st.write(f"{t('資訊辨識')}: `{rep['old_san']:.1f} ➔ {game.sanity:.1f}`")
+        st.write(f"{t('選民情緒')}: `{rep['old_emo']:.1f} ➔ {game.emotion:.1f}`")
+        st.write(f"{t('施政滿意度位移 (執行/監管)')}: `{rep['h_perf']:.1f}% / {rep['r_perf']:.1f}%`")
 
     st.markdown("---")
-    if st.button("⏩ 確認報告並進入下一年", type="primary", use_container_width=True):
+    if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
         game.year += 1
         game.phase = 1
         game.p1_step = 'draft_r'
