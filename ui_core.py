@@ -278,7 +278,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"{t('工程處')}: {view_party.build_ability*10:.1f}%")
     st.write(f"**(依據當前機構投資，明年維護費估算: -${total_maint:.1f})**")
 
-def render_proposal_component(title, plan, game, view_party, cfg):
+def render_proposal_component(res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)):
     st.markdown(f"#### {title}")
     
     c_tog1, c_tog2 = st.columns(2)
