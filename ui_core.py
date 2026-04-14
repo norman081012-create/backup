@@ -4,6 +4,7 @@
 # ==========================================
 import streamlit as st
 import random
+import math
 import config
 import formulas
 import engine
@@ -56,7 +57,7 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         gdp_diff = disp_gdp - gdp_base
         gdp_pct = (gdp_diff / max(1.0, gdp_base)) * 100.0
         g_color = "green" if gdp_diff > 0 else "red" if gdp_diff < 0 else "gray"
-        label_gdp = t("預期 GDP") if is_preview else t("當前 GDP")
+        label_gdp = t("預估 GDP") if is_preview else t("當前 GDP")
         st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` <span style='color:{g_color}'>*({gdp_diff:+.1f}, {gdp_pct:+.2f}%)*</span>", unsafe_allow_html=True)
 
     with c2:
@@ -73,18 +74,15 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         fc = view_party.current_forecast
         acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
-        # [修改] 顯示無施政跌幅與絕對值預估，根除「衰退」字眼
-        no_policy_gdp = game.gdp * (1.0 - (fc / 100.0))
-        st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)}")
-        st.write(f"({t('無施政估算')}: `-{fc:.1f}%` ➔ GDP `~{no_policy_gdp:.1f}`)")
-        
+        st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)} ({t('預估衰退值')}: -{fc:.2f})")
         if rep:
             my_is_h = view_party.name == rep['h_party_name']
             past_forecast = rep.get('h_forecast') if my_is_h else rep.get('r_forecast')
             if past_forecast is not None:
                 diff = abs(past_forecast - rep['real_decay'])
                 eval_txt = config.get_thinktank_eval(view_party.predict_ability, diff)
-                st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 內部檢討: **{eval_txt}**)")
+                st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 年度內部檢討報告: \n")
+                st.write(f"**{eval_txt}**)")
         else:
             st.write("(尚無去年歷史資料以供檢討)")
 
@@ -199,22 +197,34 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.progress(acc / 100.0, text=f"{t('準確度')}: {acc}%")
     rng = random.Random(f"intel_{opp.name}_{game.year}")
     
-    st.write(f"{t('智庫')}: {max(0, opp.predict_ability*(1+rng.uniform(-blur, blur))*10):.1f}% | {t('情報處')}: {max(0, opp.investigate_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
-    st.write(f"{t('黨媒')}: {max(0, opp.media_ability*(1+rng.uniform(-blur, blur))*10):.1f}% | {t('反情報處')}: {max(0, opp.stealth_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
+    # [修改核心] 觀測誤差從「率」轉為「量」的計算模型
+    def get_obs_abi(val):
+        if blur == 0: return val
+        true_cost = (2**val - 1) * 50
+        obs_cost = max(0.0, true_cost * (1 + rng.uniform(-blur, blur)))
+        return math.log2(obs_cost / 50.0 + 1)
+        
+    obs_pre = get_obs_abi(opp.predict_ability)
+    obs_inv = get_obs_abi(opp.investigate_ability)
+    obs_med = get_obs_abi(opp.media_ability)
+    obs_stl = get_obs_abi(opp.stealth_ability)
+    obs_bld = get_obs_abi(opp.build_ability)
+
+    st.write(f"{t('智庫')}: {obs_pre*10:.1f}% | {t('情報處')}: {obs_inv*10:.1f}%")
+    st.write(f"{t('黨媒')}: {obs_med*10:.1f}% | {t('反情報處')}: {obs_stl*10:.1f}%")
     
-    # [新增] 貪污查緝預估能力顯示
-    obs_stl_val = max(0.1, opp.stealth_ability * (1 + rng.uniform(-blur, blur)))
-    catch_mult = max(0.1, view_party.investigate_ability / max(0.1, obs_stl_val))
+    # [新增核心] 貪污查緝能力評估 (基於觀測到的對手反情報量)
+    catch_mult = max(0.1, view_party.investigate_ability / max(0.1, obs_stl))
     catch_10 = min(100.0, catch_mult * 0.1 * 3.0 * 100)
     catch_30 = min(100.0, catch_mult * 0.3 * 3.0 * 100)
+    
     st.write(f"**{t('貪污查緝能力評估')}**: 偵測倍率 `{catch_mult:.2f}x`")
     st.caption(f"*(若對手貪污 10% $\\rightarrow$ 查獲率約 `{catch_10:.1f}%` | 貪污 30% $\\rightarrow$ `{catch_30:.1f}%`)*")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    obs_build = max(0.1, opp.build_ability * (1 + rng.uniform(-blur, blur)))
-    st.write(f"{t('工程處')}: {obs_build*10:.1f}%")
+    st.write(f"{t('工程處')}: {obs_bld*10:.1f}%")
     
-    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_build, view_party.current_forecast)
+    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_bld, view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
     inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
@@ -240,7 +250,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     c1, c2 = st.columns(2)
     
-    eval_drop = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
+    eval_decay = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
     override_cost = plan.get('claimed_cost') if use_claimed else None
     
     if simulate_swap:
@@ -254,7 +264,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_drop, override_unit_cost=override_cost)
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost)
     
     eval_req_cost = res['req_cost']
     eval_unit_cost = res.get('unit_cost', 1.0)
@@ -263,7 +273,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     eval_h_pays = eval_req_cost - eval_r_pays
     
     with c1:
-        st.write(f"**{t('公告無施政跌幅(%)')}**: -{plan.get('claimed_decay', 0.0):.1f}% | **{t('試算建設單價')}:** {eval_unit_cost:.2f}")
+        st.write(f"**{t('公告衰退值')}:** {plan.get('claimed_decay', 0.0):.2f} | **{t('試算建設單價')}:** {eval_unit_cost:.2f}")
         st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
         if simulate_swap:
@@ -291,7 +301,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, 
             ha_dummy, ra_dummy, 
-            res['h_idx'], plan.get('claimed_decay', 0.0), eval_drop, game.sanity, game.emotion
+            res['h_idx'], plan.get('claimed_decay', 0.0), eval_decay, game.sanity, game.emotion
         )
         my_sup = shift_preview['actual_shift'] if my_is_h else -shift_preview['actual_shift']
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
@@ -303,30 +313,29 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"3. {t('支持度變化預估')}: <span style='color:{sup_c}'>**{my_sup:+.2f}%**</span>", unsafe_allow_html=True)
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
-        # [修改] 針對 0-90% 的跌幅設計動態對白
-        tt_drop = view_party.current_forecast
-        cl_drop = plan.get('claimed_decay', 0.0)
-        diff = cl_drop - tt_drop
+        tt_decay = view_party.current_forecast
+        cl_decay = plan.get('claimed_decay', 0.0)
+        diff = cl_decay - tt_decay
         abs_diff = abs(diff)
         
         author_role = plan.get('author')
         viewer_role = 'H' if my_is_h else 'R'
         is_self = (author_role == viewer_role)
 
-        if abs_diff > 30.0: 
+        if abs_diff > 0.3: 
             light = "🔴"
             if is_self:
-                if cl_drop > tt_drop: risk_txt = t("高明的手法，長官。刻意高估跌幅能有效壓低民眾期望，若結算超標，我們將收割巨大的預期紅利。")
-                else: risk_txt = t("明智的抉擇，長官。低估跌幅粉飾太平雖有奇效，但若最終經濟不如預期，須防範民意反噬。")
+                if cl_decay > tt_decay: risk_txt = t("高明的手法，長官。刻意高估衰退能有效壓低民眾期望，若結算超標，我們將收割巨大的預期紅利——前提是別被看破手腳。")
+                else: risk_txt = t("明智的抉擇，長官。您低估衰退的直覺往往比我們的數據準確，但若最終經濟不如預期，須防範民意反噬。")
             else:
-                if cl_drop > tt_drop: risk_txt = t("警報！對手惡意高估無施政跌幅。企圖製造恐慌降低施政期望，藉此收割反差紅利！")
-                else: risk_txt = t("根據比對，對手正惡意低估無施政跌幅粉飾太平。若最終施政破功，他們將面臨嚴重的反撲！")
-        elif abs_diff > 10.0: 
-            light, risk_txt = "🟡", t("中度風險 (公告跌幅與預期略有出入，可能影響選民心理預期)")
+                if cl_decay > tt_decay: risk_txt = t("警報！對手顯然在高估衰退率。他們企圖製造恐慌以降低施政期望，藉此在期末收割反差紅利，甚至質疑我們的基準！")
+                else: risk_txt = t("根據智庫交叉比對，對手正惡意低估衰退率粉飾太平。若最終施政破功，他們將面臨嚴重的民意反撲，這是我們的好機會。")
+        elif abs_diff > 0.1: 
+            light, risk_txt = "🟡", t("中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)")
         else: 
-            light, risk_txt = "🟢", t("差異極小 (公告跌幅誠實，無心理預期操弄空間)")
+            light, risk_txt = "🟢", t("差異極小 (公告衰退率誠實，無心理預期操弄空間)")
             
-        st.markdown(f"5. {t('無施政估值判讀')}: {light} {risk_txt} ({t('公告')}: -{cl_drop:.1f}% / {t('智庫')}: -{tt_drop:.1f}%)")
+        st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
         
         cl_cost = plan.get('claimed_cost', eval_unit_cost)
         diff_c = cl_cost - eval_unit_cost
@@ -335,13 +344,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         if abs_diff_c > 0.5:
             light_c = "🔴"
             if is_self:
-                if cl_cost > eval_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的操作空間。")
-                else: risk_txt_c = t("長官，刻意低報單價能展現行政效率，但過度壓榨預算恐引發工程隱患。")
+                if cl_cost > eval_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的資金水位與操作空間。只要對手沒察覺，這就是一筆完美的政治溢價。")
+                else: risk_txt_c = t("長官，刻意低報單價能展現我們驚人的行政效率。但請注意，過度壓榨預算恐引發工程隱患。")
             else:
                 if cl_cost > eval_unit_cost:
-                    risk_txt_c = t("對手（執行）意圖套取超額工程款！") if author_role == 'H' else t("對手（監管）惡意墊高基準單價建立預算門檻！")
+                    risk_txt_c = t("智庫警告！對手（執行系統）浮報單價的意圖非常明顯，他們正試圖套取超額工程款，這其中必定暗藏圖利與貪腐！") if author_role == 'H' else t("智庫警告！對手（監管系統）竟惡意墊高基準單價，他們企圖以『通膨』為藉口，為日後的杯葛與預算卡關建立門檻！")
                 else:
-                    risk_txt_c = t("對手（執行）企圖掩飾低效能！") if author_role == 'H' else t("對手（監管）正惡意低估單價剝削我們的預算！")
+                    risk_txt_c = t("智庫研判，對手（執行系統）正刻意壓低單價。他們企圖以『低預算高產出』的假象掩飾工程瑕疵，我們必須加強調查防堵！") if author_role == 'H' else t("智庫研判，對手（監管系統）正惡意低估市場單價。他們企圖剝削我們的合理預算，逼迫我們承擔不可能的建設量！")
         elif abs_diff_c > 0.2:
             light_c, risk_txt_c = "🟡", t("中度風險 (單價略有出入，需留意工程品質或超支)")
         else:
