@@ -75,7 +75,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)} ({t('預估衰退值')}: -{fc:.2f})")
         if rep:
-            # [修正] KeyError view_party_forecast，改為抓取己方的紀錄預估
             my_is_h = view_party.name == rep['h_party_name']
             past_forecast = rep.get('h_forecast') if my_is_h else rep.get('r_forecast')
             if past_forecast is not None:
@@ -203,9 +202,11 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     obs_build = max(0.1, opp.build_ability * (1 + rng.uniform(-blur, blur)))
     st.write(f"{t('工程處')}: {obs_build*10:.1f}%")
     
-    # [新增] 建設估價：智庫結合情報處推算一單位產能成本
-    est_unit_cost = 10.0 / obs_build
-    st.write(f"**{t('建設估價')}**: 🌟 {t('判讀')} ({t('單位產出成本')}: `{est_unit_cost:.2f}`) / {t('基於觀測對手工程能力預算')}")
+    # [修改] 導入全新的情報處專屬經濟判讀
+    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_build, view_party.current_forecast)
+    eval_txt = config.get_intel_market_eval(est_unit_cost)
+    st.write(f"**{t('建設估價')}**: {eval_txt}")
+    st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` / 基於觀測對手工程能力與通膨試算)*")
 
     st.markdown("---")
     st.title(t("🧾 審計處 - 內部部門報告"))
@@ -225,6 +226,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     c1, c2 = st.columns(2)
     
     eval_decay = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
+    override_cost = plan.get('claimed_cost') if use_claimed else None
     
     if simulate_swap:
         sim_h_party = game.r_role_party
@@ -237,19 +239,17 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay)
+    # [修改] 傳入 override_unit_cost 以支援切換功能
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost)
     
-    # [修改] 若切換至公告試算，出資總額完全依照 公告單價 * 計畫總效益
-    if use_claimed:
-        eval_req_cost = plan['bid_cost'] * plan.get('claimed_cost', 10.0/max(0.1, sim_h_party.build_ability))
-    else:
-        eval_req_cost = res['req_cost']
-
+    eval_req_cost = res['req_cost']
+    eval_unit_cost = res.get('unit_cost', 1.0)
+    
     eval_r_pays = plan['r_pays']
     eval_h_pays = eval_req_cost - eval_r_pays
     
     with c1:
-        st.write(f"**{t('公告衰退值')}:** {plan.get('claimed_decay', 0.0):.2f} | **{t('公告建設單價')}:** {plan.get('claimed_cost', 0.0):.2f}")
+        st.write(f"**{t('公告衰退值')}:** {plan.get('claimed_decay', 0.0):.2f} | **{t('試算建設單價')}:** {eval_unit_cost:.2f}")
         st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
         if simulate_swap:
@@ -295,7 +295,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         abs_diff = abs(diff)
         opp_role = 'R' if plan.get('author') == 'R' else 'H'
         
-        # [修改] 重構符合智庫專業度的高級對白
         if abs_diff > 0.3: 
             light = "🔴"
             if cl_decay > tt_decay:
