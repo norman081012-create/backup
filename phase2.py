@@ -28,17 +28,23 @@ def render(game, view_party, opponent_party, cfg):
         h_corr_pct = 0; h_crony_pct = 0
         judicial_amt = 0.0; edu_policy_amt = 0.0
         
+        # [修改] 載入去年的設定值
+        last_media = min(float(view_party.last_acts.get('media', 0.0)), cw)
+        last_camp = min(float(view_party.last_acts.get('camp', 0.0)), cw)
+        last_incite = min(float(view_party.last_acts.get('incite', 0.0)), cw)
+        last_judicial = min(float(view_party.last_acts.get('judicial', 0.0)), cw)
+        
         if is_h:
             h_corr_pct = st.slider(t("💸 秘密貪污 (%)"), 0, 100, 0)
             max_crony = max(0, 100 - h_corr_pct)
             h_crony_pct = st.slider(t("🏢 圖利自身廠商 (%)"), 0, max_crony, 0)
         else:
-            judicial_amt = st.slider(t("⚖️ 司法審查 (投入資金)(降低全體黨媒效果，引起高思辯選民反感)"), 0.0, cw, 0.0)
+            judicial_amt = st.slider(t("⚖️ 媒體審查 (投入資金)(打壓對手黨媒效率，依對手當前支持度反噬自身民調)"), 0.0, cw, last_judicial)
             edu_policy_amt = st.slider(t("🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))"), -cw, cw, 0.0)
             
-        media_ctrl = st.slider(t("📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)"), 0.0, cw, 0.0)
-        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)"), 0.0, cw, 0.0)
-        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)"), 0.0, cw, 0.0)
+        media_ctrl = st.slider(t("📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)"), 0.0, cw, last_media)
+        camp_amt = st.slider(t("🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)"), 0.0, cw, last_camp)
+        incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)"), 0.0, cw, last_incite)
         
     with c2:
         st.markdown(t("#### 🔒 內部部門投資"))
@@ -87,7 +93,6 @@ def render(game, view_party, opponent_party, cfg):
     
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), orig_corr_amt)
     
-    # [修改] 使用新的總預算比例參數
     h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
