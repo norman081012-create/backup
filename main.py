@@ -7,6 +7,7 @@ import random
 import config
 import engine
 import ui_core
+import ui_panels
 import phase1
 import phase2
 import phase3
@@ -43,17 +44,13 @@ if game.phase == 4:
     st.stop()
 
 if 'turn_initialized' not in st.session_state:
-    # 1. 決定真實衰退率 (0~1.0)
     game.current_real_decay = max(0.0, round(random.uniform(cfg['DECAY_MIN'], cfg['DECAY_MAX']), 3))
     
-    # 2. [新增邏輯] 智庫觀測先換算成「損失建設量」
     real_infra_loss = game.gdp * (game.current_real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     
     for p in [game.party_A, game.party_B]:
         error_range = (cfg['PREDICT_DIFF'] / max(0.1, p.predict_ability)) * (game.gdp * 0.01)
         observed_loss = max(0.0, real_infra_loss + random.uniform(-error_range, error_range))
-        
-        # 反推回衰退值，供後續公式使用
         p.current_forecast = max(0.0, round(((observed_loss / max(1.0, game.gdp)) - cfg['BASE_DECAY_RATE']) / cfg['DECAY_WEIGHT_MULT'], 3))
         
         p.poll_history = {'小型': [], '中型': [], '大型': []}
@@ -79,7 +76,7 @@ is_election_year = (game.year % cfg['ELECTION_CYCLE'] == 1)
 
 with st.sidebar:
     ui_core.render_global_settings(cfg, game)
-    ui_core.render_sidebar_intel_audit(game, view_party, cfg)
+    ui_panels.render_sidebar_intel_audit(game, view_party, cfg)
     god_mode = st.toggle(t("👁️ 上帝視角", "👁️ God Mode"), False)
     if st.button(t("🔄 重新開始遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
 
@@ -93,8 +90,8 @@ if god_mode:
     st.error(t(f"👁️ **上帝視角：** 真實衰退值為 **{game.current_real_decay:.3f}** (損失建設量: {real_loss:.1f})"))
 
 if game.phase == 1 or game.phase == 2:
-    if game.phase == 1: ui_core.render_dashboard(game, view_party, cfg, is_preview=False)
-    ui_core.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
+    if game.phase == 1: ui_panels.render_dashboard(game, view_party, cfg, is_preview=False)
+    ui_panels.render_party_cards(game, view_party, god_mode, is_election_year, cfg)
     ui_core.render_message_board(game)
 
 if game.phase == 1:
