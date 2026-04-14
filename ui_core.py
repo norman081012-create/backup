@@ -205,7 +205,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_build, view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
-    # [新增] 將通膨指數顯示於審計處，並使用初始設定 5000 為基礎 0%
     inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
     
     st.write(f"**{t('建設估價')}**: {eval_txt}")
@@ -292,19 +291,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"3. {t('支持度變化預估')}: <span style='color:{sup_c}'>**{my_sup:+.2f}%**</span>", unsafe_allow_html=True)
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
+        # --- 智庫判讀核心：8 種情境動態對白 ---
         tt_decay = view_party.current_forecast
         cl_decay = plan.get('claimed_decay', 0.0)
         diff = cl_decay - tt_decay
         abs_diff = abs(diff)
-        opp_role = 'R' if plan.get('author') == 'R' else 'H'
         
-        # [修改] 將衰退值判讀邏輯更換為預期心理與恐慌紅利攻防
+        author_role = plan.get('author')
+        viewer_role = 'H' if my_is_h else 'R'
+        is_self = (author_role == viewer_role)
+
+        # 衰退值判讀
         if abs_diff > 0.3: 
             light = "🔴"
-            if cl_decay > tt_decay:
-                risk_txt = t("研判對手惡意高估衰退率，企圖製造恐慌以降低施政期望，收割預期反差紅利！")
+            if is_self:
+                if cl_decay > tt_decay: risk_txt = t("高明的手法，長官。刻意高估衰退能有效壓低民眾期望，若結算超標，我們將收割巨大的預期紅利——前提是別被看破手腳。")
+                else: risk_txt = t("明智的抉擇，長官。您低估衰退的直覺往往比我們的數據準確，但若最終經濟不如預期，須防範民意反噬。")
             else:
-                risk_txt = t("研判對手低估衰退率，粉飾太平，若最終施政未達標將遭民意反噬！")
+                if cl_decay > tt_decay: risk_txt = t("警報！對手顯然在高估衰退率。他們企圖製造恐慌以降低施政期望，藉此在期末收割反差紅利，甚至質疑我們的基準！")
+                else: risk_txt = t("根據智庫交叉比對，對手正惡意低估衰退率粉飾太平。若最終施政破功，他們將面臨嚴重的民意反撲，這是我們的好機會。")
         elif abs_diff > 0.1: 
             light, risk_txt = "🟡", t("中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)")
         else: 
@@ -316,12 +321,17 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         diff_c = cl_cost - eval_unit_cost
         abs_diff_c = abs(diff_c)
 
+        # 建設單價判讀
         if abs_diff_c > 0.5:
             light_c = "🔴"
-            if cl_cost > eval_unit_cost:
-                risk_txt_c = t("研判對手惡意高估單價，企圖浮報預算與墊高門檻！") if opp_role == 'R' else t("研判對手惡意高估單價，意圖套取過高工程款！")
+            if is_self:
+                if cl_cost > eval_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的資金水位與操作空間。只要對手沒察覺，這就是一筆完美的政治溢價。")
+                else: risk_txt_c = t("長官，刻意低報單價能展現我們驚人的行政效率。但請注意，過度壓榨預算恐引發工程隱患。")
             else:
-                risk_txt_c = t("研判對手低估單價，企圖壓榨我方建設量！") if opp_role == 'R' else t("研判對手低估單價，企圖掩飾低效能！")
+                if cl_cost > eval_unit_cost:
+                    risk_txt_c = t("智庫警告！對手（執行系統）浮報單價的意圖非常明顯，他們正試圖套取超額工程款，這其中必定暗藏圖利與貪腐！") if author_role == 'H' else t("智庫警告！對手（監管系統）竟惡意墊高基準單價，他們企圖以『通膨』為藉口，為日後的杯葛與預算卡關建立門檻！")
+                else:
+                    risk_txt_c = t("智庫研判，對手（執行系統）正刻意壓低單價。他們企圖以『低預算高產出』的假象掩飾工程瑕疵，我們必須加強調查防堵！") if author_role == 'H' else t("智庫研判，對手（監管系統）正惡意低估市場單價。他們企圖剝削我們的合理預算，逼迫我們承擔不可能的建設量！")
         elif abs_diff_c > 0.2:
             light_c, risk_txt_c = "🟡", t("中度風險 (單價略有出入，需留意工程品質或超支)")
         else:
