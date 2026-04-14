@@ -75,10 +75,14 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)} ({t('預估衰退值')}: -{fc:.2f})")
         if rep:
-            diff = abs(rep['view_party_forecast'] - rep['real_decay'])
-            eval_txt = config.get_thinktank_eval(view_party.predict_ability, diff)
-            st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 年度內部檢討報告: \n")
-            st.write(f"**{eval_txt}**)")
+            # [修正] KeyError view_party_forecast，改為抓取己方的紀錄預估
+            my_is_h = view_party.name == rep['h_party_name']
+            past_forecast = rep.get('h_forecast') if my_is_h else rep.get('r_forecast')
+            if past_forecast is not None:
+                diff = abs(past_forecast - rep['real_decay'])
+                eval_txt = config.get_thinktank_eval(view_party.predict_ability, diff)
+                st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 年度內部檢討報告: \n")
+                st.write(f"**{eval_txt}**)")
         else:
             st.write("(尚無去年歷史資料以供檢討)")
 
@@ -195,7 +199,13 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     st.write(f"{t('智庫')}: {max(0, opp.predict_ability*(1+rng.uniform(-blur, blur))*10):.1f}% | {t('情報處')}: {max(0, opp.investigate_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
     st.write(f"{t('黨媒')}: {max(0, opp.media_ability*(1+rng.uniform(-blur, blur))*10):.1f}% | {t('反情報處')}: {max(0, opp.stealth_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
-    st.write(f"{t('工程處')}: {max(0, opp.build_ability*(1+rng.uniform(-blur, blur))*10):.1f}%")
+    
+    obs_build = max(0.1, opp.build_ability * (1 + rng.uniform(-blur, blur)))
+    st.write(f"{t('工程處')}: {obs_build*10:.1f}%")
+    
+    # [新增] 建設估價：智庫結合情報處推算一單位產能成本
+    est_unit_cost = 10.0 / obs_build
+    st.write(f"**{t('建設估價')}**: 🌟 {t('判讀')} ({t('單位產出成本')}: `{est_unit_cost:.2f}`) / {t('基於觀測對手工程能力預算')}")
 
     st.markdown("---")
     st.title(t("🧾 審計處 - 內部部門報告"))
@@ -209,7 +219,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"#### {title}")
     
     c_tog1, c_tog2 = st.columns(2)
-    use_claimed = c_tog1.toggle(t("切換以 公告衰退 試算 (預設為智庫衰退)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
+    use_claimed = c_tog1.toggle(t("切換以 公告數字 試算 (預設為智庫/真實預估)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
     simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (依據新定位試算)"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
     
     c1, c2 = st.columns(2)
@@ -229,23 +239,27 @@ def render_proposal_component(title, plan, game, view_party, cfg):
 
     res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay)
     
-    eval_req_cost = res['req_cost']
+    # [修改] 若切換至公告試算，出資總額完全依照 公告單價 * 計畫總效益
+    if use_claimed:
+        eval_req_cost = plan['bid_cost'] * plan.get('claimed_cost', 10.0/max(0.1, sim_h_party.build_ability))
+    else:
+        eval_req_cost = res['req_cost']
+
     eval_r_pays = plan['r_pays']
     eval_h_pays = eval_req_cost - eval_r_pays
     
     with c1:
-        st.write(f"**{t('公告衰退值')}:** {plan['claimed_decay']:.2f} | **{t('標案總額')}:** {plan['proj_fund']:.1f}")
-        st.write(f"**{t('標案成本')}:** {plan['bid_cost']:.1f}")
+        st.write(f"**{t('公告衰退值')}:** {plan.get('claimed_decay', 0.0):.2f} | **{t('公告建設單價')}:** {plan.get('claimed_cost', 0.0):.2f}")
+        st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
-        # [修正] 無論是否切換模擬，都要使用動態計算的 eval_req_cost，因為出資總額會隨工程能力變化
         if simulate_swap:
             st.info(f"🔧 **{t('模擬執行方出資')}:** {t('總額')} {eval_req_cost:.1f} ({t('監管出資')}: {eval_r_pays:.1f} | {t('執行出資')}: {eval_h_pays:.1f})")
         else:
             st.write(f"**{t('出資總額')}:** {eval_req_cost:.1f} ({t('監管出資')}: {eval_r_pays:.1f} | {t('執行出資')}: {eval_h_pays:.1f})")
             
     with c2:
-        h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if sim_ruling_name == sim_h_party.name else 0)
-        r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if sim_ruling_name == sim_r_party.name else 0)
+        h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_h_party.name else 0))
+        r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_r_party.name else 0))
         
         h_net = h_base + res['payout_h'] - res['act_fund'] + eval_r_pays
         r_net = r_base + res['payout_r'] - eval_r_pays
@@ -281,18 +295,19 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         abs_diff = abs(diff)
         opp_role = 'R' if plan.get('author') == 'R' else 'H'
         
+        # [修改] 重構符合智庫專業度的高級對白
         if abs_diff > 0.3: 
             light = "🔴"
             if cl_decay > tt_decay:
-                risk_txt = t("差異極大 (說對方誇大景氣不好是為了騙支持度)") if opp_role == 'R' else t("差異極大 (說對方誇大景氣不好是為了騙更多標案資金維持現有GDP)")
+                risk_txt = t("研判對手惡意高估衰退率，企圖製造恐慌騙取紅利與支持！") if opp_role == 'R' else t("研判對手高估衰退率，意圖墊高阻力預期，套取過高獎勵金！")
             else:
-                risk_txt = t("差異極大 (說對手誇大景氣好是為了減少標案資金)") if opp_role == 'R' else t("差異極大 (說對手誇大景氣好是為了騙標案資金利用景氣提升GDP)")
+                risk_txt = t("研判對手低估衰退率，意圖苛扣我方資源與獎勵！") if opp_role == 'R' else t("研判對手低估衰退率，企圖掩蓋困境並收割自然成長紅利！")
         elif abs_diff > 0.1: 
-            light, risk_txt = "🟡", t("中等差異 (數據略有出入)")
+            light, risk_txt = "🟡", t("中度風險 (數據略有出入，需留意預算流失)")
         else: 
-            light, risk_txt = "🟢", t("差異極小 (基準比對)")
+            light, risk_txt = "🟢", t("差異極小 (公告與智庫基準相符，屬正常估值)")
             
-        st.markdown(f"5. {t('衰退值差異')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
+        st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     current_pct = current_val * 10.0
