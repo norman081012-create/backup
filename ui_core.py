@@ -116,7 +116,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                # Phase 2 儀表板：包含履約政績 (因為正在設定貪污)
                 st.markdown(f"{t('預期政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
                 if 'project_perf' in preview_data:
                     st.caption(f"*(包含執行方當前貪污設定下的履約政績: `{preview_data['project_perf']:+.1f}`)*")
@@ -278,11 +277,11 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"{t('工程處')}: {view_party.build_ability*10:.1f}%")
     st.write(f"**(依據當前機構投資，明年維護費估算: -${total_maint:.1f})**")
 
-def render_proposal_component(res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)):
+# === 這裡就是之前出錯的函數，現在完整正確！ ===
+def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"#### {title}")
     
     c_tog1, c_tog2 = st.columns(2)
-    # [反轉預設值] 預設關閉(False) = 使用公告數字。文字改為「切換至智庫預估」
     use_tt = c_tog1.toggle(t("切換至 智庫預估 試算 (預設為公告數值)"), False, key=f"tg_tt_{title}_{plan.get('author', 'sys')}")
     use_claimed = not use_tt
     simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (依據新定位試算)"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
@@ -310,7 +309,7 @@ def render_proposal_component(res = formulas.calc_economy(cfg, game.gdp, game.to
         eval_decay = view_party.current_forecast
         override_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, eval_decay), 2)
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'])
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=override_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)
     
     eval_req_cost = res['req_cost']          
     eval_unit_cost = res.get('unit_cost', 1.0)
@@ -360,7 +359,6 @@ def render_proposal_component(res = formulas.calc_economy(cfg, game.gdp, game.to
         opp_perf = shift_preview[sim_r_party.name if my_is_h else sim_h_party.name]['perf']
         proj_perf = shift_preview['project_perf']
         
-        # [核心剝離] Phase 1 的預覽只顯示「大環境政績」，扣除必定歸屬執行方的履約紅利
         base_my_perf = my_perf - (proj_perf if my_is_h else 0.0)
         base_opp_perf = opp_perf - (proj_perf if not my_is_h else 0.0)
         
