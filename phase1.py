@@ -63,7 +63,7 @@ def render(game, view_party, cfg):
                 req_infra_to_balance = gdp_loss / conv_rate
                 
                 st.markdown(t(f"**公告衰退值 (當前公告: {current_val:.3f}) (相當於 {req_infra_to_balance:.1f} 建設量)** | {opp_txt1}"))
-                claimed_decay = st.number_input("公告衰退值", step=0.001, min_value=0.0, max_value=1.0, key=widget_decay_key, label_visibility="collapsed")
+                claimed_decay = st.number_input("公告衰退值", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
