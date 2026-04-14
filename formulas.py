@@ -17,20 +17,22 @@ def calculate_upgrade_cost(current, target, build_ability=0.0):
     discount_factor = 1.0 - (build_ability * 0.02)
     return base_cost * max(0.1, discount_factor)
 
-def calc_unit_cost(cfg, gdp, build_abi, decay):
+def calc_unit_cost(cfg, gdp, build_abi, drop_rate_pct):
     b_norm = max(0.01, build_abi / 10.0)
-    # [修改] 初始通膨為 0，只計算增長的部分
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-    base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
+    # [修改] 將 0~90 的跌幅百分比標準化供單價公式使用
+    decay_norm = drop_rate_pct / 100.0
+    base_cost = (0.5 / b_norm) * (2 ** (2 * decay_norm - 1))
     return base_cost * (1 + inflation)
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
-    l_gdp = gdp * forecast_decay * 0.072
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_drop, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
+    # [修改] 自然衰退量直接依照無施政跌幅 % 計算
+    l_gdp = gdp * (forecast_drop / 100.0)
     
     if override_unit_cost is not None:
         unit_cost = override_unit_cost
     else:
-        unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
+        unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_drop)
         
     req_cost = bid_cost * unit_cost
     available_fund = max(0.0, proj_fund - corr_amt)
@@ -48,7 +50,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
-    # [修改] 建設量不 1:1 轉換，套用設定的倍率
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
     h_project_profit = payout_h - act_fund
     
@@ -59,9 +60,10 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_decay, eval_decay, sanity, emotion):
-    true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * eval_decay * 0.072))
-    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * claimed_decay * 0.072))
+def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_fund, curr_gdp, ha, ra, h_idx, claimed_drop, eval_drop, sanity, emotion):
+    # [修改] 直接套用百分比跌幅推算預期基準
+    true_expected_gdp = max(0.0, curr_gdp - (curr_gdp * (eval_drop / 100.0)))
+    public_expected_gdp = max(0.0, curr_gdp - (curr_gdp * (claimed_drop / 100.0)))
 
     base_ruling_perf = (new_gdp - true_expected_gdp) / max(1.0, curr_gdp)
     claimed_weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
@@ -121,10 +123,10 @@ def calc_support_shift(cfg, hp, rp, ruling_party_name, payout_h, new_gdp, proj_f
     return {'actual_shift': act_h_shift, 'h_perf': h_perf_val * 100.0, 'r_perf': ruling_perf_val * 100.0, 'norm_M_H': norm_M_H, 'S': S}
 
 def get_formula_explanation(game, view_party, plan, cfg):
-    tt_decay = view_party.current_forecast
+    tt_drop = view_party.current_forecast
     build_abi = game.h_role_party.build_ability
     
-    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_decay)
+    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop)
     
     my_is_h = (view_party.name == game.h_role_party.name)
     
@@ -154,7 +156,7 @@ def get_formula_explanation(game, view_party, plan, cfg):
     ha_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     ra_dummy = {'media': 0, 'camp': 0, 'incite': 0, 'judicial': 0}
     
-    shift = calc_support_shift(cfg, game.h_role_party, game.r_role_party, game.ruling_party.name, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan.get('claimed_decay', 0.0), tt_decay, game.sanity, game.emotion)
+    shift = calc_support_shift(cfg, game.h_role_party, game.r_role_party, game.ruling_party.name, res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, ha_dummy, ra_dummy, res['h_idx'], plan.get('claimed_decay', 0.0), tt_drop, game.sanity, game.emotion)
     my_sup = shift['actual_shift'] if my_is_h else -shift['actual_shift']
     gdp_diff = res['est_gdp'] - game.gdp
 
@@ -162,7 +164,6 @@ def get_formula_explanation(game, view_party, plan, cfg):
     lines.append(f"> 公式: [H政績 {shift['h_perf']:.1f} 與 R政績 {shift['r_perf']:.1f} + 雙方媒體/競選攻防估算 {shift['norm_M_H']:.2f}] × 理智乘數S {shift['S']:.2f} × 轉換率 {cfg['SUPPORT_CONVERSION_RATE']}")
 
     lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f} ({gdp_diff:+.1f})`")
-    # [修改] 反映新的轉換率公式
     lines.append(f"> 公式: 當前GDP {game.gdp:.1f} - 自然衰退量 {res['l_gdp']:.1f} + (淨建設量 {res['c_net']:.1f} × 轉換倍率 {cfg.get('GDP_CONVERSION_RATE', 0.2)}) = {res['est_gdp']:.1f}")
 
     return lines
