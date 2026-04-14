@@ -10,12 +10,14 @@ DEFAULT_CONFIG = {
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
     'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.8,  
+    # [修改] 衰退率徹底改為直觀的跌幅百分比 0 ~ 90
+    'DECAY_MIN': 0.0, 'DECAY_MAX': 90.0,  
     'RESISTANCE_MULT': 1.0, 
-    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
+    # [修改] 因為 0~90 尺度變大，預測誤差基數也等比放大
+    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 10.0, 'MEDIA_DIFF': 1.0,
     'CURRENT_GDP': 5000.0, 
     'GDP_INFLATION_DIVISOR': 10000.0, 
-    'GDP_CONVERSION_RATE': 0.2,   # [新增] 建設量轉化為GDP的倍率，避免1:1互換
+    'GDP_CONVERSION_RATE': 0.2,   
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
     'BASE_INCOME_RATIO': 0.05,    
@@ -42,7 +44,7 @@ def get_config_translations():
         'CALENDAR_NAME': "紀元名稱", 'PARTY_A_COLOR': "A黨代表色", 'PARTY_B_COLOR': "B黨代表色",
         'PARTY_A_NAME': "A黨名稱", 'PARTY_B_NAME': "B黨名稱", 
         'INITIAL_WEALTH': "初始黨產", 'END_YEAR': "遊戲總年數",
-        'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
+        'DECAY_MIN': "最小無施政跌幅(%)", 'DECAY_MAX': "最大無施政跌幅(%)",  
         'RESISTANCE_MULT': "建設阻力倍率",
         'BUILD_DIFF': "建設難度", 'INVESTIGATE_DIFF': "調查難度", 'PREDICT_DIFF': "預測難度", 'MEDIA_DIFF': "媒體難度",
         'CURRENT_GDP': "初始 GDP", 'GDP_INFLATION_DIVISOR': "通膨基數(越小越快通膨)", 
@@ -55,7 +57,7 @@ def get_config_translations():
         'MAINTENANCE_RATE': "維護費倍率",
         'TRUST_BREAK_PENALTY_RATIO': "換位扣款比例", 'ELECTION_CYCLE': "大選週期(年)",
         'SUPPORT_CONVERSION_RATE': "支持度轉換率", 'PERF_IMPACT_BASE': "施政表現影響量權重",
-        'OBS_ERR_BASE': "觀測誤差基數", 'CLAIMED_DECAY_WEIGHT': "公告衰退操弄權重"
+        'OBS_ERR_BASE': "觀測誤差基數", 'CLAIMED_DECAY_WEIGHT': "公告跌幅操弄權重"
     }
 
 def get_intel_market_eval(unit_cost):
@@ -65,12 +67,13 @@ def get_intel_market_eval(unit_cost):
     elif unit_cost < 2.5: return "🔴 市場過熱警報 (系統性阻力高，預算消耗劇烈)"
     else: return "💀 經濟結構惡化 (成本呈現毀滅性通膨，建議暫緩非必要開發)"
 
-def get_economic_forecast_text(decay_val):
-    if decay_val <= 0.35: return "🌟 景氣極佳"
-    elif decay_val <= 0.65: return "📈 穩定成長"
-    elif decay_val <= 0.95: return "⚖️ 持平放緩"
-    elif decay_val <= 1.15: return "📉 衰退警報"
-    else: return "⚠️ 經濟風暴"
+# [修改] 配合 0~90% 的跌幅重新調整門檻
+def get_economic_forecast_text(drop_val):
+    if drop_val <= 10.0: return "🌟 景氣極佳 (跌幅微小)"
+    elif drop_val <= 30.0: return "📈 穩定成長 (跌幅可控)"
+    elif drop_val <= 50.0: return "⚖️ 持平放緩 (面臨衰退)"
+    elif drop_val <= 70.0: return "📉 衰退警報 (百業蕭條)"
+    else: return "⚠️ 經濟風暴 (系統性崩潰)"
 
 def get_civic_index_text(score):
     if score < 15: return f"易受灌輸 ({score:.1f})"
@@ -102,7 +105,7 @@ def get_party_logo(name):
 
 def get_thinktank_eval(ability, diff):
     abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
-    acc_lvl = "high" if diff <= 0.1 else "med" if diff <= 0.25 else "low"
+    acc_lvl = "high" if diff <= 5.0 else "med" if diff <= 15.0 else "low"  # [修改] 容錯率隨 0-90 尺度放大
     matrix = {
         ('high', 'high'): "頂尖發揮，完美預判", ('high', 'med'): "微幅誤差，戰略可控", ('high', 'low'): "黑天鵝事件！未能看透劇變",
         ('med', 'high'): "表現超常，精準命中", ('med', 'med'): "中規中矩，誤差預期內", ('med', 'low'): "嚴重誤判，建議升級",
