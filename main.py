@@ -60,6 +60,10 @@ if 'turn_initialized' not in st.session_state:
         if k.startswith('ui_decay_') or k.endswith('_acts'): del st.session_state[k]
     
     st.session_state.turn_initialized = True
+    
+    # [新增] 開局(首年)的選舉播報
+    if game.year == 1:
+        st.session_state.news_flash = f"🎉 **【建國大選：勢均力敵】** 遊戲開始！{game.ruling_party.name} 黨獲得初代執政權，將優先負責分配國家資源！"
 
 view_party = game.proposing_party
 opponent_party = game.party_B if view_party.name == game.party_A.name else game.party_A
