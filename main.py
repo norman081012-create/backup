@@ -91,5 +91,5 @@ elif game.phase == 2:
 elif game.phase == 3:
     phase3.render(game, cfg)
 
-# 將運作公式置底顯示給玩家參考
-ui_core.render_formula_panel(game, cfg)
+# 修正：補上 view_party 解決 TypeError
+ui_core.render_formula_panel(game, view_party, cfg)
