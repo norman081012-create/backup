@@ -55,7 +55,7 @@ def render_formula_panel(game, view_party, cfg):
         else:
             st.info("目前階段尚無具體標案數據可供計算。")
 
-# [核心實裝] 基於「量(資金)」的物理慣性拉桿
+# [核心實裝] 物理慣性與殘值保護的升降級拉桿
 def ability_slider(label, dept_key, current_lvl, wealth, cfg, build_ability=0.0):
     current_pct = current_lvl * 10.0
     current_amt = (2**current_lvl - 1) * 50.0
@@ -69,25 +69,23 @@ def ability_slider(label, dept_key, current_lvl, wealth, cfg, build_ability=0.0)
     if t_amt > current_amt:
         cost = formulas.calculate_upgrade_cost(current_lvl, t_lvl, build_ability)
         maint = formulas.get_ability_maintenance(t_lvl, cfg)
-        actual_next = t_lvl
+        actual_next_lvl = t_lvl
         st.caption(f"📈 <span style='color:orange'>**升級花費**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 維護費將達 ${maint:.1f}", unsafe_allow_html=True)
     elif t_amt < current_amt:
         cost = 0.0
-        maint = formulas.get_ability_maintenance(t_lvl, cfg) 
+        maint = formulas.get_ability_maintenance(t_lvl, cfg)
         
-        # 殘值保護生效：計算當前的「量」扣除「最大衰變量」後的值
-        next_amt_guaranteed = max(0.0, current_amt - max_drop_amt)
-        actual_next_amt = max(t_amt, next_amt_guaranteed)
-        actual_next = math.log2(actual_next_amt / 50.0 + 1)
+        actual_next_amt = max(t_amt, current_amt - max_drop_amt)
+        actual_next_lvl = math.log2(actual_next_amt / 50.0 + 1) if actual_next_amt > 0 else 0.0
         
-        if actual_next > t_lvl:
-            st.caption(f"📉 <span style='color:blue'>**殘值保護中**</span> | 支付維護費: ${maint:.1f} | 組織僵固性吸收了斷炊衝擊，明年實際保留至 **{actual_next*10:.1f}%**", unsafe_allow_html=True)
+        if actual_next_amt > t_amt:
+            st.caption(f"📉 <span style='color:blue'>**殘值保護中**</span> | 支付維護費: ${maint:.1f} | 組織僵固性吸收衝擊，明年實際保留至 **{actual_next_lvl*10:.1f}%**", unsafe_allow_html=True)
         else:
-            st.caption(f"📉 <span style='color:blue'>**全面降級**</span> | 支付維護費: ${maint:.1f} | 明年降至 {actual_next*10:.1f}%", unsafe_allow_html=True)
+            st.caption(f"📉 <span style='color:blue'>**全面降級**</span> | 支付維護費: ${maint:.1f} | 明年降至 {actual_next_lvl*10:.1f}%", unsafe_allow_html=True)
     else:
         cost = 0.0
-        actual_next = current_lvl
+        actual_next_lvl = current_lvl
         maint = formulas.get_ability_maintenance(t_lvl, cfg)
         st.caption(f"🛡️ 穩定維持 | 能力: {current_pct:.1f}% | 維護費: ${maint:.1f}")
         
-    return actual_next, cost, maint
+    return actual_next_lvl, cost, maint
