@@ -31,12 +31,20 @@ def render(game, view_party, cfg):
             
             input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
-            if input_decay_key not in st.session_state: st.session_state[input_decay_key] = float(view_party.current_forecast)
             
-            # [修改] 使用新的指數模型給出預設的建設估價
+            tt_decay = float(view_party.current_forecast)
             suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, game.h_role_party.build_ability, view_party.current_forecast)
-            if input_cost_key not in st.session_state: st.session_state[input_cost_key] = round(suggested_unit_cost, 2)
+            tt_cost = round(suggested_unit_cost, 2)
             
+            if input_decay_key not in st.session_state: st.session_state[input_decay_key] = tt_decay
+            if input_cost_key not in st.session_state: st.session_state[input_cost_key] = tt_cost
+            
+            # [新增] 換回智庫/情報預估按鈕
+            if st.button(t("🔄 全部換回自己智庫/情報的預估報告", "🔄 Reset to Think Tank/Intel Eval"), use_container_width=True):
+                st.session_state[input_decay_key] = tt_decay
+                st.session_state[input_cost_key] = tt_cost
+                st.rerun()
+
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
@@ -54,9 +62,14 @@ def render(game, view_party, cfg):
             
             max_budget = max(10.0, float(game.total_budget))
             
-            proj_fund = st.slider(t("計畫達成獎勵金 (提供給執行方的總預算，最高不超過當年總預算)", "Total Plan Reward"), 0.0, max_budget, float(min(1000.0, max_budget)), 10.0)
-            bid_cost = st.slider(t("計畫總效益 (預期增加之 GDP 與基礎建設)", "Plan Total Benefit"), 0.0, max_budget * 1.5, float(min(800.0, max_budget * 1.5)), 10.0)
-            r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, float(min(500.0, max_budget)), 10.0)
+            # [修改] 若對手有提案，載入對手的；否則預設為 0.0
+            def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
+            def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
+            def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
+            
+            proj_fund = st.slider(t("計畫達成獎勵金 (提供給執行方的總預算，最高不超過當年總預算)", "Total Plan Reward"), 0.0, max_budget, def_proj, 10.0)
+            bid_cost = st.slider(t("計畫總效益 (預期增加之 GDP 與基礎建設)", "Plan Total Benefit"), 0.0, max_budget * 1.5, def_bid, 10.0)
+            r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, def_rpays, 10.0)
             
             req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
