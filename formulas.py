@@ -23,7 +23,7 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None):
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None, r_pays=0.0):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     
     if override_unit_cost is not None:
@@ -32,7 +32,9 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
         
     req_cost = bid_cost * unit_cost
-    available_fund = max(0.0, proj_fund - corr_amt)
+    
+    # [修正] 可動用資金必須包含監管系統給的補貼
+    available_fund = max(0.0, proj_fund + r_pays - corr_amt)
     
     if req_cost <= available_fund:
         act_fund = req_cost
@@ -48,7 +50,9 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
-    h_project_profit = payout_h - act_fund
+    
+    # [修正] H黨的專案淨利潤 = 收到的獎勵 + 收到的補貼 - 實際付給工程的費用
+    h_project_profit = payout_h + r_pays - act_fund
     
     return {
         'est_gdp': est_gdp, 'payout_h': payout_h, 'payout_r': payout_r,
@@ -138,7 +142,7 @@ def get_formula_explanation(game, view_party, plan, cfg):
     tt_drop = view_party.current_forecast
     build_abi = game.h_role_party.build_ability
     
-    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop)
+    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop, r_pays=plan.get('r_pays', 0.0))
     
     lines = []
     lines.append(f"**我方預估試算完成。由於民意系統已轉為支持量遞減陣列，詳細的 S濾鏡與搶功甩鍋結算，請參考年度結算報告。**")
