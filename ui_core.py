@@ -75,9 +75,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         
-        # [修改點] 計算達到 GDP 損益兩平所需的「建設量」
         conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-        gdp_loss = game.gdp * (fc * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+        gdp_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
         req_infra_to_balance = gdp_loss / conv_rate
         
         st.write(f"預估衰退值: `{fc:.3f}`")
@@ -117,8 +116,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                sup_c = "green" if preview_data['my_sup_shift'] > 0 else "red"
-                st.markdown(f"{t('新增支持量預估')}: <span style='color:{sup_c}'>**{preview_data['my_sup_shift']:+.1f} 點**</span>", unsafe_allow_html=True)
+                # [修改] 改為顯示未經媒體影響的「純淨政績」
+                st.markdown(f"{t('預期政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
     st.markdown("---")
 
 def render_message_board(game):
@@ -315,7 +314,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     eval_h_pays = eval_req_cost - eval_r_pays 
     
     with c1:
-        # [修改點] 預覽區顯示亦同步換算
         conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
         claimed_val = plan.get('claimed_decay', 0.0)
         equiv_infra_loss = (game.gdp * (claimed_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
@@ -345,17 +343,14 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
         opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
         
-        ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
-        ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
-        
-        shift_preview = formulas.calc_support_amounts(
+        # [核心修正] 呼叫新的 calc_performance_amounts
+        shift_preview = formulas.calc_performance_amounts(
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['est_gdp'], game.gdp, 
-            ha_dummy, ra_dummy, 
-            plan.get('claimed_decay', 0.0), game.sanity, game.emotion, plan['bid_cost'], res['c_net'], eval_decay
+            plan.get('claimed_decay', 0.0), game.sanity, game.emotion, plan['bid_cost'], res['c_net']
         )
-        my_shifts = shift_preview[view_party.name]
-        my_sup = my_shifts['perf'] + my_shifts['camp'] + my_shifts['backlash']
+        my_perf = shift_preview[view_party.name]['perf']
+        opp_perf = shift_preview[sim_h_party.name if my_is_h else sim_r_party.name]['perf']
         
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
 
@@ -365,8 +360,8 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"1. {t('我方預估總收益')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
         st.markdown(f"2. {t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
         
-        sup_c = "green" if my_sup > 0 else "red"
-        st.markdown(f"3. {t('新增支持量預估')}: <span style='color:{sup_c}'>**{my_sup:+.1f} 點**</span>", unsafe_allow_html=True)
+        # [修改點] 清楚標示我方與對手的純淨政績
+        st.markdown(f"3. {t('預期政績 (未經媒體換算)')}: 我方 **{my_perf:+.1f}** / 對手 **{opp_perf:+.1f}**")
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
         tt_decay = view_party.current_forecast
