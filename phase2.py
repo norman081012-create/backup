@@ -109,7 +109,6 @@ def render(game, view_party, opponent_party, cfg):
     hp_net_est = h_base + res_prev['payout_h'] - res_prev['act_fund'] + r_pays + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
-    # [修復點] 改用新的 calc_support_amounts 並計算預期獲得的支持量點數
     shift_preview = formulas.calc_support_amounts(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
         res_prev['est_gdp'], game.gdp, 
