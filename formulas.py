@@ -30,6 +30,7 @@ def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_a
         
     req_amt = a_t - a_base
     discount_factor = 1.0 - (build_ability * 0.02)
+    # 乘上 0.1 的經濟規模轉換率
     return req_amt * max(0.1, discount_factor) * 0.1
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
@@ -63,8 +64,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
-    
-    # 完整保留淨利結算邏輯
     h_project_profit = payout_h + r_pays - act_fund
     
     return {
@@ -105,3 +104,14 @@ def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     shifts['project_perf'] = project_perf_base
     
     return shifts
+
+def get_formula_explanation(game, view_party, plan, cfg):
+    tt_drop = view_party.current_forecast
+    build_abi = game.h_role_party.build_ability
+    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop, r_pays=plan.get('r_pays', 0.0), h_wealth=game.h_role_party.wealth)
+    
+    lines = []
+    lines.append(f"**我方預估試算完成。**")
+    lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f}`")
+    lines.append(f"> 估算建設淨值 (C_net): {res['c_net']:.1f} / 標案承諾 (Bid_cost): {plan['bid_cost']:.1f}")
+    return lines
