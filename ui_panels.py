@@ -11,7 +11,6 @@ import engine
 import i18n
 t = i18n.t
 
-# [核心實裝] 基於「量(資金)」的觀測誤差系統
 def get_observed_abilities(viewer, target, game, cfg):
     if viewer.name == target.name or st.session_state.get('god_mode'):
         return {
@@ -125,7 +124,7 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                st.markdown(f"{t('預期政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
+                st.markdown(f"{t('預期大環境政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
                 if 'project_perf' in preview_data:
                     st.caption(f"*(包含執行方當前貪污設定下的履約政績: `{preview_data['project_perf']:+.1f}`)*")
     st.markdown("---")
