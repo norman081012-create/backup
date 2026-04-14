@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     'EMOTION_DEFAULT': 30.0,
     'SUPPORT_CONVERSION_RATE': 0.05, 
     'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.2  # 觀測誤差基數
+    'OBS_ERR_BASE': 0.4  # [已修改] 觀測誤差基數調整為 0.4
 }
 
 def get_config_translations():
