@@ -29,20 +29,27 @@ def render(game, cfg):
         r_pays = float(d.get('r_pays') or 0.0)
         h_pays = float(d.get('h_pays') or 0.0)
         
-        corr_amt = proj_fund * (float(ha.get('corr') or 0) / 100.0)
-        crony_base = proj_fund * (float(ha.get('crony') or 0) / 100.0)
-        crony_income = crony_base * 0.1
+        # [修改] 依照需求將圖利收入改為總工程款的 10% * 圖利比例，且大幅增加被抓機率
+        corr_pct = float(ha.get('corr') or 0) / 100.0
+        crony_pct = float(ha.get('crony') or 0) / 100.0
         
-        catch_prob_base = max(0.1, (rp.investigate_ability - hp.stealth_ability)) * 2.0
+        corr_amt = proj_fund * corr_pct
+        crony_base = proj_fund * crony_pct
+        crony_income = crony_base * 0.1  # 如要求：獲利為該方案圖利金額的 0.1
         
-        if corr_amt > 0 and random.random() < min(1.0, catch_prob_base * (corr_amt / max(1.0, proj_fund))):
+        # 增加被情報處查獲的機率
+        catch_prob_mult = max(0.1, rp.investigate_ability / max(0.1, hp.stealth_ability))
+        catch_prob_corr = min(1.0, catch_prob_mult * corr_pct * 3.0) 
+        catch_prob_crony = min(1.0, catch_prob_mult * crony_pct * 3.0) 
+        
+        if corr_amt > 0 and random.random() < catch_prob_corr:
             returned_to_r += corr_amt
             confiscated_to_budget += corr_amt * 0.4
             corr_support_penalty = (corr_amt * max(1.0, hp.build_ability)) / max(1.0, proj_fund) * 100.0 * cfg['SUPPORT_CONVERSION_RATE']
             corr_caught = True
             corr_amt = 0
 
-        if crony_base > 0 and random.random() < min(1.0, catch_prob_base * (crony_base / max(1.0, proj_fund))):
+        if crony_base > 0 and random.random() < catch_prob_crony:
             returned_to_r += crony_base
             confiscated_to_budget += crony_base * 0.5
             crony_caught = True
@@ -52,8 +59,9 @@ def render(game, cfg):
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
-        hp_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == hp.name else 0)
-        rp_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == rp.name else 0)
+        # [修改] 換為新的基本補助計算方式
+        hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
+        rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
         hp_project_net = res_exec['payout_h'] - res_exec['act_fund'] + r_pays
         rp_project_net = res_exec['payout_r'] - r_pays
@@ -80,6 +88,8 @@ def render(game, cfg):
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
             'h_party_name': hp.name, 'h_perf': shift['h_perf'], 'r_perf': shift['r_perf'],
+            'shift_s': shift['S'],  # [新增] 紀錄理智度影響乘數供顯示
+            'h_forecast': hp.current_forecast, 'r_forecast': rp.current_forecast, # [新增] 紀錄雙方智庫供結算檢討
             'h_inc': hp_inc, 'r_inc': rp_inc, 
             'h_base': hp_base, 'r_base': rp_base, 
             'h_payout': res_exec['payout_h'], 'r_payout': res_exec['payout_r'],
@@ -94,7 +104,6 @@ def render(game, cfg):
 
         hp.support, rp.support = hp_sup_new, 100.0 - hp_sup_new
         
-        # [修改] 針對選舉年的動態對白
         if game.year % cfg['ELECTION_CYCLE'] == 1:
             winner = hp if hp.support > rp.support else rp
             gap = abs(hp.support - rp.support)
@@ -138,8 +147,8 @@ def render(game, cfg):
     with c1:
         st.markdown(t("#### 💰 經濟與財政"))
         st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
-        st.write(f"**執行系統收益總結:** `(基礎 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} - 工程成本 {rep['h_act_fund']:.1f} + 監管補貼 {rep['r_pays']:.1f} + 業外 {rep['h_extra']:.1f}) - (政策花費 {rep['h_pol_cost']:.1f} + 維護費 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
-        st.write(f"**監管系統收益總結:** `(基礎 {rep['r_base']:.1f} + 國庫剩餘 {rep['r_payout']:.1f} - 提案出資 {rep['r_pays']:.1f} + 業外 {rep['r_extra']:.1f}) - (政策花費 {rep['r_pol_cost']:.1f} + 維護費 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
+        st.write(f"**執行系統收益總結:** `(基本額 {rep['h_base']:.1f} + 標案 {rep['h_payout']:.1f} - 工程成本 {rep['h_act_fund']:.1f} + 監管補貼 {rep['r_pays']:.1f} + 業外 {rep['h_extra']:.1f}) - (政策花費 {rep['h_pol_cost']:.1f} + 維護費 {rep['h_maint']:.1f}) = {rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint']:.1f}`")
+        st.write(f"**監管系統收益總結:** `(基本額 {rep['r_base']:.1f} + 國庫剩餘 {rep['r_payout']:.1f} - 提案出資 {rep['r_pays']:.1f} + 業外 {rep['r_extra']:.1f}) - (政策花費 {rep['r_pol_cost']:.1f} + 維護費 {rep['r_maint']:.1f}) = {rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint']:.1f}`")
         
         if rep.get('corr_caught'): st.error(t("🚨 貪污醜聞爆發！執行系統貪污被情報處查獲，沒收所有非法所得並重挫民意。"))
         if rep.get('crony_caught'): st.error(t("🚨 圖利爭議！執行系統圖利親信遭舉發，強制沒收資金返還國庫與監管系統。"))
@@ -149,6 +158,8 @@ def render(game, cfg):
         st.write(f"{t('資訊辨識')}: `{rep['old_san']:.1f} ➔ {game.sanity:.1f}`")
         st.write(f"{t('選民情緒')}: `{rep['old_emo']:.1f} ➔ {game.emotion:.1f}`")
         st.write(f"{t('施政滿意度位移 (執行/監管)')}: `{rep['h_perf']:.1f}% / {rep['r_perf']:.1f}%`")
+        # [修改] 應要求加上公式
+        st.caption(f"*(位移公式: [ (H政績與R政績相對差 + 雙方媒體/競選攻防估算差) × 理智乘數 S ({rep.get('shift_s', 0):.2f}) ± 司法審查懲罰 ] × 基礎轉換率 {cfg['SUPPORT_CONVERSION_RATE']})*")
 
     st.markdown("---")
     if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
