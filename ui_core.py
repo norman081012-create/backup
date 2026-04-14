@@ -187,7 +187,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     # 真實觀測誤差計算公式
     opp_stl = opp.stealth_ability / 10.0
     my_inv = view_party.investigate_ability / 10.0
-    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.2)
+    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.4)
     blur = err_margin if not st.session_state.get('god_mode') else 0.0
     acc = max(0, min(100, int((1.0 - err_margin) * 100)))
     
@@ -218,22 +218,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         opp = game.party_B if view_party.name == game.party_A.name else game.party_A
         my_is_h = (view_party.name == game.h_role_party.name)
         
-        # 依照對手真實能力推演經濟
+        # 切換以 公告衰退/智庫衰退 試算
+        use_claimed = st.toggle(t("切換以 公告衰退 試算 (預設為智庫衰退)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
+        eval_decay = plan.get('claimed_decay', 0.0) if use_claimed else view_party.current_forecast
+        
         target_build_abi = game.h_role_party.build_ability
-        res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], target_build_abi, view_party.current_forecast)
+        res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], target_build_abi, eval_decay)
         
-        h_gross = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0) + res['payout_h']
-        r_gross = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0) + res['payout_r']
-        h_net = h_gross - plan['h_pays']
-        r_net = r_gross - plan['r_pays']
+        h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.h_role_party.name else 0)
+        r_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if game.ruling_party.name == game.r_role_party.name else 0)
         
-        o_h_roi = (h_net / max(1.0, float(plan['h_pays']))) * 100.0 if plan['h_pays'] > 0 else float('inf')
-        o_r_roi = (r_net / max(1.0, float(plan['r_pays']))) * 100.0 if plan['r_pays'] > 0 else float('inf')
+        h_net = h_base + res['h_project_profit'] - plan['h_pays']
+        r_net = r_base + res['payout_r'] - plan['r_pays']
+        
+        o_h_roi = (h_net / max(1.0, float(plan['h_pays']))) * 100.0 if plan['h_pays'] > 0 else 0.0
+        o_r_roi = (r_net / max(1.0, float(plan['r_pays']))) * 100.0 if plan['r_pays'] > 0 else 0.0
         
         my_net, my_roi = (h_net, o_h_roi) if my_is_h else (r_net, o_r_roi)
         opp_net, opp_roi = (r_net, o_r_roi) if my_is_h else (h_net, o_h_roi)
 
-        # 依據上一回合的雙方媒體預算進行估算
         shift_preview = formulas.calc_support_shift(
             cfg, game.h_role_party, game.r_role_party, 
             res['payout_h'], res['est_gdp'], plan['proj_fund'], game.gdp, 
@@ -249,11 +252,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"3. {t('支持度變化預估')}: {my_sup:+.2f}%")
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ {res['est_gdp']:.1f} ({o_gdp_pct:+.2f}%)")
         
-        diff = abs(plan.get('claimed_decay', 0.0) - view_party.current_forecast)
-        if diff > 0.3: light, risk_txt = "🔴", t("差異極大 (對方恐隱瞞嚴重衰退或灌水)")
-        elif diff > 0.1: light, risk_txt = "🟡", t("中等差異 (數據略有出入)")
-        else: light, risk_txt = "🟢", t("差異極小 (雙方預測基準一致)")
-        st.markdown(f"5. {t('衰退值差異')}: {light} {risk_txt} ({t('公告')}: {plan.get('claimed_decay', 0.0):.2f} / {t('智庫')}: {view_party.current_forecast:.2f})")
+        # 衰退值差異比較永遠不受 toggle 影響
+        tt_decay = view_party.current_forecast
+        cl_decay = plan.get('claimed_decay', 0.0)
+        diff = cl_decay - tt_decay
+        abs_diff = abs(diff)
+        opp_role = 'R' if plan.get('author') == 'R' else 'H'
+        
+        if abs_diff > 0.3: 
+            light = "🔴"
+            if cl_decay > tt_decay:
+                risk_txt = "差異極大 (說對方誇大景氣不好是為了騙支持度)" if opp_role == 'R' else "差異極大 (說對方誇大景氣不好是為了騙更多標案資金維持現有GDP)"
+            else:
+                risk_txt = "差異極大 (說對手誇大景氣好是為了減少標案資金)" if opp_role == 'R' else "差異極大 (說對手誇大景氣好是為了騙標案資金利用景氣提升GDP)"
+        elif abs_diff > 0.1: 
+            light, risk_txt = "🟡", t("中等差異 (數據略有出入)")
+        else: 
+            light, risk_txt = "🟢", t("差異極小 (基準比對)")
+            
+        st.markdown(f"5. {t('衰退值差異')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.2f} / {t('智庫')}: {tt_decay:.2f})")
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     current_pct = current_val * 10.0
