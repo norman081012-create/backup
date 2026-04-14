@@ -101,6 +101,10 @@ def render(game, cfg):
         hp.stealth_ability = ha.get('t_stl', hp.stealth_ability)
         hp.build_ability = ha.get('t_bld', hp.build_ability)
         
+        # 將對手動作完整記錄供明年的預估參考
+        hp.last_acts = ha.copy()
+        rp.last_acts = ra.copy()
+        
         game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
     
     rep = game.last_year_report
