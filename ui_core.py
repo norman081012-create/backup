@@ -75,8 +75,9 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
         st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         
-        st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)}")
-        st.write(f"({t('預估衰退值')}: `{fc:.2f}`)")
+        equiv_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
+        st.write(f"預估衰退值: `{fc:.3f}`")
+        st.write(f"預估建設損失: `{equiv_loss:.1f}`")
         
         if rep:
             my_is_h = view_party.name == rep['h_party_name']
@@ -113,7 +114,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('對方預估收益')}: **{opp_net:.1f}**")
                 
                 sup_c = "green" if preview_data['my_sup_shift'] > 0 else "red"
-                # [修復點] 改為顯示支持量 (點數) 而非 %
                 st.markdown(f"{t('新增支持量預估')}: <span style='color:{sup_c}'>**{preview_data['my_sup_shift']:+.1f} 點**</span>", unsafe_allow_html=True)
     st.markdown("---")
 
@@ -129,7 +129,7 @@ def render_message_board(game):
         st.info("📢 **【年度通報】** 法案已通過，請分配黨產資金進行內部升級、競選造勢與媒體攻防。")
 
 def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
-    st.header(t("👤 玩家頁面"))
+    st.header(t("👤 兩黨概況"))
     c1, c2 = st.columns(2)
     opp = game.party_B if view_party.name == game.party_A.name else game.party_A
     
@@ -140,7 +140,12 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
     </style>
     """, unsafe_allow_html=True)
 
-    for col, party in zip([c1, c2], [view_party, opp]):
+    a_pts = sum([x['val'] * (1.0 - (x['age']/7.0)) for x in game.support_queues[game.party_A.name]['perf']]) + \
+            sum([x['val'] * (1.0 - (x['age']/3.0)) for x in game.support_queues[game.party_A.name]['camp']]) + 5000.0
+    b_pts = sum([x['val'] * (1.0 - (x['age']/7.0)) for x in game.support_queues[game.party_B.name]['perf']]) + \
+            sum([x['val'] * (1.0 - (x['age']/3.0)) for x in game.support_queues[game.party_B.name]['camp']]) + 5000.0
+
+    for col, party, pts in zip([c1, c2], [view_party, opp], [a_pts if view_party.name == game.party_A.name else b_pts, b_pts if view_party.name == game.party_A.name else a_pts]):
         with col:
             is_h = (game.h_role_party.name == party.name)
             role_badge = t("🛡️ [執行系統]") if is_h else t("⚖️ [監管系統]")
@@ -164,7 +169,7 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 st.markdown(f"### 💰 **{t('黨產資金')}:** `${est_wealth:.1f}` *({t('預估')})*")
 
             if is_election_year or god_mode: 
-                disp_sup = f"{party.support:.1f}%" + (" 🏆(當選!)" if is_winner else " 💀(落選)")
+                disp_sup = f"{party.support:.1f}% 🏆(當選!)" if is_winner else f"{party.support:.1f}% 💀(落選)"
             else:
                 if party.latest_poll is not None:
                     best_type = None
@@ -173,12 +178,12 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                     if best_type:
                         avg = sum(party.poll_history[best_type]) / len(party.poll_history[best_type])
                         count = len(party.poll_history[best_type])
-                        disp_sup = f"{party.latest_poll:.1f}%(最新民調) ({count}次{best_type}民調平均: {avg:.1f}%)"
+                        disp_sup = f"{party.latest_poll:.1f}%(最新民調) ({count}次{best_type}平均: {avg:.1f}%)"
                     else: disp_sup = f"{party.latest_poll:.1f}%(最新民調)"
                 else:
                     disp_sup = "??? (需作民調)"
             
-            st.markdown(f"### 📊 {t('支持度')}: {disp_sup}")
+            st.markdown(f"### 📊 支持量: `{pts:.1f} 點` (佔比: {disp_sup})")
             
             if party.name == view_party.name and not is_election_year:
                 b1, b2, b3 = st.columns(3)
@@ -283,7 +288,9 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     eval_h_pays = eval_req_cost - eval_r_pays
     
     with c1:
-        st.write(f"**{t('公告衰退率(0~1)')}:** {plan.get('claimed_decay', 0.0):.2f} | **{t('試算建設單價')}:** {eval_unit_cost:.2f}")
+        equiv_loss = game.gdp * (plan.get('claimed_decay', 0.0) * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+        st.write(f"**{t('公告衰退率(0~1)')}:** {plan.get('claimed_decay', 0.0):.3f}")
+        st.write(f"**(相當於 {equiv_loss:.1f} 建設損失)**")
         st.write(f"**{t('計畫達成獎勵金')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益')}:** {plan['bid_cost']:.1f}")
         
         if simulate_swap:
@@ -307,7 +314,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         ha_dummy = game.h_role_party.last_acts if not simulate_swap else game.r_role_party.last_acts
         ra_dummy = game.r_role_party.last_acts if not simulate_swap else game.h_role_party.last_acts
         
-        # [修復點] 改用新的 calc_support_amounts 算點數
         shift_preview = formulas.calc_support_amounts(
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['est_gdp'], game.gdp, 
@@ -323,7 +329,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"1. {t('我方預估收益')}: **{my_net:.1f}** (ROI: {my_roi:.1f}%)")
         st.markdown(f"2. {t('對方預估收益')}: **{opp_net:.1f}** (ROI: {opp_roi:.1f}%)")
         sup_c = "green" if my_sup > 0 else "red"
-        # [修復點] 顯示支持量 (點數) 而非 %
         st.markdown(f"3. {t('新增支持量預估')}: <span style='color:{sup_c}'>**{my_sup:+.1f} 點**</span>", unsafe_allow_html=True)
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
