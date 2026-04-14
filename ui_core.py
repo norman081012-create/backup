@@ -45,51 +45,57 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
     with c1:
         st.markdown(t("### 🌐 國家總體現況"))
         san_chg = (disp_san - rep['old_san']) if rep else 0
-        st.markdown(f"**{t('資訊辨識')}:** `{config.get_civic_index_text(disp_san)}` *({t('變動')}: {san_chg:+.1f})*")
+        c_color = "green" if san_chg > 0 else "red" if san_chg < 0 else "gray"
+        st.markdown(f"**{t('資訊辨識')}:** `{config.get_civic_index_text(disp_san)}` <span style='color:{c_color}'>*({san_chg:+.1f})*</span>", unsafe_allow_html=True)
+        
         emo_chg = disp_emo - rep['old_emo'] if rep else 0
-        st.markdown(f"**{t('選民情緒')}:** `{config.get_emotion_text(disp_emo)}` *({t('變動')}: {emo_chg:+.1f})*")
+        e_color = "red" if emo_chg > 0 else "green" if emo_chg < 0 else "gray"
+        st.markdown(f"**{t('選民情緒')}:** `{config.get_emotion_text(disp_emo)}` <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
         
         gdp_base = rep['old_gdp'] if rep else game.gdp
         gdp_diff = disp_gdp - gdp_base
         gdp_pct = (gdp_diff / max(1.0, gdp_base)) * 100.0
+        g_color = "green" if gdp_diff > 0 else "red" if gdp_diff < 0 else "gray"
         label_gdp = t("預估 GDP") if is_preview else t("當前 GDP")
-        st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` *({t('變動')}: {gdp_diff:+.1f}, {gdp_pct:+.2f}%)*")
+        st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` <span style='color:{g_color}'>*({gdp_diff:+.1f}, {gdp_pct:+.2f}%)*</span>", unsafe_allow_html=True)
 
     with c2:
         st.markdown(t("### 💰 執行系統資源"))
         if game.year == 1 and not is_preview: st.info("首年重整中，尚未配發獎勵。")
         else:
             current_h_ratio = (disp_h_fund / disp_budg) * 100 if disp_budg > 0 else 50
-            st.markdown(f"**{t('總預算池')}:** `{disp_budg:.1f}` *({t('變動')}: {disp_budg - rep['old_budg'] if rep else 0:+.1f})*")
+            budg_chg = disp_budg - rep['old_budg'] if rep else 0
+            b_color = "green" if budg_chg > 0 else "red" if budg_chg < 0 else "gray"
+            st.markdown(f"**{t('總預算池')}:** `{disp_budg:.1f}` <span style='color:{b_color}'>*({budg_chg:+.1f})*</span>", unsafe_allow_html=True)
             st.markdown(f"**{t('獎勵基金')}:** `{disp_h_fund:.1f}` *({t('佔比')}: {current_h_ratio:.1f}%)*")
 
     with c3:
         fc = view_party.current_forecast
-        acc = min(100, int((view_party.predict_ability / cfg['MAX_ABILITY']) * 100))
-        st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: {acc}%")
+        acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
+        st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
         st.write(f"{t('經濟預估')}: {config.get_economic_forecast_text(fc)} ({t('預估衰退值')}: -{fc:.2f})")
         if rep:
             diff = abs(rep['view_party_forecast'] - rep['real_decay'])
             eval_txt = config.get_thinktank_eval(view_party.predict_ability, diff)
-            st.write(f"\n({cfg['CALENDAR_NAME']} {game.year-1} 年度內部檢討報告: \n")
-            st.write(f"{eval_txt}\n")
+            st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 年度內部檢討報告: \n")
+            st.write(f"**{eval_txt}**)")
         else:
-            st.write("\n(尚無去年歷史資料以供檢討)")
+            st.write("(尚無去年歷史資料以供檢討)")
 
     with c4:
         if game.phase == 1:
             st.markdown(t("### 📊 財報"))
             total_maint = sum([formulas.get_ability_maintenance(a, cfg) for a in [view_party.build_ability, view_party.investigate_ability, view_party.media_ability, view_party.predict_ability, view_party.stealth_ability]])
             if game.year == 1:
-                st.write(f"{t('可用淨資產')}: {view_party.wealth:.1f} ({view_party.wealth:.1f} - 0.0)")
+                st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({view_party.wealth:.1f} - 0.0)")
             else:
-                st.write(f"{t('可用淨資產')}: {view_party.wealth:.1f} ({(view_party.wealth + total_maint):.1f} - {total_maint:.1f})")
+                st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({(view_party.wealth + total_maint):.1f} - {total_maint:.1f})")
                 
             if rep:
                 my_is_h = view_party.name == rep['h_party_name']
                 real_inc = rep['h_inc'] if my_is_h else rep['r_inc']
                 est_inc = rep['est_h_inc'] if my_is_h else rep['est_r_inc']
-                st.write(f"{t('淨利')}: {t('真')}:{real_inc:.1f} ({t('去年估')}:{est_inc:.1f})")
+                st.write(f"{t('淨利')}: {t('真')}:**{real_inc:.1f}** ({t('去年估')}:{est_inc:.1f})")
         else:
             if is_preview:
                 my_is_h = view_party.name == game.h_role_party.name
@@ -97,9 +103,11 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 opp_net = preview_data['r_inc'] if my_is_h else preview_data['h_inc']
                 
                 st.markdown(t("### 📊 智庫評估報告"))
-                st.markdown(f"{t('我方預估收益')}: {my_net:.1f}")
-                st.markdown(f"{t('對方預估收益')}: {opp_net:.1f}")
-                st.markdown(f"{t('支持度預估')}: {preview_data['my_sup_shift']:+.2f}%")
+                st.markdown(f"{t('我方預估收益')}: **{my_net:.1f}**")
+                st.markdown(f"{t('對方預估收益')}: **{opp_net:.1f}**")
+                
+                sup_c = "green" if preview_data['my_sup_shift'] > 0 else "red"
+                st.markdown(f"{t('支持度預估')}: <span style='color:{sup_c}'>**{preview_data['my_sup_shift']:+.2f}%**</span>", unsafe_allow_html=True)
     st.markdown("---")
 
 def render_message_board(game):
@@ -143,7 +151,7 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 rng = random.Random(f"wealth_{party.name}_{game.year}")
                 opp_stl = party.stealth_ability / 10.0
                 my_inv = view_party.investigate_ability / 10.0
-                err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.4)
+                err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
                 blur = err_margin if not god_mode else 0.0
                 est_wealth = party.wealth * (1 + rng.uniform(-blur, blur))
                 st.markdown(f"**{t('黨產資金')}:** `${est_wealth:.1f}` *({t('預估')})*")
@@ -178,7 +186,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     opp_stl = opp.stealth_ability / 10.0
     my_inv = view_party.investigate_ability / 10.0
-    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.4)
+    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
     blur = err_margin if not st.session_state.get('god_mode') else 0.0
     acc = max(0, min(100, int((1.0 - err_margin) * 100)))
     
@@ -202,7 +210,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     c_tog1, c_tog2 = st.columns(2)
     use_claimed = c_tog1.toggle(t("切換以 公告衰退 試算 (預設為智庫衰退)"), False, key=f"tg_{title}_{plan.get('author', 'sys')}")
-    # [修改] 將按鈕改為「模擬倒閣換位」，真實反映調換位子的效果
     simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (依據新定位試算)"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
     
     c1, c2 = st.columns(2)
@@ -230,10 +237,11 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.write(f"**{t('公告衰退值')}:** {plan['claimed_decay']:.2f} | **{t('標案總額')}:** {plan['proj_fund']:.1f}")
         st.write(f"**{t('標案成本')}:** {plan['bid_cost']:.1f}")
         
+        # [修正] 無論是否切換模擬，都要使用動態計算的 eval_req_cost，因為出資總額會隨工程能力變化
         if simulate_swap:
             st.info(f"🔧 **{t('模擬執行方出資')}:** {t('總額')} {eval_req_cost:.1f} ({t('監管出資')}: {eval_r_pays:.1f} | {t('執行出資')}: {eval_h_pays:.1f})")
         else:
-            st.write(f"**{t('出資總額')}:** {plan.get('req_cost', eval_req_cost):.1f} ({t('監管出資')}: {plan['r_pays']:.1f} | {t('執行出資')}: {plan['h_pays']:.1f})")
+            st.write(f"**{t('出資總額')}:** {eval_req_cost:.1f} ({t('監管出資')}: {eval_r_pays:.1f} | {t('執行出資')}: {eval_h_pays:.1f})")
             
     with c2:
         h_base = cfg['DEFAULT_BONUS'] + (cfg['RULING_BONUS'] if sim_ruling_name == sim_h_party.name else 0)
@@ -261,10 +269,11 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
 
         st.markdown(t("### 📝 智庫分析報告"))
-        st.markdown(f"1. {t('我方預估收益')}: {my_net:.1f} (ROI: {my_roi:.1f}%)")
-        st.markdown(f"2. {t('對方預估收益')}: {opp_net:.1f} (ROI: {opp_roi:.1f}%)")
-        st.markdown(f"3. {t('支持度變化預估')}: {my_sup:+.2f}%")
-        st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ {res['est_gdp']:.1f} ({o_gdp_pct:+.2f}%)")
+        st.markdown(f"1. {t('我方預估收益')}: **{my_net:.1f}** (ROI: {my_roi:.1f}%)")
+        st.markdown(f"2. {t('對方預估收益')}: **{opp_net:.1f}** (ROI: {opp_roi:.1f}%)")
+        sup_c = "green" if my_sup > 0 else "red"
+        st.markdown(f"3. {t('支持度變化預估')}: <span style='color:{sup_c}'>**{my_sup:+.2f}%**</span>", unsafe_allow_html=True)
+        st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
         tt_decay = view_party.current_forecast
         cl_decay = plan.get('claimed_decay', 0.0)
@@ -292,8 +301,8 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0):
     cost = formulas.calculate_upgrade_cost(current_val, t_val, build_ability)
     maint = formulas.get_ability_maintenance(t_val, cfg)
     
-    if t_val > current_val: st.caption(f"📈 {t('升級花費')}: ${cost:.1f} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費將達')} ${maint:.1f}")
-    elif t_val < current_val: st.caption(f"📉 {t('降級退回')} | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費降至')} ${maint:.1f}")
+    if t_val > current_val: st.caption(f"📈 <span style='color:orange'>**{t('升級花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費將達')} ${maint:.1f}", unsafe_allow_html=True)
+    elif t_val < current_val: st.caption(f"📉 <span style='color:blue'>**{t('降級退回')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | {t('維護費降至')} ${maint:.1f}", unsafe_allow_html=True)
     else: st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${maint:.1f}")
         
     return t_val, cost
