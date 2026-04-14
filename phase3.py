@@ -138,17 +138,23 @@ def render(game, cfg):
         if rep.get('crony_caught'): st.error(t("🚨 圖利爭議！執行系統圖利遭舉發，強制沒收資金。"))
 
     with c2:
-        st.markdown(t("#### 🧠 社會與民意 (新增量)"))
-        st.write(f"{t('資訊辨識')}: `{rep['old_san']:.1f} ➔ {game.sanity:.1f}`")
-        st.write(f"{t('選民情緒')}: `{rep['old_emo']:.1f} ➔ {game.emotion:.1f}`")
-        
+        st.markdown(t("#### 📈 支持量變動 (點數)"))
         h_shift = rep['shifts'][game.h_role_party.name]
         r_shift = rep['shifts'][game.r_role_party.name]
         
         st.write(f"**執行系統新增支持量**:")
-        st.write(f"政績: `{h_shift['perf']:.1f}` | 造勢: `{h_shift['camp']:.1f}`")
+        h_perf_color = "green" if h_shift['perf'] > 0 else "red"
+        h_camp_color = "green" if h_shift['camp'] > 0 else "red"
+        st.markdown(f"- 政績: <span style='color:{h_perf_color}'>**{h_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
+        st.markdown(f"- 聲勢: <span style='color:{h_camp_color}'>**{h_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
+        
         st.write(f"**監管系統新增支持量**:")
-        st.write(f"政績: `{r_shift['perf']:.1f}` | 造勢: `{r_shift['camp']:.1f}` | 審查反噬: `{r_shift['backlash']:.1f}`")
+        r_perf_color = "green" if r_shift['perf'] > 0 else "red"
+        r_camp_color = "green" if r_shift['camp'] > 0 else "red"
+        st.markdown(f"- 政績: <span style='color:{r_perf_color}'>**{r_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
+        st.markdown(f"- 聲勢: <span style='color:{r_camp_color}'>**{r_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
+        if r_shift['backlash'] != 0:
+            st.write(f"- 審查反噬: `{r_shift['backlash']:+.1f} 點` (即時扣除)")
 
     st.markdown("---")
     if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
