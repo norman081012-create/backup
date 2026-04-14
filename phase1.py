@@ -6,6 +6,7 @@ import streamlit as st
 import formulas
 import engine
 import ui_core
+import ui_proposal  # 新增引用
 import i18n
 t = i18n.t
 
@@ -37,7 +38,6 @@ def render(game, view_party, cfg):
             widget_decay_key = f"num_{input_decay_key}"
             widget_cost_key = f"num_{input_cost_key}"
             
-            # 取得觀測到的對手能力
             obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
             tt_decay = float(view_party.current_forecast)
             suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
@@ -57,8 +57,6 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = t(f"對手公告: {opp_claimed_decay:.3f}", f"Opp. Claimed: {opp_claimed_decay:.3f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
                 
-                # [核心修正] 計算達到 GDP 損益兩平所需的「建設量」
-                # 公式: (GDP * (衰退率 * 權重)) / GDP 轉換率
                 current_val = st.session_state.get(widget_decay_key, tt_decay)
                 conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
                 gdp_loss = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
@@ -139,11 +137,11 @@ def render(game, view_party, cfg):
 
             if not is_invalid:
                 st.markdown("---")
-                ui_core.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
+                ui_proposal.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
 
             if opp_plan:
                 st.markdown("---")
-                ui_core.render_proposal_component(t('📜 對手 (執行系統) 既有草案參考', '📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
+                ui_proposal.render_proposal_component(t('📜 對手 (執行系統) 既有草案參考', '📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
 
     elif game.p1_step == 'voting_pick':
         st.markdown(t(f"### 🗳️ 執政黨定奪 ({game.ruling_party.name})", f"### 🗳️ Ruling Party Decision ({game.ruling_party.name})"))
@@ -154,7 +152,7 @@ def render(game, view_party, cfg):
                 plan = game.p1_proposals.get(key)
                 if plan is None: st.info(t("等待對方發布草案...", "Waiting for opponent draft...")); continue
                 st.markdown("---")
-                ui_core.render_proposal_component(t('⚖️ 監管系統草案', '⚖️ R-System Draft') if key=='R' else t('🛡️ 執行系統草案', '🛡️ H-System Draft'), plan, game, view_party, cfg)
+                ui_proposal.render_proposal_component(t('⚖️ 監管系統草案', '⚖️ R-System Draft') if key=='R' else t('🛡️ 執行系統草案', '🛡️ H-System Draft'), plan, game, view_party, cfg)
                 if st.button(t(f"✅ 選擇此方案", f"✅ Select this draft"), key=f"pick_{key}"):
                     game.p1_selected_plan = plan; game.p1_step = 'voting_confirm'
                     game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
@@ -162,7 +160,7 @@ def render(game, view_party, cfg):
     elif game.p1_step == 'voting_confirm':
         if view_party.name != game.proposing_party.name: st.warning(t("⏳ 等待對手覆議...", "⏳ Waiting for opponent confirmation..."))
         else:
-            ui_core.render_proposal_component(t('📜 待覆議草案內容', '📜 Draft to Confirm'), game.p1_selected_plan, game, view_party, cfg)
+            ui_proposal.render_proposal_component(t('📜 待覆議草案內容', '📜 Draft to Confirm'), game.p1_selected_plan, game, view_party, cfg)
             st.markdown("---")
             c1, c2, c3, c4 = st.columns(4)
             if c1.button(t("✅ 同意法案", "✅ Agree to Bill"), use_container_width=True, type="primary"):
@@ -189,7 +187,7 @@ def render(game, view_party, cfg):
         if view_party.name != game.h_role_party.name: 
             st.warning(t(f"⏳ 等待執行系統 {game.h_role_party.name} 決斷...", f"⏳ Waiting for H-System {game.h_role_party.name}..."))
         else:
-            ui_core.render_proposal_component(t('📜 監管系統最終底線/通牒方案', '📜 R-System Final Ultimatum Draft'), game.p1_selected_plan, game, view_party, cfg)
+            ui_proposal.render_proposal_component(t('📜 監管系統最終底線/通牒方案', '📜 R-System Final Ultimatum Draft'), game.p1_selected_plan, game, view_party, cfg)
             st.markdown("---")
             c1, c2 = st.columns(2)
             if c1.button(t("✅ 忍辱負重 (接受通牒)", "✅ Accept Ultimatum"), use_container_width=True, type="primary"):
