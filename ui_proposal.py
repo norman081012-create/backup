@@ -10,7 +10,6 @@ import i18n
 t = i18n.t
 
 def render_proposal_component(title, plan, game, view_party, cfg):
-    # 🚀 將智庫分析報告抬升到上方區塊
     st.markdown(t("#### 📝 智庫分析報告", "#### 📝 Think Tank Analysis Report"))
     
     c_tog1, c_tog2 = st.columns(2)
@@ -21,13 +20,17 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     if simulate_swap:
         sim_h_party = game.r_role_party
         sim_r_party = game.h_role_party
-        sim_ruling_name = game.party_B.name if game.ruling_party.name == game.party_A.name else game.party_A.name
+        # 🚀 修正 1：換位只換 H/R 職責，執政黨(Ruling Party)不變，紅利不會跟著跑！
+        sim_ruling_name = game.ruling_party.name 
         my_is_h = (view_party.name == sim_h_party.name)
+        # 🚀 修正 2：將倒閣社會動盪罰金納入試算扣除額
+        swap_penalty = game.total_budget * cfg.get('TRUST_BREAK_PENALTY_RATIO', 0.05)
     else:
         sim_h_party = game.h_role_party
         sim_r_party = game.r_role_party
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
+        swap_penalty = 0.0
 
     tt_decay = view_party.current_forecast
     obs_abis = ui_core.get_observed_abilities(view_party, sim_h_party, game, cfg)
@@ -63,8 +66,9 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     my_roi = o_h_roi if my_is_h else o_r_roi
     opp_roi = o_r_roi if my_is_h else o_h_roi
     
-    my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
-    opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
+    # 🚀 扣除倒閣罰款，呈現真實淨利
+    my_net = (h_base + h_project_profit if my_is_h else r_base + r_project_profit) - swap_penalty
+    opp_net = (r_base + r_project_profit if my_is_h else h_base + h_project_profit) - swap_penalty
     
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
@@ -135,7 +139,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
 
     st.markdown("---")
     
-    # 🚀 將原始的方案標題放入下方草案內容區塊
     st.markdown(f"#### {title}")
     
     conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
