@@ -56,19 +56,16 @@ def render(game, cfg):
         hp_stl_pct = hp.stealth_ability / 10.0
         actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
         
-        # 🚀 貪污判定：經通膨矯正的一元一骰
         inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
         adj_corr_amt = corr_amt / (1.0 + inflation)
         rolls_corr = adj_corr_amt * actual_catch_mult
         catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
         catch_prob_corr = 1.0 - (1.0 - catch_rate_per_dollar)**rolls_corr
         
-        # 圖利判定
         crony_pct_val = (crony_base / max(1.0, proj_fund)) * 100.0
         rolls_crony = crony_pct_val * actual_catch_mult
         catch_prob_crony = 1.0 - (1.0 - cfg['CRONY_CATCH_RATE_PER_PERCENT'])**rolls_crony
         
-        # 🚀 貪污被抓：錢全部送對手，自己倒貼 0.4 給國庫
         if corr_amt > 0 and random.random() < catch_prob_corr:
             original_corr_amt = corr_amt
             returned_to_r += original_corr_amt
@@ -77,7 +74,6 @@ def render(game, cfg):
             corr_caught = True
             corr_amt = 0 
 
-        # 🚀 圖利被抓：吐出合約總值外加 0.5 倍罰款 (共 1.5 倍) 給國庫
         if crony_base > 0 and random.random() < catch_prob_crony:
             original_crony_base = crony_base
             penalty = original_crony_base * 1.5
@@ -87,12 +83,13 @@ def render(game, cfg):
             crony_base = 0
             crony_income = 0
             
-        actual_h_wealth_available = hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty
-        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=max(0.0, actual_h_wealth_available))
-        budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
-        
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
+        
+        # 🚀 信用結算：讓執行方可以用次年底薪來扛法定專案款，避免被升級花費卡死
+        actual_h_wealth_available = max(0.0, hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty + hp_base)
+        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=actual_h_wealth_available)
+        budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_project_net = res_exec['h_project_profit']
         rp_project_net = res_exec['payout_r'] - r_pays
@@ -132,7 +129,6 @@ def render(game, cfg):
         emotion_delta = (float(ha.get('incite') or 0) + float(ra.get('incite') or 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
         
-        # 🚀 教育方針合併結算影響全國思辨
         f_target_san = max(0.0, min(100.0, 50.0 + (ha.get('edu_stance', 0) + ra.get('edu_stance', 0)) * 0.5))
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
@@ -183,7 +179,6 @@ def render(game, cfg):
         st.markdown(f"### 💰 {t('經濟與財政結算')}")
         st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
         
-        # 🚀 報表明細重構：清楚展示總現金流 (Gross vs Net)
         with st.expander(f"📊 {rep['h_party_name']} ({t('執行系統')}) 專案與收益明細"):
             st.write(f"- 📥 領取計畫獎勵金: `${rep['payout_h']:.1f}`")
             st.write(f"- 📥 收取監管方補貼: `${rep['r_pays']:.1f}`")
