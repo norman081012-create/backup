@@ -15,7 +15,6 @@ def render(game, view_party, opponent_party, cfg):
     r_label = t('⚖️ 監管系統', '⚖️ R-System')
     st.subheader(f"{t('🛠️ Phase 2: 政策執行與行動 - 輪到', '🛠️ Phase 2: Execution - Turn:')} {view_party.name} ({h_label if is_h else r_label})")
     
-    # 確保教育光譜屬性存在
     if not hasattr(view_party, 'edu_stance'): view_party.edu_stance = 0.0
     if not hasattr(opponent_party, 'edu_stance'): opponent_party.edu_stance = 0.0
     
@@ -49,7 +48,6 @@ def render(game, view_party, opponent_party, cfg):
             last_corr = min(float(view_party.last_acts.get('corr_amt', 0.0)), proj_fund)
             h_corr_amt = st.slider(t("💸 秘密貪污 ($)", "💸 Secret Corruption ($)"), 0.0, proj_fund, last_corr, 1.0)
             
-            # 🚀 貪污機率預估 (經通膨矯正的一元一骰)
             catch_rate_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
             adj_corr_amt = h_corr_amt / (1.0 + inflation)
             est_prob_corr = (1.0 - (1.0 - catch_rate_dollar)**(adj_corr_amt * est_catch_mult)) * 100
@@ -61,7 +59,6 @@ def render(game, view_party, opponent_party, cfg):
             last_crony = min(float(view_party.last_acts.get('crony_amt', 0.0)), max_crony)
             h_crony_amt = st.slider(t("🏢 圖利自身廠商 ($)", "🏢 Cronyism ($)"), 0.0, max_crony, last_crony, 1.0)
             
-            # 圖利機率預估 (維持比例制)
             crony_pct = (h_crony_amt / max(1.0, proj_fund)) * 100.0 if proj_fund > 0 else 0.0
             crony_rate_pct = cfg.get('CRONY_CATCH_RATE_PER_PERCENT', 0.01)
             est_prob_crony = (1.0 - (1.0 - crony_rate_pct)**(crony_pct * est_catch_mult)) * 100
@@ -72,10 +69,10 @@ def render(game, view_party, opponent_party, cfg):
             st.markdown("##### 🎓 意識形態與社會控制")
             judicial_amt = st.slider(t("⚖️ 媒體審查 (投入資金)(打壓對手黨媒，依對手支持度反噬自身)", "⚖️ Media Censorship"), 0.0, cw, last_judicial)
             
-            # 🚀 教育方針改為長期投資屬性
             new_edu = st.slider(t("🎓 教育方針 (左: 極端填鴨 | 右: 極端思辨)", "🎓 Education Policy"), -100.0, 100.0, float(view_party.edu_stance), 1.0)
-            edu_shift_cost = abs(new_edu - view_party.edu_stance) * 2.0
-            edu_maint_cost = abs(new_edu) * 1.0
+            # 🚀 修正：微調轉型與維護費，拉開與部門擴編的差距
+            edu_shift_cost = abs(new_edu - view_party.edu_stance) * 1.5
+            edu_maint_cost = abs(new_edu) * 0.5
             st.caption(f"🔄 路線轉型花費: `${edu_shift_cost:.1f}` | 🛠️ 常態維護費: `${edu_maint_cost:.1f}`/年")
             
         st.markdown("##### 📺 競選與媒體公關")
@@ -101,14 +98,16 @@ def render(game, view_party, opponent_party, cfg):
         t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護貪污，干擾對手觀測)", "Counter-Intel"), f"up_stl_{view_party.name}_{game.year}", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
         t_bld, c_bld = ui_core.ability_slider(t("工程處 (降升級成本，提升建設效率)", "Engineering"), f"up_bld_{view_party.name}_{game.year}", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
+    # 🚀 修正核心機制：法定專案承諾款 (req_pay) 不再扣除當前現金 (cw)，而是改由 Phase 3 年底從次年收益預扣！
     tot_action = float(media_ctrl) + float(camp_amt) + float(incite_emo) + float(judicial_amt) + float(edu_shift_cost)
     tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld) + float(edu_maint_cost)
-    tot = req_pay + tot_action + tot_maint
+    tot_spending_now = tot_action + tot_maint
     
-    st.write(f"**法定專案款:** `{req_pay:.1f}` / **政策與媒體:** `{tot_action:.1f}` / **部門維護與升級:** `{tot_maint:.1f}` / **剩餘可用淨值:** `{cw - tot:.1f}`")
+    st.write(f"**政策與媒體:** `{tot_action:.1f}` / **部門維護與升級:** `{tot_maint:.1f}` / **剩餘可用現金:** `{cw - tot_spending_now:.1f}`")
+    st.info(f"📌 **法定專案承諾款 (`{req_pay:.1f}`) 將由『次年國家撥款收益』中優先抵扣，不佔用當前現金餘額。**")
     
-    if tot > cw:
-        st.error(f"🚨 資金不足！當前行動預算已超支 {tot - cw:.1f} 元，請降低投入資金或放棄升級。")
+    if tot_spending_now > cw:
+        st.error(f"🚨 資金不足！當前行動預算已超支 {tot_spending_now - cw:.1f} 元，請降低投入資金或放棄升級。")
     
     ra_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'edu_stance': new_edu, 'judicial': judicial_amt}
     ha_dummy = {'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt}
@@ -130,8 +129,12 @@ def render(game, view_party, opponent_party, cfg):
     orig_corr_amt = corr_val
     orig_crony_income = crony_val * 0.1
     
-    res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), corr_amt=orig_corr_amt, r_pays=r_pays, h_wealth=cw if is_h else float(game.h_role_party.wealth))
-    h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    # 預估次年基礎底薪，以便試算會不會爛尾
+    h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    expected_h_wealth = cw - tot_spending_now + h_base_expected if is_h else float(game.h_role_party.wealth)
+    
+    res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), corr_amt=orig_corr_amt, r_pays=r_pays, h_wealth=expected_h_wealth)
+    h_base = h_base_expected
     r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
     hp_net_est = h_base + res_prev['h_project_profit'] + orig_corr_amt + orig_crony_income
@@ -155,7 +158,7 @@ def render(game, view_party, opponent_party, cfg):
     
     ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
     
-    if tot <= cw and st.button(t("確認行動/結算", "Confirm Action/Settle"), use_container_width=True, type="primary"):
+    if tot_spending_now <= cw and st.button(t("確認行動/結算", "Confirm Action/Settle"), use_container_width=True, type="primary"):
         my_acts = {
             'media': media_ctrl, 'camp': camp_amt, 'incite': incite_emo, 
             'edu_stance': new_edu, 'judicial': judicial_amt,
