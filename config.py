@@ -10,7 +10,8 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 1.0,  
+    # 🚀 修正：衰退率範圍改為 0.1 ~ 0.7
+    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.7,  
     'DECAY_WEIGHT_MULT': 0.05,
     'BASE_DECAY_RATE': 0.0,
     
@@ -19,6 +20,7 @@ DEFAULT_CONFIG = {
     
     'CATCH_RATE_PER_PERCENT': 0.02,
     'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
+    'CATCH_RATE_PER_DOLLAR': 0.005, # 一元一骰的基礎機率 (0.5%)
     
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
@@ -27,14 +29,17 @@ DEFAULT_CONFIG = {
     'GDP_CONVERSION_RATE': 0.2,   
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
-    'BASE_INCOME_RATIO': 0.05,    
-    'RULING_BONUS_RATIO': 0.10,   
+    
+    # 🚀 修正：調整政黨基礎底薪，確保有穩定現金流支付 10/10/10 結構
+    'BASE_INCOME_RATIO': 0.08,    
+    'RULING_BONUS_RATIO': 0.12,   
+    
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
     'CORRUPTION_PENALTY': 2.0,
     'MAX_ABILITY': 10.0, 
     'ABILITY_DEFAULT': 3.0,          
-    'BUILD_ABILITY_DEFAULT': 3.0, # 🚀 修正：工程處初始值降回 30%
+    'BUILD_ABILITY_DEFAULT': 3.0,
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
@@ -44,10 +49,12 @@ DEFAULT_CONFIG = {
     'CLAIMED_DECAY_WEIGHT': 0.2,
     'AMMO_MULTIPLIER': 50.0,
     'MAX_UPGRADE_SPEED': 20.0,
-    'UPGRADE_COST_MULT': 0.15, # 🚀 修正：提高二次方升級基礎花費
     
-    'PREDICT_ACCURACY_WEIGHT': 0.8,     # 🚀 新增：智庫預測準確權重
-    'INVESTIGATE_ACCURACY_WEIGHT': 0.8, # 🚀 新增：情報處觀測準確權重
+    # 🚀 修正：大幅降低二次方升級基礎花費
+    'UPGRADE_COST_MULT': 0.05, 
+    
+    'PREDICT_ACCURACY_WEIGHT': 0.8,     
+    'INVESTIGATE_ACCURACY_WEIGHT': 0.8, 
     
     'PERF_IMPACT_BASE': 1000.0,
     'OBS_ERR_BASE': 0.7,      
