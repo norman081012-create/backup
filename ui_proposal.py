@@ -30,8 +30,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_ruling_name = game.ruling_party.name
         my_is_h = (view_party.name == sim_h_party.name)
 
-    # === [修復核心：情報基準嚴格脫鉤] ===
-    # 永遠保留情報處的原始評估值，不受玩家切換 Toggle 影響，專供下方紅綠燈判讀使用
+    # === 情報基準脫鉤 ===
     tt_decay = view_party.current_forecast
     obs_abis = ui_core.get_observed_abilities(view_party, sim_h_party, game, cfg)
     obs_bld = obs_abis['build']
@@ -40,7 +39,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     cl_decay = plan.get('claimed_decay', tt_decay)
     cl_cost = plan.get('claimed_cost', tt_unit_cost)
 
-    # Toggle 僅影響「餵給經濟系統試算」的數值
     if use_claimed:
         eval_decay = cl_decay
         eval_cost = cl_cost
@@ -84,18 +82,23 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         my_net = h_base + h_project_profit if my_is_h else r_base + r_project_profit
         opp_net = r_base + r_project_profit if my_is_h else h_base + h_project_profit
         
+        # 開啟 is_preview 獲取正確歸因率和期望值
         shift_preview = formulas.calc_performance_amounts(
             cfg, sim_h_party, sim_r_party, sim_ruling_name,
             res['est_gdp'], game.gdp, 
-            cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net']
+            cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net'],
+            is_preview=True
         )
         
-        my_perf = shift_preview[view_party.name]['perf']
-        opp_perf = shift_preview[sim_r_party.name if my_is_h else sim_h_party.name]['perf']
-        proj_perf = shift_preview['project_perf']
+        # 抓取雙方單純的大環境政績 (GDP)
+        opp_party_name = sim_r_party.name if my_is_h else sim_h_party.name
+        base_my_perf = shift_preview[view_party.name]['perf_gdp']
+        base_opp_perf = shift_preview[opp_party_name]['perf_gdp']
         
-        base_my_perf = my_perf - (proj_perf if my_is_h else 0.0)
-        base_opp_perf = opp_perf - (proj_perf if not my_is_h else 0.0)
+        # 抓取專案苦勞的預期分配點數
+        h_gain = shift_preview['h_proj_preview']
+        r_gain = shift_preview['r_proj_preview']
+        prob = shift_preview['correct_prob']
         
         o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
         def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
@@ -105,11 +108,10 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         st.markdown(f"2. {t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
         
         st.markdown(f"3. {t('預期大環境政績 (未經媒體)')}: 我方 **{base_my_perf:+.1f}** / 對手 **{base_opp_perf:+.1f}**")
-        st.caption(f"*(⚠️ 草案階段不預設完工。若執行方 100% 履約，將於 Phase 2 額外獲得 `{proj_perf:+.1f}` 點)*")
+        st.caption(f"*(⚠️ 草案階段不預設完工。若執行方 100% 履約，因選民正確歸因率僅 `{prob*100:.1f}%`，預期：執行方獲得 `{h_gain:+.1f}` 點 / 監管方獲得 `{r_gain:+.1f}` 點)*")
         
         st.markdown(f"4. {t('預期 GDP 變化')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
         
-        # [判讀區] 嚴格使用 cl_decay 減去 tt_decay，不受 toggle 影響
         diff = cl_decay - tt_decay
         abs_diff = abs(diff)
         
@@ -132,7 +134,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
             
         st.markdown(f"5. {t('衰退值判讀')}: {light} {risk_txt} ({t('公告')}: {cl_decay:.3f} / {t('智庫')}: {tt_decay:.3f})")
         
-        # [判讀區] 嚴格使用 cl_cost 減去 tt_unit_cost，不受 toggle 影響
         diff_c = cl_cost - tt_unit_cost
         abs_diff_c = abs(diff_c)
 
