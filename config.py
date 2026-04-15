@@ -10,7 +10,6 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
-    # 🚀 修正：衰退率範圍改為 0.1 ~ 0.7
     'DECAY_MIN': 0.1, 'DECAY_MAX': 0.7,  
     'DECAY_WEIGHT_MULT': 0.05,
     'BASE_DECAY_RATE': 0.0,
@@ -18,9 +17,13 @@ DEFAULT_CONFIG = {
     'DECAY_AMOUNT_DEFAULT': 1500.0,
     'DECAY_AMOUNT_BUILD': 500.0,
     
+    # 🚀 線性查扣制核心參數
+    'CATCH_RATE_PER_DOLLAR': 0.10,        # 貪污預設每元查扣率 10%
+    'CRONY_CATCH_RATE_DOLLAR': 0.05,      # 圖利預設每元查扣率 5%
+    'CRONY_PROFIT_RATE': 0.20,            # 圖利利潤率 20%
+    'CORRUPTION_FINE_MULT': 0.4,          # 貪污被抓部分的額外罰款倍率
     'CATCH_RATE_PER_PERCENT': 0.02,
     'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
-    'CATCH_RATE_PER_DOLLAR': 0.005, # 一元一骰的基礎機率 (0.5%)
     
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
@@ -30,16 +33,14 @@ DEFAULT_CONFIG = {
     'HEALTH_MULTIPLIER': 0.2, 
     'BASE_TOTAL_BUDGET': 0.0,  
     
-    # 🚀 修正：調整政黨基礎底薪，確保有穩定現金流支付 10/10/10 結構
     'BASE_INCOME_RATIO': 0.08,    
     'RULING_BONUS_RATIO': 0.12,   
     
     'H_FUND_DEFAULT': 600.0, 
     'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
-    'CORRUPTION_PENALTY': 2.0,
     'MAX_ABILITY': 10.0, 
     'ABILITY_DEFAULT': 3.0,          
-    'BUILD_ABILITY_DEFAULT': 3.0,
+    'BUILD_ABILITY_DEFAULT': 3.0, 
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
@@ -49,8 +50,6 @@ DEFAULT_CONFIG = {
     'CLAIMED_DECAY_WEIGHT': 0.2,
     'AMMO_MULTIPLIER': 50.0,
     'MAX_UPGRADE_SPEED': 20.0,
-    
-    # 🚀 修正：大幅降低二次方升級基礎花費
     'UPGRADE_COST_MULT': 0.05, 
     
     'PREDICT_ACCURACY_WEIGHT': 0.8,     
@@ -63,12 +62,12 @@ DEFAULT_CONFIG = {
 def get_config_translations():
     return {
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
+        'CATCH_RATE_PER_DOLLAR': "貪污每元被查扣率", 'CRONY_CATCH_RATE_DOLLAR': "圖利每元被查扣率",
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
-        'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
         'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率",
         'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重"
     }
-    
+
 def get_intel_market_eval(unit_cost):
     if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
     elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
