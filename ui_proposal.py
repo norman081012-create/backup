@@ -66,7 +66,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     opp_party_name = sim_r_party.name if my_is_h_in_sim else sim_h_party.name
     
-    # 拆解我方與對手的政績來源
     my_gdp_perf = shift_preview[view_party.name]['perf_gdp']
     my_proj_perf = shift_preview[view_party.name]['perf_proj']
     my_total_perf = my_gdp_perf + my_proj_perf
@@ -75,8 +74,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     opp_proj_perf = shift_preview[opp_party_name]['perf_proj']
     opp_total_perf = opp_gdp_perf + opp_proj_perf
     
-    h_gain = shift_preview[sim_h_party.name]['perf_proj']
-    r_gain = shift_preview[sim_r_party.name]['perf_proj']
     prob = shift_preview['correct_prob']
 
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
@@ -84,12 +81,10 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}**")
     st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}**")
     
-    # 🚀 將支持度明細攤開顯示，並強調 100% 履約條件
+    # 🚀 將思辨歸因率與 100% 完工提示直接內嵌在數值旁邊
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} | 專案: {my_proj_perf:+.1f})*")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} | 專案: {opp_proj_perf:+.1f})*")
-    
-    st.caption(f"*(⚠️ 注意：此預估包含大環境基本盤。**專案政績需執行方 100% 履約才會完整發放**。以當前思辨正確歸因率 `{prob*100:.1f}%` 試算，若 100% 完工，執行方將獲得 `{h_gain:+.1f}` 點 / 監管方蹭到 `{r_gain:+.1f}` 點)*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} (思辨正確歸因率 {prob*100:.1f}%) | 專案: {my_proj_perf:+.1f} (若 100% 完工))*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} (思辨正確歸因率 {prob*100:.1f}%) | 專案: {opp_proj_perf:+.1f} (若 100% 完工))*")
     
     st.markdown(f"4. {t('預期 GDP 變化', 'Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
