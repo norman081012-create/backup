@@ -50,10 +50,9 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         emo_chg = disp_emo - rep['old_emo'] if rep else 0
         e_color = "red" if emo_chg > 0 else "green" if emo_chg < 0 else "gray"
         
-        # 🚀 濃縮顯示：資訊辨識與情緒在一行
-        st.markdown(f"**{t('資訊辨識')}:** `{config.get_civic_index_text(disp_san)}` <span style='color:{c_color}'>*({san_chg:+.1f})*</span> | **{t('選民情緒')}:** `{config.get_emotion_text(disp_emo)}` <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
+        # 🚀 根據要求，將資訊緊密排列
+        st.markdown(f"**{t('資訊辨識')}:** {config.get_civic_index_text(disp_san)} <span style='color:{c_color}'>*({san_chg:+.1f})*</span> &nbsp;&nbsp; **{t('選民情緒')}:** {config.get_emotion_text(disp_emo)} <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
         
-        # 🚀 顯示全國思辨正確歸因率
         crit_think = disp_san / 100.0
         emo_val = disp_emo / 100.0
         prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5)))
@@ -110,7 +109,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({(view_party.wealth + total_maint):.1f} - {total_maint:.1f})")
                 
             if rep:
-                # 🚀 修正：首頁直接顯示上一年的收入明細拆解
                 my_is_h = view_party.name == rep['h_party_name']
                 base = rep['h_base'] if my_is_h else rep['r_base']
                 proj = rep['h_project_net'] if my_is_h else rep['r_project_net']
@@ -128,7 +126,9 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.caption(f"*(➖ 支出 `{pol+maint:.1f}` | 罰金 `{penalty:.1f}`)*")
         else:
             if is_preview:
-                my_is_h = view_party.name == game.h_role_party.name
+                my_is_ruling = (view_party.name == game.ruling_party.name)
+                my_is_h = (view_party.name == game.h_role_party.name)
+                
                 my_net = preview_data['h_inc'] if my_is_h else preview_data['r_inc']
                 opp_net = preview_data['r_inc'] if my_is_h else preview_data['h_inc']
                 
@@ -136,9 +136,22 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                my_perf = preview_data['my_perf_gdp'] + preview_data['my_perf_proj']
-                opp_perf = preview_data['opp_perf_gdp'] + preview_data['opp_perf_proj']
-                st.markdown(f"{t('預期產生支持量')}: 我方 **{my_perf:+.1f}** / 對方 **{opp_perf:+.1f}**")
+                my_gdp_label = "思辨正確" if my_is_ruling else "思辨錯誤"
+                opp_gdp_label = "思辨錯誤" if my_is_ruling else "思辨正確"
+                my_proj_label = "思辨正確" if my_is_h else "思辨錯誤"
+                opp_proj_label = "思辨錯誤" if my_is_h else "思辨正確"
+
+                my_gdp_perf = preview_data['my_perf_gdp']
+                my_proj_perf = preview_data['my_perf_proj']
+                my_total_perf = my_gdp_perf + my_proj_perf
+
+                opp_gdp_perf = preview_data['opp_perf_gdp']
+                opp_proj_perf = preview_data['opp_perf_proj']
+                opp_total_perf = opp_gdp_perf + opp_proj_perf
+
+                st.markdown(f"{t('預期產生總支持量')}:")
+                st.markdown(f"&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} ({my_gdp_label}) | 專案: {my_proj_perf:+.1f} ({my_proj_label}))*")
+                st.markdown(f"&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} ({opp_gdp_label}) | 專案: {opp_proj_perf:+.1f} ({opp_proj_label}))*")
                 
     st.markdown("---")
 
