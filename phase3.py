@@ -50,43 +50,47 @@ def render(game, cfg):
         
         corr_amt = float(ha.get('corr_amt') or 0.0)
         crony_base = float(ha.get('crony_amt') or 0.0)
-        crony_income = crony_base * 0.1  
         
         rp_inv_pct = rp.investigate_ability / 10.0
         hp_stl_pct = hp.stealth_ability / 10.0
         actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
         
-        inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-        adj_corr_amt = corr_amt / (1.0 + inflation)
-        rolls_corr = adj_corr_amt * actual_catch_mult
-        catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
-        catch_prob_corr = 1.0 - (1.0 - catch_rate_per_dollar)**rolls_corr
+        # 🚀 1. 貪污結算 (線性模型)
+        corr_catch_ratio = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * actual_catch_mult)
+        caught_corr = corr_amt * corr_catch_ratio
+        kept_corr = corr_amt - caught_corr
         
-        crony_pct_val = (crony_base / max(1.0, proj_fund)) * 100.0
-        rolls_crony = crony_pct_val * actual_catch_mult
-        catch_prob_crony = 1.0 - (1.0 - cfg['CRONY_CATCH_RATE_PER_PERCENT'])**rolls_crony
+        # 罰款：被查獲部分的 0.4 倍
+        corr_fine = caught_corr * cfg.get('CORRUPTION_FINE_MULT', 0.4)
         
-        if corr_amt > 0 and random.random() < catch_prob_corr:
-            original_corr_amt = corr_amt
-            returned_to_r += original_corr_amt
-            hp_wealth_penalty += original_corr_amt * 0.4
-            confiscated_to_budget += original_corr_amt * 0.4
+        if caught_corr > 0:
+            returned_to_r += (caught_corr + corr_fine) * 0.2
+            confiscated_to_budget += (caught_corr + corr_fine) * 0.8
             corr_caught = True
-            corr_amt = 0 
-
-        if crony_base > 0 and random.random() < catch_prob_crony:
-            original_crony_base = crony_base
-            penalty = original_crony_base * 1.5
-            hp_wealth_penalty += penalty
-            confiscated_to_budget += penalty
+        
+        # 🚀 2. 圖利結算 (線性模型 + 0.2利潤)
+        crony_catch_ratio = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * actual_catch_mult)
+        caught_crony_base = crony_base * crony_catch_ratio
+        kept_crony_base = crony_base - caught_crony_base
+        
+        crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
+        crony_profit = kept_crony_base * crony_profit_rate
+        
+        # 罰款：繳回圖利金 (0.2) + 0.5倍罰款 = 查獲合約的 0.7 倍
+        crony_fine = caught_crony_base * (crony_profit_rate + 0.5)
+        
+        if caught_crony_base > 0:
+            returned_to_r += crony_fine * 0.2
+            confiscated_to_budget += crony_fine * 0.8
             crony_caught = True
-            crony_base = 0
-            crony_income = 0
+        
+        hp_wealth_penalty = corr_fine + crony_fine
+        total_dirty_income = kept_corr + crony_profit
             
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
-        # 🚀 信用結算：讓執行方可以用次年底薪來扛法定專案款，避免被升級花費卡死
+        # 結算可動用資金 (包含預期的基礎撥款，用來扛法定專案款)
         actual_h_wealth_available = max(0.0, hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty + hp_base)
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=actual_h_wealth_available)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -94,7 +98,7 @@ def render(game, cfg):
         hp_project_net = res_exec['h_project_profit']
         rp_project_net = res_exec['payout_r'] - r_pays
         
-        hp_inc = hp_base + hp_project_net + corr_amt + crony_income
+        hp_inc = hp_base + hp_project_net + total_dirty_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
@@ -147,7 +151,7 @@ def render(game, cfg):
             'h_base': hp_base, 'r_base': rp_base, 
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
-            'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
+            'h_extra': total_dirty_income, 'r_extra': returned_to_r,
             'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
             'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
             'hp_penalty': hp_wealth_penalty,
@@ -187,9 +191,9 @@ def render(game, cfg):
             st.markdown("---")
             st.write(f"- 基礎撥款 (含執政紅利): `${rep['h_base']:.1f}`")
             if rep['h_extra'] > 0:
-                st.write(f"- 秘密所得 (貪污/圖利): `${rep['h_extra']:.1f}`")
+                st.write(f"- 秘密所得 (洗白後貪污/圖利): `${rep['h_extra']:.1f}`")
             if rep.get('hp_penalty', 0) > 0:
-                st.write(f"- 🚨 司法罰金與沒收: `-${rep['hp_penalty']:.1f}`")
+                st.write(f"- 🚨 查扣罰金 (繳納國庫與對手): `-${rep['hp_penalty']:.1f}`")
             st.write(f"- 政策行動與部門支出: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
             st.write(f"**💰 最終總淨現金流: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']) - rep.get('hp_penalty', 0):.1f}`**")
 
@@ -254,9 +258,4 @@ def render(game, cfg):
                 game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
             game.proposing_party = game.r_role_party
-            game.last_year_report = None
-            
-            for k in list(st.session_state.keys()):
-                if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
-            if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
-        st.rerun()
+            game.last_year_report
