@@ -28,7 +28,6 @@ def render(game, cfg):
         r_pays = float(d.get('r_pays') or 0.0)
         h_pays = float(d.get('h_pays') or 0.0)
         
-        # 費用宣告提前，防止 UnboundLocalError
         h_tot_action = float(ha.get('tot_action') or 0)
         r_tot_action = float(ra.get('tot_action') or 0)
         h_tot_maint = float(ha.get('tot_maint') or 0)
@@ -77,10 +76,12 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
+        # [關鍵] 傳入 is_preview=False，啟動逐點真實擲骰機制！
         shifts = formulas.calc_performance_amounts(
             cfg, hp, rp, game.ruling_party.name, 
             res_exec['est_gdp'], game.gdp, 
-            claimed_decay, game.sanity, game.emotion, bid_cost, res_exec['c_net']
+            claimed_decay, game.sanity, game.emotion, bid_cost, res_exec['c_net'],
+            is_preview=False
         )
         
         h_media = hp.media_ability / 10.0
@@ -95,7 +96,6 @@ def render(game, cfg):
             game.party_B.name: shifts[game.party_B.name]
         })
         
-        # 國家指標變化計算
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         emotion_delta = (float(ha.get('incite') or 0) + float(ra.get('incite') or 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
@@ -118,7 +118,6 @@ def render(game, cfg):
             'corr_caught': corr_caught, 'crony_caught': crony_caught
         }
         
-        # 更新國家數值
         game.gdp = res_exec['est_gdp']
         game.sanity = new_sanity
         game.emotion = new_emotion
@@ -137,13 +136,11 @@ def render(game, cfg):
     
     rep = game.last_year_report
     
-    # === UI 渲染區 ===
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"### 💰 {t('經濟與收益結算')}")
         st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
         
-        # 執行系統收益明細
         with st.expander(f"📊 {rep['h_party_name']} ({t('執行系統')}) {t('收益明細')}"):
             st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['h_base']:.1f}`")
             st.write(f"- {t('專案執行利潤')}: `${rep['h_project_net']:.1f}`")
@@ -152,7 +149,6 @@ def render(game, cfg):
             st.write(f"- {t('行政與部門支出')}: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
             st.write(f"**{t('最終淨收益')}: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']):.1f}`**")
 
-        # 監管系統收益明細
         with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) {t('收益明細')}"):
             st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['r_base']:.1f}`")
             st.write(f"- {t('專案監管剩餘')}: `${rep['r_project_net']:.1f}`")
@@ -175,22 +171,30 @@ def render(game, cfg):
         st.markdown("---")
         st.markdown(f"### 📈 {t('支持量歸因分析')}")
         
+        # 顯示今年民眾的智商水準
+        correct_prob = rep['shifts'].get('correct_prob', 0.5)
+        st.caption(f"*(📡 今年度選民正確歸因率: `{correct_prob*100:.1f}%`)*")
+        
         for p_name in [rep['h_party_name'], rep['r_party_name']]:
             is_h = (p_name == rep['h_party_name'])
             role_label = t("執行") if is_h else t("監管")
             shift = rep['shifts'][p_name]
+            is_ruling = (p_name == game.ruling_party.name)
             
             with st.expander(f"🔎 {p_name} ({role_label}) {t('支持量來源')}"):
-                # 這裡顯示政績歸因
-                # 我們假設在 shifts 中已經拆分好，或者在這裡進行說明
-                # 根據您的描述，我們在顯示上強調「專案表現」與「大環境紅利」
                 if is_h:
-                    st.write(f"- 🏗️ **{t('專案執行政績')}**: `{shift['perf'] * 0.7:+.1f}` (來自工程產出)")
-                    st.write(f"- 🌐 **{t('大環境歸因紅利')}**: `{shift['perf'] * 0.3:+.1f}` (民眾對經濟成長的印象)")
+                    if shift.get('perf_proj', 0.0) != 0:
+                        st.write(f"- 🏗️ **{t('專案政績')}**: `{shift.get('perf_proj', 0.0):+.1f}` (憑實力正確歸因獲得)")
+                    if shift.get('perf_gdp', 0.0) != 0:
+                        reason = "執政優勢" if is_ruling else "民眾誤判當成你的功勞"
+                        st.write(f"- 🌐 **{t('大環境政績')}**: `{shift.get('perf_gdp', 0.0):+.1f}` (來自GDP變化 - {reason})")
                 else:
-                    st.write(f"- ⚖️ **{t('制度監督政績')}**: `{shift['perf'] * 0.4:+.1f}` (維護預算紀律)")
-                    st.write(f"- 👑 **{t('執政名望紅利')}**: `{shift['perf'] * 0.6:+.1f}` (當權者的天然優勢)")
-                
+                    if shift.get('perf_proj', 0.0) != 0:
+                        st.write(f"- 🎁 **{t('專案政績')}**: `{shift.get('perf_proj', 0.0):+.1f}` (民眾誤判，白嫖執行方苦勞)")
+                    if shift.get('perf_gdp', 0.0) != 0:
+                        reason = "執政優勢" if is_ruling else "民眾誤判當成你的功勞"
+                        st.write(f"- 🌐 **{t('大環境政績')}**: `{shift.get('perf_gdp', 0.0):+.1f}` (來自GDP變化 - {reason})")
+                        
                 st.write(f"- 📢 **{t('媒體與造勢')}**: `{shift['camp']:+.1f}`")
 
     st.markdown("---")
