@@ -102,10 +102,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 formulas.get_ability_maintenance(view_party.stealth_ability, cfg, False, view_party.build_ability) +
                 formulas.get_ability_maintenance(view_party.build_ability, cfg, True, view_party.build_ability)
             )
-            # 加上教育與審查的預設維護費
             edu_maint = abs(view_party.edu_stance) * 0.5 if hasattr(view_party, 'edu_stance') else 0.0
-            jud_maint = float(view_party.last_acts.get('judicial_lvl', 0.0)) * 1.0 if view_party.name == game.r_role_party.name else 0.0
-            total_maint += edu_maint + jud_maint
+            total_maint += edu_maint
             
             if game.year == 1:
                 st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({view_party.wealth:.1f} - 0.0)")
@@ -130,15 +128,15 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.caption(f"*(➖ 支出 `{pol+maint:.1f}` | 罰金 `{penalty:.1f}`)*")
         else:
             if is_preview:
-                my_is_ruling = (view_party.name == game.ruling_party.name)
-                my_is_h = (view_party.name == game.h_role_party.name)
-                
-                my_net = preview_data['h_inc'] if my_is_h else preview_data['r_inc']
-                opp_net = preview_data['r_inc'] if my_is_h else preview_data['h_inc']
+                my_net = preview_data['h_inc'] if (view_party.name == game.h_role_party.name) else preview_data['r_inc']
+                opp_net = preview_data['r_inc'] if (view_party.name == game.h_role_party.name) else preview_data['h_inc']
                 
                 st.markdown(t("### 📊 智庫評估報告"))
-                st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
-                st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
+                def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
+                
+                # 🚀 乾淨清楚的 ROI 與點數顯示
+                st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(preview_data.get('my_roi', 0))})")
+                st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(preview_data.get('opp_roi', 0))})")
                 
                 my_gdp_perf = preview_data['my_perf_gdp']
                 my_proj_perf = preview_data['my_perf_proj']
@@ -306,84 +304,39 @@ def render_sidebar_intel_audit(game, view_party, cfg):
         formulas.get_ability_maintenance(view_party.build_ability, cfg, True, view_party.build_ability)
     )
     edu_maint = abs(view_party.edu_stance) * 0.5 if hasattr(view_party, 'edu_stance') else 0.0
-    jud_maint = float(view_party.last_acts.get('judicial_lvl', 0.0)) * 1.0 if view_party.name == game.r_role_party.name else 0.0
-    total_maint += edu_maint + jud_maint
+    total_maint += edu_maint
     
     st.write(f"{t('智庫')}: {view_party.predict_ability*10:.1f}% | {t('情報處')}: {view_party.investigate_ability*10:.1f}%")
     st.write(f"{t('黨媒')}: {view_party.media_ability*10:.1f}% | {t('反情報處')}: {view_party.stealth_ability*10:.1f}%")
     st.write(f"{t('工程處')}: {view_party.build_ability*10:.1f}%")
     st.write(f"**(依據當前機構與政策投資，明年維護費估算: -${total_maint:.1f})**")
 
-# 🚀 擴展 ability_slider 支援教育方針(負數絕對值計價)與媒體審查(100上限)
-def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False, is_edu=False, is_jud=False):
-    if is_edu:
-        current_display = current_val
-        min_pct = max(-100.0, current_display - 10.0)
-        max_pct = min(100.0, current_display + 10.0)
-        t_pct = st.slider(f"{label}", float(min_pct), float(max_pct), float(current_display), 1.0, key=key)
+# 回歸純粹的機構升級邏輯，清除多餘的判定
+def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
+    current_pct = current_val * 10.0
+    max_upgrade = cfg.get('MAX_UPGRADE_SPEED', 20.0) * (1.0 + build_ability / 5.0)
+    min_pct = max(0.0, current_pct - 20.0)
+    max_pct = min(100.0, current_pct + max_upgrade)
+    
+    t_pct = st.slider(f"{label}", float(min_pct), float(max_pct), float(current_pct), 0.1, key=key)
+    
+    cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
+    discount = 1.0 + build_ability / 5.0
+    
+    import formulas
+    new_val = t_pct / 10.0
+    eff_build = new_val if is_build else build_ability
+    new_maint = formulas.get_ability_maintenance(new_val, cfg, is_build, eff_build)
+    
+    if t_pct > current_pct: 
+        cost = ((t_pct**2 - current_pct**2) * cost_mult) / discount
+        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處減免) | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
+    elif t_pct < current_pct: 
+        refund = ((current_pct**2 - t_pct**2) * cost_mult * 0.5) 
+        cost = -refund
+        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
+    else: 
+        cost = 0.0
+        st.caption(f"🛡️ {t('維持現狀')} (維護費: ${new_maint:.1f})")
         
-        # 教育方針的成本計算：純看絕對值的差距 (因為越極端越貴，不管左右)
-        cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
-        # 用絕對值的平方來算差價
-        cost = ((abs(t_pct)**2 - abs(current_display)**2) * cost_mult)
-        new_maint = abs(t_pct) * 0.5
-        
-        if abs(t_pct) > abs(current_display): 
-            st.caption(f"📈 <span style='color:orange'>**轉型投入**: ${cost:.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        elif abs(t_pct) < abs(current_display): 
-            refund = abs(cost) * 0.5 
-            st.caption(f"📉 <span style='color:blue'>**緩和回收**: +${refund:.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        else: 
-            st.caption(f"🛡️ 維持現狀 (維護費: ${new_maint:.1f})")
-            cost = 0.0
-        return t_pct, cost
-        
-    elif is_jud:
-        current_display = current_val
-        min_pct = max(0.0, current_display - 10.0)
-        max_pct = min(100.0, current_display + 10.0)
-        t_pct = st.slider(f"{label}", float(min_pct), float(max_pct), float(current_display), 1.0, key=key)
-        
-        cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
-        cost = ((t_pct**2 - current_display**2) * cost_mult)
-        new_maint = t_pct * 1.0
-        
-        if t_pct > current_display: 
-            st.caption(f"📈 <span style='color:orange'>**升級投入**: ${cost:.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        elif t_pct < current_display: 
-            refund = abs(cost) * 0.5 
-            st.caption(f"📉 <span style='color:blue'>**降級回收**: +${refund:.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        else: 
-            st.caption(f"🛡️ 維持現狀 (維護費: ${new_maint:.1f})")
-            cost = 0.0
-        return t_pct, cost
-
-    else:
-        # 一般部門邏輯
-        current_pct = current_val * 10.0
-        max_upgrade = cfg.get('MAX_UPGRADE_SPEED', 20.0) * (1.0 + build_ability / 5.0)
-        min_pct = max(0.0, current_pct - 20.0)
-        max_pct = min(100.0, current_pct + max_upgrade)
-        
-        t_pct = st.slider(f"{label}", float(min_pct), float(max_pct), float(current_pct), 0.1, key=key)
-        
-        cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
-        discount = 1.0 + build_ability / 5.0
-        
-        import formulas
-        new_val = t_pct / 10.0
-        eff_build = new_val if is_build else build_ability
-        new_maint = formulas.get_ability_maintenance(new_val, cfg, is_build, eff_build)
-        
-        if t_pct > current_pct: 
-            cost = ((t_pct**2 - current_pct**2) * cost_mult) / discount
-            st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處減免) | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        elif t_pct < current_pct: 
-            refund = ((current_pct**2 - t_pct**2) * cost_mult * 0.5) 
-            cost = -refund
-            st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
-        else: 
-            cost = 0.0
-            st.caption(f"🛡️ {t('維持現狀')} (維護費: ${new_maint:.1f})")
-            
-        return new_val, cost
+    return new_val, cost
