@@ -17,13 +17,9 @@ DEFAULT_CONFIG = {
     'DECAY_AMOUNT_DEFAULT': 1500.0,
     'DECAY_AMOUNT_BUILD': 500.0,
     
-    # 線性查扣制核心參數
+    # 🚀 暗盤機制：貪污基礎查扣率 (圖利將在程式碼中自動取其 20%)
     'CATCH_RATE_PER_DOLLAR': 0.10,        
-    'CRONY_CATCH_RATE_DOLLAR': 0.05,      
     'CRONY_PROFIT_RATE': 0.20,            
-    'CORRUPTION_FINE_MULT': 0.4,          
-    'CATCH_RATE_PER_PERCENT': 0.02,
-    'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
     
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
@@ -62,7 +58,7 @@ DEFAULT_CONFIG = {
 def get_config_translations():
     return {
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-        'CATCH_RATE_PER_DOLLAR': "貪污每元被查扣率", 'CRONY_CATCH_RATE_DOLLAR': "圖利每元被查扣率",
+        'CATCH_RATE_PER_DOLLAR': "貪污每元被查扣率",
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率",
         'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重"
