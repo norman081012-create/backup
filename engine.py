@@ -53,6 +53,8 @@ class GameEngine:
         self.last_year_report = None
         
         self.boundary_B = 100 
+        # 🚀 新增：儲存媒體審查帶來的極化固著度 Buff (持續2年)
+        self.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
 
     def record_history(self, is_election):
         self.history.append({
