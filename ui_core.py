@@ -46,11 +46,18 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         st.markdown(t("### 🌐 國家總體現況"))
         san_chg = (disp_san - rep['old_san']) if rep else 0
         c_color = "green" if san_chg > 0 else "red" if san_chg < 0 else "gray"
-        st.markdown(f"**{t('資訊辨識')}:** `{config.get_civic_index_text(disp_san)}` <span style='color:{c_color}'>*({san_chg:+.1f})*</span>", unsafe_allow_html=True)
         
         emo_chg = disp_emo - rep['old_emo'] if rep else 0
         e_color = "red" if emo_chg > 0 else "green" if emo_chg < 0 else "gray"
-        st.markdown(f"**{t('選民情緒')}:** `{config.get_emotion_text(disp_emo)}` <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
+        
+        # 🚀 濃縮顯示：資訊辨識與情緒在一行
+        st.markdown(f"**{t('資訊辨識')}:** `{config.get_civic_index_text(disp_san)}` <span style='color:{c_color}'>*({san_chg:+.1f})*</span> | **{t('選民情緒')}:** `{config.get_emotion_text(disp_emo)}` <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
+        
+        # 🚀 顯示全國思辨正確歸因率
+        crit_think = disp_san / 100.0
+        emo_val = disp_emo / 100.0
+        prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5)))
+        st.markdown(f"**思辨正確歸因率:** `{prob*100:.1f}%`")
         
         gdp_base = rep['old_gdp'] if rep else game.gdp
         gdp_diff = disp_gdp - gdp_base
@@ -103,10 +110,22 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.write(f"{t('可用淨資產')}: **{view_party.wealth:.1f}** ({(view_party.wealth + total_maint):.1f} - {total_maint:.1f})")
                 
             if rep:
+                # 🚀 修正：首頁直接顯示上一年的收入明細拆解
                 my_is_h = view_party.name == rep['h_party_name']
-                real_inc = rep['h_inc'] if my_is_h else rep['r_inc']
-                est_inc = rep.get('est_h_inc', 0.0) if my_is_h else rep.get('est_r_inc', 0.0)
-                st.write(f"{t('淨利')}: {t('真')}:**{real_inc:.1f}** ({t('去年估')}:{est_inc:.1f})")
+                base = rep['h_base'] if my_is_h else rep['r_base']
+                proj = rep['h_project_net'] if my_is_h else rep['r_project_net']
+                extra = rep['h_extra'] if my_is_h else rep['r_extra']
+                penalty = rep.get('hp_penalty', 0.0) if my_is_h else 0.0
+                pol = rep['h_pol_cost'] if my_is_h else rep['r_pol_cost']
+                maint = rep['h_maint'] if my_is_h else rep['r_maint']
+                
+                real_inc_gross = base + proj + extra
+                expenses = pol + maint + penalty
+                real_inc_net = real_inc_gross - expenses
+                
+                st.markdown(f"**去年結算淨流: `{real_inc_net:+.1f}`**")
+                st.caption(f"*(➕ 撥款 `{base:.1f}` | 專案 `{proj:.1f}` | 業外 `{extra:.1f}`)*")
+                st.caption(f"*(➖ 支出 `{pol+maint:.1f}` | 罰金 `{penalty:.1f}`)*")
         else:
             if is_preview:
                 my_is_h = view_party.name == game.h_role_party.name
@@ -247,7 +266,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     obs_stl_pct = obs_abis['stealth'] / 10.0
     catch_mult = max(0.1, (my_inv_raw_pct * r_bonus) - obs_stl_pct + 1.0)
     
-    # 🚀 顯示線性預期查扣率
     corr_rate = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * catch_mult)
     crony_rate = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * catch_mult)
     
