@@ -107,7 +107,9 @@ def render(game, view_party, cfg):
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
                 'r_pays': r_pays, 'h_pays': h_pays, 
                 'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
-                'author': active_role, 'req_cost': req_cost
+                'author': active_role, 
+                'author_party': view_party.name, # 🚀 標記這份草案是哪個黨發布的
+                'req_cost': req_cost
             }
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -135,7 +137,6 @@ def render(game, view_party, cfg):
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
 
-            # 🚀 實作完美並排框架，分析報告和草案會左右各自包攬
             if not is_invalid or opp_plan:
                 st.markdown("---")
                 c_prop1, c_prop2 = st.columns(2)
