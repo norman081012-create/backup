@@ -10,7 +10,6 @@ DEFAULT_CONFIG = {
     'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
-    # [修改] 真實衰退亂數預設範圍 0.1 ~ 1.0
     'DECAY_MIN': 0.1, 'DECAY_MAX': 1.0,  
     'DECAY_WEIGHT_MULT': 0.05,
     'BASE_DECAY_RATE': 0.0,
@@ -41,10 +40,13 @@ DEFAULT_CONFIG = {
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 50.0,   
     'EMOTION_DEFAULT': 30.0,
-    'SUPPORT_CONVERSION_RATE': 0.05, 
+    
+    # 🚀 支持度 2.0 新增常數
+    'CLAIMED_DECAY_WEIGHT': 0.2,   # 預期影響的 20% 權重煞車皮
+    'AMMO_MULTIPLIER': 50.0,       # 政績轉化為實體彈藥的放大倍數
+    
     'PERF_IMPACT_BASE': 1000.0,
     'OBS_ERR_BASE': 0.7,      
-    'CLAIMED_DECAY_WEIGHT': 0.2  
 }
 
 def get_config_translations():
@@ -52,6 +54,7 @@ def get_config_translations():
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
+        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉彈藥倍率"
     }
     
 def get_intel_market_eval(unit_cost):
