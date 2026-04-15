@@ -25,12 +25,20 @@ def render(game, view_party, cfg):
             role_text_zh = '監管系統' if active_role == 'R' else '執行系統'
             role_text_en = 'R-System' if active_role == 'R' else 'H-System'
             
-            c_title, c_btn = st.columns([0.8, 0.2])
+            # 🚀 重新排版：將「司法罰金」設定縮小並與標題並排
+            c_title, c_fine, c_btn = st.columns([0.5, 0.3, 0.2])
             with c_title:
                 st.markdown(t(f"#### 📝 {view_party.name} ({role_text_zh}黨) 草案擬定室", f"#### 📝 {view_party.name} ({role_text_en}) Draft Room"))
             
             opp_role = 'H' if active_role == 'R' else 'R'
             opp_plan = game.p1_proposals.get(opp_role)
+            
+            with c_fine:
+                if active_role == 'R':
+                    fine_mult = st.number_input(t("⚖️ 違規罰金倍數 (僅監管設定)", "Fine Multiplier"), min_value=0.0, max_value=5.0, value=0.3, step=0.1, help="違規時額外繳交國庫的罰金倍率")
+                else:
+                    fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
+                    st.info(f"⚖️ 當前司法罰金: **{fine_mult}x**")
             
             input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
@@ -46,21 +54,11 @@ def render(game, view_party, cfg):
             if widget_cost_key not in st.session_state: st.session_state[widget_cost_key] = tt_cost
 
             with c_btn:
+                st.markdown("<br>", unsafe_allow_html=True)
                 if st.button(t("🔄 帶入情報", "🔄 Auto-Fill"), use_container_width=True):
                     st.session_state[widget_decay_key] = tt_decay
                     st.session_state[widget_cost_key] = tt_cost
                     st.rerun()
-
-            # 🚀 僅監管系統可以設定年度司法罰鍰倍率
-            if active_role == 'R':
-                st.markdown("##### ⚖️ 司法罰鍰設定 (僅監管系統設定)")
-                fine_mult = st.slider(t("設定本年度違規(貪污/圖利)的國庫罰金倍數", "Set penalty multiplier for corruption/cronyism"), 0.0, 5.0, 0.3, 0.1)
-                st.caption(f"*(若執行系統被查獲違規，除全額沒收違規金移交監管方外，還需從黨產額外支付違規本金的 `{fine_mult}` 倍罰金給國庫)*")
-            else:
-                fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
-                st.info(f"⚖️ 監管系統本年度設定的司法罰金倍數為：**{fine_mult} 倍**")
-
-            st.markdown("---")
 
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
@@ -118,9 +116,9 @@ def render(game, view_party, cfg):
                 'r_pays': r_pays, 'h_pays': h_pays, 
                 'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
                 'author': active_role, 
-                'author_party': view_party.name,
+                'author_party': view_party.name, 
                 'req_cost': req_cost,
-                'fine_mult': fine_mult # 🚀 寫入草案變數中
+                'fine_mult': fine_mult 
             }
 
             st.markdown("<br>", unsafe_allow_html=True)
