@@ -1,6 +1,5 @@
 # ==========================================
 # ui_core.py
-# 負責共用 UI 渲染、圖表繪製、標準化組件
 # ==========================================
 import streamlit as st
 import random
@@ -76,9 +75,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         acc = int(((view_party.predict_ability / 10.0) * p_acc_weight) * 100)
         st.markdown(f"### 🕵️ {t('智庫')} {t('預測情報')} (準確度: {acc}%)")
         
-        conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-        gdp_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
-        
         st.write(f"預估衰退值: `{fc:.3f}`")
         eval_scenario = config.get_economic_forecast_text(fc * 100)
         st.info(eval_scenario)
@@ -90,8 +86,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 diff = abs(past_forecast - rep['real_decay'])
                 eval_txt = config.get_thinktank_eval(view_party.predict_ability, diff)
                 st.write(f"({cfg['CALENDAR_NAME']} {game.year-1} 內部檢討: **{eval_txt}**)")
-        else:
-            st.write("(尚無去年歷史資料以供檢討)")
 
     with c4:
         if game.phase == 1:
@@ -253,18 +247,12 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     obs_stl_pct = obs_abis['stealth'] / 10.0
     catch_mult = max(0.1, (my_inv_raw_pct * r_bonus) - obs_stl_pct + 1.0)
     
-    # 🚀 金額機率換算 (Sidebar展示)
-    inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-    catch_rate_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
-    def get_catch_prob_amt(c_amt):
-        rolls = (c_amt / (1.0 + inflation)) * catch_mult
-        return (1.0 - (1.0 - catch_rate_dollar)**rolls) * 100.0
-        
-    catch_100 = get_catch_prob_amt(100.0)
-    catch_300 = get_catch_prob_amt(300.0)
+    # 🚀 顯示線性預期查扣率
+    corr_rate = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * catch_mult)
+    crony_rate = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * catch_mult)
     
     st.write(f"**{t('防貪污能力估算')}**: 偵測擲骰倍率 `{catch_mult:.2f}x`")
-    st.caption(f"*(若對手貪污 $100 $\\rightarrow$ 查獲率約 `{catch_100:.1f}%` | 貪 $300 $\\rightarrow$ `{catch_300:.1f}%`)*")
+    st.caption(f"*(預期對手貪污查扣率: `{corr_rate*100:.1f}%` | 合約圖利查扣率: `{crony_rate*100:.1f}%`)*")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.write(f"{t('工程處')}: {obs_abis['build']*10:.1f}%")
@@ -272,7 +260,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
-    inflation_rate = inflation * 100.0
+    inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
     
     st.write(f"**{t('建設估價')}**: {eval_txt}")
     st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` )*")
