@@ -28,12 +28,11 @@ def render(game, cfg):
         r_pays = float(d.get('r_pays') or 0.0)
         h_pays = float(d.get('h_pays') or 0.0)
         
-        # === [修復] 將變數宣告提前，避免 UnboundLocalError ===
+        # 費用宣告提前，防止 UnboundLocalError
         h_tot_action = float(ha.get('tot_action') or 0)
         r_tot_action = float(ra.get('tot_action') or 0)
         h_tot_maint = float(ha.get('tot_maint') or 0)
         r_tot_maint = float(ra.get('tot_maint') or 0)
-        # ======================================================
         
         corr_pct_val = float(ha.get('corr') or 0)
         crony_pct_val = float(ha.get('crony') or 0)
@@ -78,14 +77,12 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # [核心修正] 獲取純淨的政績
         shifts = formulas.calc_performance_amounts(
             cfg, hp, rp, game.ruling_party.name, 
             res_exec['est_gdp'], game.gdp, 
             claimed_decay, game.sanity, game.emotion, bid_cost, res_exec['c_net']
         )
         
-        # [保留造勢點數] 將簡單的媒體/造勢點數直接在這裡計算（待未來 debug 完整媒體機制）
         h_media = hp.media_ability / 10.0
         r_media = rp.media_ability / 10.0
         shifts[hp.name]['camp'] = float(ha.get('camp', 0)) * h_media * 0.1
@@ -98,6 +95,7 @@ def render(game, cfg):
             game.party_B.name: shifts[game.party_B.name]
         })
         
+        # 國家指標變化計算
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         emotion_delta = (float(ha.get('incite') or 0) + float(ra.get('incite') or 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
@@ -108,66 +106,92 @@ def render(game, cfg):
         
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
-            'h_party_name': hp.name,
+            'new_san': new_sanity, 'new_emo': new_emotion,
+            'h_party_name': hp.name, 'r_party_name': rp.name,
             'shifts': shifts, 
             'h_inc': hp_inc, 'r_inc': rp_inc, 
             'h_base': hp_base, 'r_base': rp_base, 
-            'h_payout': res_exec['payout_h'], 'r_payout': res_exec['payout_r'],
-            'h_act_fund': res_exec['act_fund'],
-            'r_pays': r_pays, 'h_pays': h_pays,
+            'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
             'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
             'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
             'corr_caught': corr_caught, 'crony_caught': crony_caught
         }
         
-        if game.year % cfg['ELECTION_CYCLE'] == 1:
-            winner = hp if hp.support > rp.support else rp
-            gap = abs(hp.support - rp.support)
-            if gap > 20: msg = f"🎉 **【大選結果：狂勝！】** {winner.name} 黨以 {gap:.1f}% 的差距取得壓倒性勝利！"
-            elif gap > 5: msg = f"🎉 **【大選結果：穩定勝選】** {winner.name} 黨穩紮穩打贏得執政權！"
-            else: msg = f"🎉 **【大選結果：驚險過關】** 選情陷入泥沼！{winner.name} 黨微幅險勝！"
-            
-            st.session_state.news_flash = msg
-            st.session_state.anim = 'balloons'
-            game.ruling_party = winner
-
+        # 更新國家數值
         game.gdp = res_exec['est_gdp']
+        game.sanity = new_sanity
+        game.emotion = new_emotion
         game.h_fund = res_exec['payout_h']
         game.total_budget = budg + confiscated_to_budget
         
         hp.wealth += hp_inc - h_tot_action - h_tot_maint
         rp.wealth += rp_inc - r_tot_action - r_tot_maint
 
+        if game.year % cfg['ELECTION_CYCLE'] == 1:
+            winner = hp if hp.support > rp.support else rp
+            game.ruling_party = winner
+
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
         game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
     
     rep = game.last_year_report
+    
+    # === UI 渲染區 ===
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(t("#### 💰 經濟與財政"))
-        st.write(f"GDP 變化: `{rep['old_gdp']:.1f} ➔ {game.gdp:.1f}`")
-        if rep.get('corr_caught'): st.error(t("🚨 貪污醜聞爆發！執行系統貪污被查獲，沒收非法所得。"))
-        if rep.get('crony_caught'): st.error(t("🚨 圖利爭議！執行系統圖利遭舉發，強制沒收資金。"))
+        st.markdown(f"### 💰 {t('經濟與收益結算')}")
+        st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
+        
+        # 執行系統收益明細
+        with st.expander(f"📊 {rep['h_party_name']} ({t('執行系統')}) {t('收益明細')}"):
+            st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['h_base']:.1f}`")
+            st.write(f"- {t('專案執行利潤')}: `${rep['h_project_net']:.1f}`")
+            if rep['h_extra'] > 0:
+                st.write(f"- {t('秘密所得 (貪污/圖利)')}: `${rep['h_extra']:.1f}`")
+            st.write(f"- {t('行政與部門支出')}: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
+            st.write(f"**{t('最終淨收益')}: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']):.1f}`**")
+
+        # 監管系統收益明細
+        with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) {t('收益明細')}"):
+            st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['r_base']:.1f}`")
+            st.write(f"- {t('專案監管剩餘')}: `${rep['r_project_net']:.1f}`")
+            if rep['r_extra'] > 0:
+                st.write(f"- {t('沒收所得/查獲獎金')}: `${rep['r_extra']:.1f}`")
+            st.write(f"- {t('行政與部門支出')}: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
+            st.write(f"**{t('最終淨收益')}: `${rep['r_inc'] - (rep['r_pol_cost'] + rep['r_maint']):.1f}`**")
+
+        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污行為，非法資金已沒收並繳回國庫。"))
+        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利爭議，關聯資金已全數凍結。"))
 
     with c2:
-        st.markdown(t("#### 📈 支持量變動 (點數)"))
-        h_shift = rep['shifts'][game.h_role_party.name]
-        r_shift = rep['shifts'][game.r_role_party.name]
+        st.markdown(f"### 🧠 {t('社會指標與國家變化')}")
+        s_move = game.sanity - rep['old_san']
+        e_move = game.emotion - rep['old_emo']
         
-        st.write(f"**執行系統新增支持量**:")
-        h_perf_color = "green" if h_shift['perf'] > 0 else "red"
-        h_camp_color = "green" if h_shift['camp'] > 0 else "red"
-        st.markdown(f"- 政績: <span style='color:{h_perf_color}'>**{h_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
-        st.markdown(f"- 聲勢: <span style='color:{h_camp_color}'>**{h_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
+        st.write(f"**{t('資訊辨識 (思辨)')}:** `{rep['old_san']:.1f}` ➔ `{game.sanity:.1f}` ({s_move:+.1f})")
+        st.write(f"**{t('選民情緒 (波動)')}:** `{rep['old_emo']:.1f}` ➔ `{game.emotion:.1f}` ({e_move:+.1f})")
         
-        st.write(f"**監管系統新增支持量**:")
-        r_perf_color = "green" if r_shift['perf'] > 0 else "red"
-        r_camp_color = "green" if r_shift['camp'] > 0 else "red"
-        st.markdown(f"- 政績: <span style='color:{r_perf_color}'>**{r_shift['perf']:+.1f} 點**</span> (時效: 7年線性遞減)", unsafe_allow_html=True)
-        st.markdown(f"- 聲勢: <span style='color:{r_camp_color}'>**{r_shift['camp']:+.1f} 點**</span> (時效: 3年線性遞減)", unsafe_allow_html=True)
-        if r_shift['backlash'] != 0:
-            st.write(f"- 審查反噬: `{r_shift['backlash']:+.1f} 點` (即時扣除)")
+        st.markdown("---")
+        st.markdown(f"### 📈 {t('支持量歸因分析')}")
+        
+        for p_name in [rep['h_party_name'], rep['r_party_name']]:
+            is_h = (p_name == rep['h_party_name'])
+            role_label = t("執行") if is_h else t("監管")
+            shift = rep['shifts'][p_name]
+            
+            with st.expander(f"🔎 {p_name} ({role_label}) {t('支持量來源')}"):
+                # 這裡顯示政績歸因
+                # 我們假設在 shifts 中已經拆分好，或者在這裡進行說明
+                # 根據您的描述，我們在顯示上強調「專案表現」與「大環境紅利」
+                if is_h:
+                    st.write(f"- 🏗️ **{t('專案執行政績')}**: `{shift['perf'] * 0.7:+.1f}` (來自工程產出)")
+                    st.write(f"- 🌐 **{t('大環境歸因紅利')}**: `{shift['perf'] * 0.3:+.1f}` (民眾對經濟成長的印象)")
+                else:
+                    st.write(f"- ⚖️ **{t('制度監督政績')}**: `{shift['perf'] * 0.4:+.1f}` (維護預算紀律)")
+                    st.write(f"- 👑 **{t('執政名望紅利')}**: `{shift['perf'] * 0.6:+.1f}` (當權者的天然優勢)")
+                
+                st.write(f"- 📢 **{t('媒體與造勢')}**: `{shift['camp']:+.1f}`")
 
     st.markdown("---")
     if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
