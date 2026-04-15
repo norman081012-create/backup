@@ -64,7 +64,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     my_roi = o_h_roi if my_is_h_in_sim else o_r_roi
     opp_roi = o_r_roi if my_is_h_in_sim else o_h_roi
     
-    # 在預覽時帶入當前的媒體數值
     cramming_factor = max(0.0, (50.0 - game.sanity) / 100.0) 
     emo_factor = game.emotion / 100.0
     media_multiplier = max(0.1, 1.0 + cramming_factor + emo_factor)
@@ -75,13 +74,14 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     sim_judicial_lvl = float(ra.get('judicial_lvl', 0.0))
     h_censor_penalty = max(0.1, 1.0 - (sim_judicial_lvl / 100.0)) 
     
-    h_media_pwr = float(ha.get('media', 0.0)) * (sim_h_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-    r_media_pwr = float(ra.get('media', 0.0)) * (sim_r_party.media_ability / 10.0) * media_multiplier
+    pr_mult = cfg.get('PR_EFFICIENCY_MULT', 3.0)
+    h_media_pwr = float(ha.get('media', 0.0)) * pr_mult * (sim_h_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+    r_media_pwr = float(ra.get('media', 0.0)) * pr_mult * (sim_r_party.media_ability / 10.0) * media_multiplier
     
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
-        cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net'],
+        cl_decay, game.sanity, game.emotion, bid_cost, res['c_net'],
         h_media_pwr, r_media_pwr
     )
     
@@ -98,11 +98,10 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
     def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
 
-    # 🚀 確認 ROI 顯示存在
     st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
     st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
     
-    # 🚀 簡潔乾淨的支持度顯示
+    # 🚀 乾淨無標籤的點數顯示
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} | 專案: {my_proj_perf:+.1f})*")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} | 專案: {opp_proj_perf:+.1f})*")
