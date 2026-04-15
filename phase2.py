@@ -40,7 +40,7 @@ def render(game, view_party, opponent_party, cfg):
         last_judicial = min(float(view_party.last_acts.get('judicial', 0.0)), cw)
         
         if is_h:
-            st.markdown("##### 🕵️ 檯面下操作 (高風險)")
+            st.markdown("##### 🕵️ 檯面下操作 (線性查扣制)")
             my_stl_pct = view_party.stealth_ability / 10.0
             opp_inv_obs = ui_core.get_observed_abilities(view_party, opponent_party, game, cfg)['investigate'] / 10.0
             est_catch_mult = max(0.1, (opp_inv_obs * cfg['R_INV_BONUS']) - my_stl_pct + 1.0)
@@ -48,29 +48,34 @@ def render(game, view_party, opponent_party, cfg):
             last_corr = min(float(view_party.last_acts.get('corr_amt', 0.0)), proj_fund)
             h_corr_amt = st.slider(t("💸 秘密貪污 ($)", "💸 Secret Corruption ($)"), 0.0, proj_fund, last_corr, 1.0)
             
-            catch_rate_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
-            adj_corr_amt = h_corr_amt / (1.0 + inflation)
-            est_prob_corr = (1.0 - (1.0 - catch_rate_dollar)**(adj_corr_amt * est_catch_mult)) * 100
+            # 🚀 顯示預期查扣比例與淨利 (貪污)
+            corr_catch_ratio = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * est_catch_mult)
+            est_caught_amt = h_corr_amt * corr_catch_ratio
+            est_fine = est_caught_amt * cfg.get('CORRUPTION_FINE_MULT', 0.4)
+            est_net_corr = h_corr_amt - est_caught_amt - est_fine
             
-            risk_color = "red" if est_prob_corr > 50 else "orange" if est_prob_corr > 20 else "green"
-            st.caption(f"*(⚠️ 智庫預估曝光率: <span style='color:{risk_color}'>`{est_prob_corr:.1f}%`</span> | 經通膨矯正實質金額: `{adj_corr_amt:.1f}`)*", unsafe_allow_html=True)
+            risk_color = "red" if corr_catch_ratio > 0.5 else "orange" if corr_catch_ratio > 0.2 else "green"
+            st.caption(f"*(⚠️ 預期查扣損失率: <span style='color:{risk_color}'>`{corr_catch_ratio*100:.1f}%`</span> | 預估淨賺: `${est_net_corr:.1f}`)*", unsafe_allow_html=True)
             
             max_crony = max(0.0, proj_fund - h_corr_amt)
             last_crony = min(float(view_party.last_acts.get('crony_amt', 0.0)), max_crony)
             h_crony_amt = st.slider(t("🏢 圖利自身廠商 ($)", "🏢 Cronyism ($)"), 0.0, max_crony, last_crony, 1.0)
             
-            crony_pct = (h_crony_amt / max(1.0, proj_fund)) * 100.0 if proj_fund > 0 else 0.0
-            crony_rate_pct = cfg.get('CRONY_CATCH_RATE_PER_PERCENT', 0.01)
-            est_prob_crony = (1.0 - (1.0 - crony_rate_pct)**(crony_pct * est_catch_mult)) * 100
-            risk_color_c = "red" if est_prob_crony > 50 else "orange" if est_prob_crony > 20 else "green"
-            st.caption(f"*(⚠️ 智庫預估曝光率: <span style='color:{risk_color_c}'>`{est_prob_crony:.1f}%`</span> | 預期回扣: `${h_crony_amt * 0.1:.1f}`)*", unsafe_allow_html=True)
+            # 🚀 顯示預期查扣比例與淨利 (圖利)
+            crony_catch_ratio = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * est_catch_mult)
+            est_crony_caught_base = h_crony_amt * crony_catch_ratio
+            est_crony_profit = (h_crony_amt - est_crony_caught_base) * cfg.get('CRONY_PROFIT_RATE', 0.2)
+            est_crony_fine = est_crony_caught_base * (cfg.get('CRONY_PROFIT_RATE', 0.2) + 0.5) # 吐回利潤 + 0.5罰款 = 0.7倍合約值
+            est_net_crony = est_crony_profit - est_crony_fine
+            
+            risk_color_c = "red" if crony_catch_ratio > 0.5 else "orange" if crony_catch_ratio > 0.2 else "green"
+            st.caption(f"*(⚠️ 預期合約查扣率: <span style='color:{risk_color_c}'>`{crony_catch_ratio*100:.1f}%`</span> | 預估淨賺: `${est_net_crony:.1f}`)*", unsafe_allow_html=True)
 
         else:
             st.markdown("##### 🎓 意識形態與社會控制")
             judicial_amt = st.slider(t("⚖️ 媒體審查 (投入資金)(打壓對手黨媒，依對手支持度反噬自身)", "⚖️ Media Censorship"), 0.0, cw, last_judicial)
             
             new_edu = st.slider(t("🎓 教育方針 (左: 極端填鴨 | 右: 極端思辨)", "🎓 Education Policy"), -100.0, 100.0, float(view_party.edu_stance), 1.0)
-            # 🚀 修正：微調轉型與維護費，拉開與部門擴編的差距
             edu_shift_cost = abs(new_edu - view_party.edu_stance) * 1.5
             edu_maint_cost = abs(new_edu) * 0.5
             st.caption(f"🔄 路線轉型花費: `${edu_shift_cost:.1f}` | 🛠️ 常態維護費: `${edu_maint_cost:.1f}`/年")
@@ -98,7 +103,6 @@ def render(game, view_party, opponent_party, cfg):
         t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護貪污，干擾對手觀測)", "Counter-Intel"), f"up_stl_{view_party.name}_{game.year}", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
         t_bld, c_bld = ui_core.ability_slider(t("工程處 (降升級成本，提升建設效率)", "Engineering"), f"up_bld_{view_party.name}_{game.year}", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
-    # 🚀 修正核心機制：法定專案承諾款 (req_pay) 不再扣除當前現金 (cw)，而是改由 Phase 3 年底從次年收益預扣！
     tot_action = float(media_ctrl) + float(camp_amt) + float(incite_emo) + float(judicial_amt) + float(edu_shift_cost)
     tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld) + float(edu_maint_cost)
     tot_spending_now = tot_action + tot_maint
@@ -127,9 +131,8 @@ def render(game, view_party, opponent_party, cfg):
     corr_val = float(h_corr_amt) if is_h else 0.0
     crony_val = float(h_crony_amt) if is_h else 0.0
     orig_corr_amt = corr_val
-    orig_crony_income = crony_val * 0.1
+    orig_crony_income = crony_val * cfg.get('CRONY_PROFIT_RATE', 0.2)
     
-    # 預估次年基礎底薪，以便試算會不會爛尾
     h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     expected_h_wealth = cw - tot_spending_now + h_base_expected if is_h else float(game.h_role_party.wealth)
     
