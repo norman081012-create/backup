@@ -55,9 +55,10 @@ def render(game, view_party, opponent_party, cfg):
         incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)", "🔥 Incite Emotion (Reduces sanity short-term)"), 0.0, cw, last_incite)
         
     with c2:
-        st.markdown(t("#### 🔒 內部部門投資", "#### 🔒 Dept. Investment"))
-        
-        if st.button(t("🔄 全部回歸當前維護費 (放棄升級)", "🔄 Reset to Current Maintenance"), use_container_width=True):
+        # 🚀 修正：將放棄升級按鈕塞在標題右方
+        c_dept1, c_dept2 = st.columns([0.65, 0.35])
+        c_dept1.markdown(t("#### 🔒 內部部門投資", "#### 🔒 Dept. Investment"))
+        if c_dept2.button(t("🔄 放棄升級", "Reset to Current Maintenance"), use_container_width=True):
             st.session_state['up_pre'] = view_party.predict_ability * 10.0
             st.session_state['up_inv'] = view_party.investigate_ability * 10.0
             st.session_state['up_med'] = view_party.media_ability * 10.0
@@ -75,7 +76,6 @@ def render(game, view_party, opponent_party, cfg):
     tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld)
     tot = req_pay + tot_action + tot_maint
     
-    # 支援多語系的字串格式化
     legal_str = t("法定專案款:", "Legal Project Funds:")
     policy_str = t("政策與媒體:", "Policy & Media:")
     dept_str = t("內部部門投資:", "Dept. Investment:")
@@ -114,7 +114,6 @@ def render(game, view_party, opponent_party, cfg):
     hp_net_est = h_base + res_prev['h_project_profit'] + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
-    # 🚀 支援度 2.0 更新：呼叫新的預覽函式
     shift_preview = formulas.calc_performance_preview(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
         res_prev['est_gdp'], game.gdp, 
