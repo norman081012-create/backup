@@ -10,30 +10,26 @@ t = i18n.t
 
 def render_formula_panel(game, view_party, cfg):
     with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)"), expanded=False):
-        # 1. 抓取數據源
+        # ... (前段抓取資料邏輯相同，保留不變) ...
         plan = None
         is_selected = False
         
-        # 判定當前數據來源
         if game.phase == 1:
             if getattr(game, 'p1_selected_plan', None):
                 plan = game.p1_selected_plan
                 is_selected = True
             else:
-                # 抓取目前正在操作角色的草案（R 或 H）
                 active_role = 'R' if game.p1_step in ['draft_r', 'ultimatum_draft_r'] else 'H'
                 plan = game.p1_proposals.get(active_role)
         elif game.phase >= 2:
             plan = st.session_state.get('turn_data')
             is_selected = True
 
-        # 定義狀態標籤
-        TAG_EST = " (估)"  # 估值 (來自智庫)
-        TAG_TMP = " (暫)"  # 暫時 (提案階段草稿)
-        TAG_CFM = " (確)"  # 已確認 (已三讀通過或現有資產)
-        TAG_CON = " (常)"  # 常數 (系統固定參數)
+        TAG_EST = " (估)"  
+        TAG_TMP = " (暫)"  
+        TAG_CFM = " (確)"  
+        TAG_CON = " (常)"  
 
-        # 基礎參數抓取
         gdp_val = game.gdp
         gdp_str = f"{gdp_val:.1f}{TAG_CFM}"
         
@@ -46,7 +42,6 @@ def render_formula_panel(game, view_party, cfg):
         h_wealth_val = game.h_role_party.wealth
         h_wealth_str = f"{h_wealth_val:.1f}{TAG_CFM}"
 
-        # 標案動態數據判定
         plan_tag = TAG_CFM if is_selected else TAG_TMP
         
         def get_val(key, fmt=".1f"):
@@ -70,15 +65,23 @@ def render_formula_panel(game, view_party, cfg):
             st.write(f"- 監管出資: `{r_pays_s}`")
 
         st.markdown("---")
+        # 🚀 支援度 2.0 新增公式說明
+        st.markdown("### 🧮 支持度演算法 (Support Engine 2.0)")
+        st.markdown("**1. 規劃政績 (大環境紅利)** - *絕對落差模型與預期權重*")
+        st.latex(r"P_{plan} = \Delta A + (\Delta A - \Delta E) \times W_{exp}")
+        st.markdown("**2. 執行政績 (專案苦勞)** - *強制綁定大環境絕對規模*")
+        st.latex(r"P_{exec} = |P_{plan}| \times \left(\frac{C_{actual}}{C_{target}} - 1\right)")
+        st.markdown("**3. 彈藥與版圖推移** - *200人 U型陣列攻堅*")
+        st.latex(r"WinProb = 1.0 - Rigidity(target\_index)")
+
+        st.markdown("---")
         st.markdown("### 🧮 核心經濟公式拆解")
 
-        # 1. 經濟萎縮量
         st.markdown("**1. 預期經濟萎縮量 (Expected Economic Loss)**")
         st.latex(r"Loss = GDP \times (Decay \times 0.05 + 0)")
         loss_v = gdp_val * (decay_val * 0.05)
         st.write(f"> **計算**: `{gdp_str}` × (`{decay_str}` × `0.05{TAG_CON}` + `0{TAG_CON}`) = **{loss_v:.2f}**")
 
-        # 2. 單位建設成本
         st.markdown("**2. 單位工程成本 (Unit Construction Cost)**")
         st.latex(r"Cost = \frac{0.5}{Build / 10} \times 2^{(2 \times Decay - 1)} \times (1 + Inflation)")
         
@@ -87,12 +90,10 @@ def render_formula_panel(game, view_party, cfg):
         unit_cost_v = (0.5 / b_norm) * (2 ** (2 * decay_val - 1)) * (1 + inflation)
         st.write(f"> **計算**: (0.5 / `{build_val/10:.2f}{TAG_CFM}`) × 2^(2 × `{decay_val:.3f}{TAG_EST}` - 1) × (1 + `{inflation:.2f}通膨{TAG_CON}`) = **{unit_cost_v:.2f}**")
 
-        # 3. 資金檢驗與 GDP 結算
         st.markdown("**3. 專案執行力與最終 GDP 預測**")
         st.latex(r"Required = BidCost \times UnitCost")
         st.latex(r"Available = ProjFund + RPays + HWealth")
         
-        # 判定是否足以計算
         can_calc = all(v is not None for v in [proj_fund_v, bid_cost_v, r_pays_v])
         
         if can_calc:
@@ -108,7 +109,6 @@ def render_formula_panel(game, view_party, cfg):
                 st.error(f"❌ 資金缺口 (Available {avail_v:.1f} < Required {req_v:.1f})，計畫將依比例爛尾。")
                 c_net = avail_v / unit_cost_v
             
-            # GDP 預測
             st.latex(r"GDP_{new} = GDP_{old} - Loss + (C_{net} \times 0.2)")
             new_gdp = gdp_val - loss_v + (c_net * 0.2)
             st.write(f"> **結算**: `{gdp_str}` - `{loss_v:.2f}` + (`{c_net:.2f}{TAG_EST}` × `0.2{TAG_CON}`) = **{new_gdp:.2f}**")
