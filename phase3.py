@@ -17,6 +17,19 @@ def render(game, cfg):
         ha = st.session_state.get(f"{hp.name}_acts", {})
         d = st.session_state.get('turn_data', {})
         
+        # 🚀 升級能力賦值：確保本回合的內部投資正式產生效果
+        if 't_pre' in ra: rp.predict_ability = float(ra['t_pre'])
+        if 't_inv' in ra: rp.investigate_ability = float(ra['t_inv'])
+        if 't_med' in ra: rp.media_ability = float(ra['t_med'])
+        if 't_stl' in ra: rp.stealth_ability = float(ra['t_stl'])
+        if 't_bld' in ra: rp.build_ability = float(ra['t_bld'])
+        
+        if 't_pre' in ha: hp.predict_ability = float(ha['t_pre'])
+        if 't_inv' in ha: hp.investigate_ability = float(ha['t_inv'])
+        if 't_med' in ha: hp.media_ability = float(ha['t_med'])
+        if 't_stl' in ha: hp.stealth_ability = float(ha['t_stl'])
+        if 't_bld' in ha: hp.build_ability = float(ha['t_bld'])
+        
         returned_to_r = 0.0
         confiscated_to_budget = 0.0
         corr_caught = False
@@ -76,7 +89,6 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # 🚀 修正：正確呼叫 generate_raw_support
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
         plan_correct, plan_wrong, correct_prob = formulas.apply_sanity_filter(raw_p_plan, game.sanity, game.emotion, is_preview=False)
@@ -106,7 +118,8 @@ def render(game, cfg):
 
         net_ammo_A = ammo_A - ammo_B
         old_boundary = game.boundary_B
-        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A)
+        # 🚀 將 sanity 帶入陣列推移，反映填鴨度
+        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity)
         
         game.boundary_B = new_boundary
         game.party_A.support = new_boundary * 0.5
@@ -199,7 +212,6 @@ def render(game, cfg):
         st.markdown("---")
         st.markdown(f"### ⚔️ 支持度影響結算")
         
-        # 🚀 修正：彈藥字眼全面替換為政績與支持量，並將明確的裝甲判定隱藏在 God Mode 中
         if st.session_state.get('god_mode'):
             st.caption(f"*(👁️ 上帝視角 | 大環境規劃政績: `{rep['raw_p_plan']/cfg['AMMO_MULTIPLIER']:+.2f}` | 執行政績: `{rep['raw_p_exec']/cfg['AMMO_MULTIPLIER']:+.2f}`)*")
         
@@ -230,6 +242,12 @@ def render(game, cfg):
         else:
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
+            
+            # 🚀 確保每年剛開始時，監管系統必定是「上次勝選黨 (Ruling Party)」
+            game.r_role_party = game.ruling_party
+            game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
+            game.proposing_party = game.r_role_party
+            
             for k in list(st.session_state.keys()):
                 if k.endswith('_acts'): del st.session_state[k]
             if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
