@@ -1,266 +1,221 @@
 # ==========================================
-# phase3.py
-# 負責 第三階段 (年度總結算報告與視覺化)
+# phase1.py
 # ==========================================
 import streamlit as st
-import random
 import formulas
+import engine
+import ui_core
+import ui_proposal  
 import i18n
 t = i18n.t
 
-def render(game, cfg):
-    st.header(t("⚖️ Phase 3: 年度結算報告"))
+def render(game, view_party, cfg):
+    penalty_amt = int(game.total_budget * cfg['TRUST_BREAK_PENALTY_RATIO'])
+    st.subheader(t(f"🤝 Phase 1: 監管系統委託執行系統建設提案 (輪數: {game.proposal_count})", f"🤝 Phase 1: R-System Proposal (Round: {game.proposal_count})"))
     
-    if not game.last_year_report:
-        rp, hp = game.r_role_party, game.h_role_party
-        ra = st.session_state.get(f"{rp.name}_acts", {})
-        ha = st.session_state.get(f"{hp.name}_acts", {})
-        d = st.session_state.get('turn_data', {})
+    if game.p1_step in ['draft_r', 'draft_h', 'ultimatum_draft_r']:
+        active_role = 'R' if game.p1_step in ['draft_r', 'ultimatum_draft_r'] else 'H'
         
-        if 't_pre' in ra: rp.predict_ability = float(ra['t_pre'])
-        if 't_inv' in ra: rp.investigate_ability = float(ra['t_inv'])
-        if 't_med' in ra: rp.media_ability = float(ra['t_med'])
-        if 't_stl' in ra: rp.stealth_ability = float(ra['t_stl'])
-        if 't_bld' in ra: rp.build_ability = float(ra['t_bld'])
-        if 'edu_stance' in ra: rp.edu_stance = float(ra['edu_stance'])
-        
-        if 't_pre' in ha: hp.predict_ability = float(ha['t_pre'])
-        if 't_inv' in ha: hp.investigate_ability = float(ha['t_inv'])
-        if 't_med' in ha: hp.media_ability = float(ha['t_med'])
-        if 't_stl' in ha: hp.stealth_ability = float(ha['t_stl'])
-        if 't_bld' in ha: hp.build_ability = float(ha['t_bld'])
-        if 'edu_stance' in ha: hp.edu_stance = float(ha['edu_stance'])
-        
-        returned_to_r = 0.0
-        confiscated_to_budget = 0.0
-        hp_wealth_penalty = 0.0
-        corr_caught = False
-        crony_caught = False
-        
-        proj_fund = float(d.get('proj_fund') or 0.0)
-        bid_cost = float(d.get('bid_cost') or 1.0)
-        claimed_decay = float(d.get('claimed_decay') or 0.0)
-        r_pays = float(d.get('r_pays') or 0.0)
-        h_pays = float(d.get('h_pays') or 0.0)
-        
-        h_tot_action = float(ha.get('tot_action') or 0)
-        r_tot_action = float(ra.get('tot_action') or 0)
-        h_tot_maint = float(ha.get('tot_maint') or 0)
-        r_tot_maint = float(ra.get('tot_maint') or 0)
-        
-        corr_amt = float(ha.get('corr_amt') or 0.0)
-        crony_base = float(ha.get('crony_amt') or 0.0)
-        
-        rp_inv_pct = rp.investigate_ability / 10.0
-        hp_stl_pct = hp.stealth_ability / 10.0
-        actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
-        
-        # 🚀 1. 貪污結算 (線性模型)
-        corr_catch_ratio = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * actual_catch_mult)
-        caught_corr = corr_amt * corr_catch_ratio
-        kept_corr = corr_amt - caught_corr
-        
-        # 罰款：被查獲部分的 0.4 倍
-        corr_fine = caught_corr * cfg.get('CORRUPTION_FINE_MULT', 0.4)
-        
-        if caught_corr > 0:
-            returned_to_r += (caught_corr + corr_fine) * 0.2
-            confiscated_to_budget += (caught_corr + corr_fine) * 0.8
-            corr_caught = True
-        
-        # 🚀 2. 圖利結算 (線性模型 + 0.2利潤)
-        crony_catch_ratio = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * actual_catch_mult)
-        caught_crony_base = crony_base * crony_catch_ratio
-        kept_crony_base = crony_base - caught_crony_base
-        
-        crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
-        crony_profit = kept_crony_base * crony_profit_rate
-        
-        # 罰款：繳回圖利金 (0.2) + 0.5倍罰款 = 查獲合約的 0.7 倍
-        crony_fine = caught_crony_base * (crony_profit_rate + 0.5)
-        
-        if caught_crony_base > 0:
-            returned_to_r += crony_fine * 0.2
-            confiscated_to_budget += crony_fine * 0.8
-            crony_caught = True
-        
-        hp_wealth_penalty = corr_fine + crony_fine
-        total_dirty_income = kept_corr + crony_profit
+        if game.p1_step == 'ultimatum_draft_r':
+            st.error(t("🚨 **最後通牒啟動中：** 監管系統必須擬定最終裁決草案！", "🚨 **Ultimatum Active:** R-System must draft final resolution!"))
             
-        hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
-        rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
-        
-        # 結算可動用資金 (包含預期的基礎撥款，用來扛法定專案款)
-        actual_h_wealth_available = max(0.0, hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty + hp_base)
-        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=actual_h_wealth_available)
-        budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
-        
-        hp_project_net = res_exec['h_project_profit']
-        rp_project_net = res_exec['payout_r'] - r_pays
-        
-        hp_inc = hp_base + hp_project_net + total_dirty_income
-        rp_inc = rp_base + rp_project_net + returned_to_r
-        
-        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
-        
-        plan_correct, plan_wrong, correct_prob = formulas.apply_sanity_filter(raw_p_plan, game.sanity, game.emotion, is_preview=False)
-        exec_correct, exec_wrong, _ = formulas.apply_sanity_filter(raw_p_exec, game.sanity, game.emotion, is_preview=False)
-        
-        ammo_A = 0.0; ammo_B = 0.0
-        ruling_name = game.ruling_party.name
-
-        if ruling_name == game.party_A.name: ammo_A += plan_correct; ammo_B += plan_wrong
-        else: ammo_B += plan_correct; ammo_A += plan_wrong
-
-        if hp.name == game.party_A.name: ammo_A += exec_correct; ammo_B += exec_wrong
-        else: ammo_B += exec_correct; ammo_A += exec_wrong
+        if view_party.name != (game.r_role_party.name if active_role == 'R' else game.h_role_party.name):
+            st.warning(t(f"⏳ 等待對手公布草案...", f"⏳ Waiting for opponent's draft..."))
+        else:
+            role_text_zh = '監管系統' if active_role == 'R' else '執行系統'
+            role_text_en = 'R-System' if active_role == 'R' else 'H-System'
             
-        h_media = hp.media_ability / 10.0; r_media = rp.media_ability / 10.0
-        camp_A = (float(ha.get('camp', 0)) if hp.name == game.party_A.name else float(ra.get('camp', 0))) * (h_media if hp.name == game.party_A.name else r_media) * 0.5
-        camp_B = (float(ha.get('camp', 0)) if hp.name == game.party_B.name else float(ra.get('camp', 0))) * (h_media if hp.name == game.party_B.name else r_media) * 0.5
+            c_title, c_btn = st.columns([0.8, 0.2])
+            with c_title:
+                st.markdown(t(f"#### 📝 {view_party.name} ({role_text_zh}黨) 草案擬定室", f"#### 📝 {view_party.name} ({role_text_en}) Draft Room"))
+            
+            opp_role = 'H' if active_role == 'R' else 'R'
+            opp_plan = game.p1_proposals.get(opp_role)
+            
+            input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
+            input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
+            widget_decay_key = f"num_{input_decay_key}"
+            widget_cost_key = f"num_{input_cost_key}"
+            
+            obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
+            tt_decay = float(view_party.current_forecast)
+            suggested_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
+            tt_cost = round(suggested_unit_cost, 2)
+            
+            if widget_decay_key not in st.session_state: st.session_state[widget_decay_key] = tt_decay
+            if widget_cost_key not in st.session_state: st.session_state[widget_cost_key] = tt_cost
 
-        ammo_A += camp_A; ammo_B += camp_B
+            with c_btn:
+                if st.button(t("🔄 帶入情報", "🔄 Auto-Fill"), use_container_width=True):
+                    st.session_state[widget_decay_key] = tt_decay
+                    st.session_state[widget_cost_key] = tt_cost
+                    st.rerun()
 
-        net_ammo_A = ammo_A - ammo_B
-        old_boundary = game.boundary_B
-        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity)
-        
-        game.boundary_B = new_boundary
-        game.party_A.support = new_boundary * 0.5
-        game.party_B.support = 100.0 - game.party_A.support
-        
-        gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
-        emotion_delta = (float(ha.get('incite') or 0) + float(ra.get('incite') or 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
-        new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
-        
-        f_target_san = max(0.0, min(100.0, 50.0 + (ha.get('edu_stance', 0) + ra.get('edu_stance', 0)) * 0.5))
-        f_san_move = (f_target_san - game.sanity) * 0.2
-        new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
-        
-        total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
-        
-        game.last_year_report = {
-            'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
-            'new_san': new_sanity, 'new_emo': new_emotion,
-            'h_party_name': hp.name, 'r_party_name': rp.name,
-            'raw_p_plan': raw_p_plan, 'raw_p_exec': raw_p_exec,
-            'ammo_A': ammo_A, 'ammo_B': ammo_B, 'net_ammo_A': net_ammo_A,
-            'old_boundary': old_boundary, 'new_boundary': new_boundary, 'used_ammo': used_ammo, 'conquered': conquered,
-            'correct_prob': correct_prob,
-            'h_inc': hp_inc, 'r_inc': rp_inc, 
-            'h_base': hp_base, 'r_base': rp_base, 
-            'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
-            'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
-            'h_extra': total_dirty_income, 'r_extra': returned_to_r,
-            'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
-            'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
-            'hp_penalty': hp_wealth_penalty,
-            'corr_caught': corr_caught, 'crony_caught': crony_caught,
-            'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 'total_bonus_deduction': total_bonus_deduction
-        }
-        
-        game.gdp = res_exec['est_gdp']
-        game.sanity = new_sanity
-        game.emotion = new_emotion
-        game.h_fund = res_exec['payout_h']
-        game.total_budget = budg + confiscated_to_budget
-        
-        hp.wealth += hp_inc - h_tot_action - h_tot_maint - hp_wealth_penalty
-        rp.wealth += rp_inc - r_tot_action - r_tot_maint
+            # 🚀 僅監管系統可以設定年度司法罰鍰倍率
+            if active_role == 'R':
+                st.markdown("##### ⚖️ 司法罰鍰設定 (僅監管系統設定)")
+                fine_mult = st.slider(t("設定本年度違規(貪污/圖利)的國庫罰金倍數", "Set penalty multiplier for corruption/cronyism"), 0.0, 5.0, 0.3, 0.1)
+                st.caption(f"*(若執行系統被查獲違規，除全額沒收違規金移交監管方外，還需從黨產額外支付違規本金的 `{fine_mult}` 倍罰金給國庫)*")
+            else:
+                fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
+                st.info(f"⚖️ 監管系統本年度設定的司法罰金倍數為：**{fine_mult} 倍**")
 
-        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
-        if is_election_end:
-            winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
-            game.ruling_party = winner
-
-        hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
-        game.record_history(is_election=is_election_end)
-    
-    rep = game.last_year_report
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"### 💰 {t('經濟與財政結算')}")
-        st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
-        
-        with st.expander(f"📊 {rep['h_party_name']} ({t('執行系統')}) 專案與收益明細"):
-            st.write(f"- 📥 領取計畫獎勵金: `${rep['payout_h']:.1f}`")
-            st.write(f"- 📥 收取監管方補貼: `${rep['r_pays']:.1f}`")
-            st.write(f"- 📤 實際工程款支出: `-${rep['act_fund']:.1f}`")
-            st.write(f"**= 專案結算淨盈虧: `${rep['h_project_net']:.1f}`**")
             st.markdown("---")
-            st.write(f"- 基礎撥款 (含執政紅利): `${rep['h_base']:.1f}`")
-            if rep['h_extra'] > 0:
-                st.write(f"- 秘密所得 (洗白後貪污/圖利): `${rep['h_extra']:.1f}`")
-            if rep.get('hp_penalty', 0) > 0:
-                st.write(f"- 🚨 查扣罰金 (繳納國庫與對手): `-${rep['hp_penalty']:.1f}`")
-            st.write(f"- 政策行動與部門支出: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
-            st.write(f"**💰 最終總淨現金流: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']) - rep.get('hp_penalty', 0):.1f}`**")
 
-        with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) 結餘與收益明細"):
-            st.write(f"- 基礎撥款 (含執政紅利): `${rep['r_base']:.1f}`")
-            st.write(f"- 📤 支付監管補貼: `-${rep['r_pays']:.1f}`")
-            unspent_proj = rep['proj_fund'] * (1.0 - rep['h_idx'])
-            st.write(f"- 📥 未執行專案款繳回: `${unspent_proj:.1f}`")
-            base_r_surplus = rep['old_budg'] - rep['total_bonus_deduction'] - rep['proj_fund']
-            st.write(f"- 📥 監管預算結餘: `${max(0.0, base_r_surplus):.1f}`")
-            if rep['r_extra'] > 0:
-                st.write(f"- 🏆 查獲貪污對手賠償金: `${rep['r_extra']:.1f}`")
-            st.write(f"- 政策行動與部門支出: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
-            st.write(f"**💰 最終總淨現金流: `${rep['r_inc'] - (rep['r_pol_cost'] + rep['r_maint']):.1f}`**")
+            c_ann1, c_ann2 = st.columns(2)
+            with c_ann1:
+                opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
+                opp_txt1 = t(f"對手公告: {opp_claimed_decay:.3f}", f"Opp. Claimed: {opp_claimed_decay:.3f}") if opp_claimed_decay is not None else t("等待對手公告", "Awaiting Opp.")
+                
+                current_val = st.session_state.get(widget_decay_key, tt_decay)
+                conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
+                gdp_loss = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
+                req_infra_to_balance = gdp_loss / conv_rate
+                
+                st.markdown(t(f"**公告衰退值 (當前公告: {current_val:.3f}) (相當於 {req_infra_to_balance:.1f} 建設量)** | {opp_txt1}"))
+                claimed_decay = st.number_input("公告衰退值", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
+                st.session_state[input_decay_key] = claimed_decay
+                
+            with c_ann2:
+                opp_claimed_cost = opp_plan.get('claimed_cost') if opp_plan else None
+                opp_txt2 = t(f"對手公告: {opp_claimed_cost:.2f}", f"Opp. Claimed: {opp_claimed_cost:.2f}") if opp_claimed_cost is not None else t("等待對手公告", "Awaiting Opp.")
+                st.markdown(t(f"**公告建設單價 (當前公告: {st.session_state.get(widget_cost_key, tt_cost):.2f})** | {opp_txt2}"))
+                claimed_cost = st.number_input("公告建設單價", step=0.01, key=widget_cost_key, label_visibility="collapsed")
+                st.session_state[input_cost_key] = claimed_cost
+            
+            max_budget = max(10.0, float(game.total_budget))
+            
+            def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
+            def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
+            def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
+            
+            proj_fund = st.slider(t("計畫獎勵金 (執行方100%完成計畫之獎勵金，最高不超過當年總預算)", "Total Plan Reward (Max=Budget)"), 0.0, max_budget, def_proj, 10.0)
+            bid_cost = st.slider(t("計畫總效益 (計畫100%完成時產生之建設量)", "Plan Total Benefit (Construction Volume)"), 0.0, max_budget * 1.5, def_bid, 10.0)
+            r_pays = st.slider(t("💰 監管出資額 (從監管方預算中支付的補貼)", "💰 R-Pays"), 0.0, max_budget, def_rpays, 10.0)
+            
+            req_cost = bid_cost * claimed_cost
+            h_pays = req_cost - r_pays
+            
+            is_invalid = False
+            warning_msg = ""
+            if proj_fund <= 0:
+                is_invalid = True; warning_msg = t("⚠️ 異常：獎勵金必須大於 0！", "⚠️ Error: Reward must be > 0!")
+            elif bid_cost <= 0:
+                is_invalid = True; warning_msg = t("⚠️ 異常：總效益必須大於 0！", "⚠️ Error: Benefit must be > 0!")
+            elif r_pays > req_cost:
+                is_invalid = True; warning_msg = t("⚠️ 異常：監管出資額不能大於出資總額！", "⚠️ Error: R-Pays cannot exceed Total Req. Cost!")
 
-        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污！非法資金全額賠償予監管方，執行方並遭裁罰 0.4 倍罰金入國庫。"))
-        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利廠商！執行方遭強制繳回全額圖利金，並追加 0.5 倍罰金入國庫。"))
+            r_pct = (r_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
+            h_pct = (h_pays / max(1.0, req_cost)) * 100 if req_cost > 0 else 0
+            
+            if is_invalid:
+                st.error(warning_msg)
+            else:
+                st.markdown(t(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>監管出資: {r_pays:.1f} ({r_pct:.1f}%)</span> / 出資總額: {req_cost:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>執行出資: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", f"<h4><span style='font-size: 1.2em'>R-Pays: {r_pays:.1f} ({r_pct:.1f}%)</span> / Req. Cost: {req_cost:.1f} / <span style='font-size: 1.2em'>H-Pays: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>"), unsafe_allow_html=True)
+            
+            plan_dict = {
+                'proj_fund': proj_fund, 'bid_cost': bid_cost, 
+                'r_pays': r_pays, 'h_pays': h_pays, 
+                'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
+                'author': active_role, 
+                'author_party': view_party.name,
+                'req_cost': req_cost,
+                'fine_mult': fine_mult # 🚀 寫入草案變數中
+            }
 
-    with c2:
-        st.markdown(f"### 🧠 {t('社會指標與選民變化')}")
-        s_move = game.sanity - rep['old_san']
-        e_move = game.emotion - rep['old_emo']
-        
-        st.write(f"**{t('資訊辨識 (思辨)')}:** `{rep['old_san']:.1f}` ➔ `{game.sanity:.1f}` ({s_move:+.1f})")
-        st.write(f"**{t('選民情緒 (波動)')}:** `{rep['old_emo']:.1f}` ➔ `{game.emotion:.1f}` ({e_move:+.1f})")
-        
-        st.markdown("---")
-        st.markdown(f"### ⚔️ 支持度影響結算")
-        
-        if st.session_state.get('god_mode'):
-            st.caption(f"*(👁️ 上帝視角 | 大環境規劃政績: `{rep['raw_p_plan']/cfg['AMMO_MULTIPLIER']:+.2f}` | 執行政績: `{rep['raw_p_exec']/cfg['AMMO_MULTIPLIER']:+.2f}`)*")
-        
-        st.caption(f"*(📡 今年度選民思辨正確歸因率: `{rep['correct_prob']*100:.1f}%`)*")
-        st.write(f"**{game.party_A.name} 總支持量:** `{rep['ammo_A']:.1f}` | **{game.party_B.name} 總支持量:** `{rep['ammo_B']:.1f}`")
-        
-        net_ammo = rep['net_ammo_A']
-        atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
-        def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
-        
-        if abs(net_ammo) < 1.0:
-            st.info("🤝 雙方支持量僵持不下，民意版圖無變化。")
+            st.markdown("<br>", unsafe_allow_html=True)
+            c_btn1, c_btn2, c_btn3 = st.columns(3)
+            if c_btn1.button(t("📤 送出常規草案", "📤 Submit Draft"), use_container_width=True, type="primary", disabled=is_invalid):
+                if game.p1_step == 'ultimatum_draft_r':
+                    game.p1_selected_plan = plan_dict; game.p1_step = 'ultimatum_resolve_h'; game.proposing_party = game.h_role_party
+                else:
+                    game.p1_proposals[active_role] = plan_dict
+                    if game.p1_step == 'draft_r': game.p1_step = 'draft_h'; game.proposing_party = game.h_role_party
+                    else: game.p1_step = 'voting_pick'; game.proposing_party = game.ruling_party
+                st.rerun()
+                
+            if active_role == 'R' and game.p1_step == 'draft_r':
+                if c_btn2.button(t("💥 發布最後通牒", "💥 Issue Ultimatum"), use_container_width=True, disabled=is_invalid):
+                    game.p1_selected_plan = plan_dict
+                    game.p1_step = 'ultimatum_resolve_h'
+                    game.proposing_party = game.h_role_party
+                    st.session_state.news_flash = t(f"🗞️ **【快訊】監管系統下達最後通牒！** {view_party.name} 逼迫執行系統必須接受此案，否則將引發倒閣！", f"🗞️ **[BREAKING] R-System Ultimatum!** {view_party.name} forces H-System to accept or trigger swap!")
+                    st.rerun()
+                
+                swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
+                if c_btn3.button(t(f"🔄 強制通過並換位\n(費用: 雙方各繳 {swap_cost:.1f} 予慈善團體)", f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
+                    st.session_state.turn_data.update(plan_dict)
+                    engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
+                    game.proposing_party = game.ruling_party; st.rerun()
+
+            if not is_invalid or opp_plan:
+                st.markdown("---")
+                c_prop1, c_prop2 = st.columns(2)
+                if not is_invalid:
+                    with c_prop1:
+                        ui_proposal.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
+                if opp_plan:
+                    with c_prop2:
+                        ui_proposal.render_proposal_component(t('📜 對手 (執行系統) 既有草案參考', '📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
+
+    elif game.p1_step == 'voting_pick':
+        st.markdown(t(f"### 🗳️ 執政黨定奪 ({game.ruling_party.name})", f"### 🗳️ Ruling Party Decision ({game.ruling_party.name})"))
+        if view_party.name != game.ruling_party.name:
+            st.warning(t("⏳ 等待執政黨定奪...", "⏳ Waiting for ruling party..."))
         else:
-            st.success(f"**淨支持量優勢:** `{abs(net_ammo):.1f}` 點！由 **{atk_party}** 向 **{def_party}** 的選民發起影響！")
-            
-            if st.session_state.get('god_mode'):
-                st.write(f"👁️ *(上帝視角)* 經歷殘酷的固著度裝甲檢定，消耗了 `{rep['used_ammo']:.1f}` 點支持量，成功攻克 **{rep['conquered']}** 個對手陣地 (每格 0.5%)！")
-                old_sup = rep['old_boundary'] * 0.5; new_sup = rep['new_boundary'] * 0.5
-                st.write(f"📊 👁️ **{game.party_A.name} 新支持度:** `{old_sup:.1f}%` ➔ `{new_sup:.1f}%`")
+            c_prop1, c_prop2 = st.columns(2)
+            for idx, key in enumerate(['R', 'H']):
+                plan = game.p1_proposals.get(key)
+                col = c_prop1 if key == 'R' else c_prop2
+                with col:
+                    if plan is None:
+                        st.info(t("等待對方發布草案...", "Waiting for opponent draft..."))
+                        continue
+                    ui_proposal.render_proposal_component(t('⚖️ 監管系統草案', '⚖️ R-System Draft') if key=='R' else t('🛡️ 執行系統草案', '🛡️ H-System Draft'), plan, game, view_party, cfg)
+                    if st.button(t(f"✅ 選擇此方案", f"✅ Select this draft"), key=f"pick_{key}", use_container_width=True):
+                        game.p1_selected_plan = plan; game.p1_step = 'voting_confirm'
+                        game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
 
-    st.markdown("---")
-    if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
-        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
-        game.year += 1
-        
-        if game.year > cfg['END_YEAR']: game.phase = 4
+    elif game.p1_step == 'voting_confirm':
+        if view_party.name != game.proposing_party.name: st.warning(t("⏳ 等待對手覆議...", "⏳ Waiting for opponent confirmation..."))
         else:
-            game.phase = 1; game.p1_step = 'draft_r'
-            game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
+            ui_proposal.render_proposal_component(t('📜 待覆議草案內容', '📜 Draft to Confirm'), game.p1_selected_plan, game, view_party, cfg)
+            st.markdown("---")
+            c1, c2, c3, c4 = st.columns(4)
+            if c1.button(t("✅ 同意法案", "✅ Agree to Bill"), use_container_width=True, type="primary"):
+                st.session_state.turn_data.update(game.p1_selected_plan)
+                st.session_state.news_flash = t(f"🗞️ **【快訊】預算案三讀通過！** 歷經 {game.proposal_count} 輪黨團協商，雙方正式簽署法案。", f"🗞️ **[BREAKING] Bill Passed!** After {game.proposal_count} rounds, bill is signed.")
+                st.session_state.anim = 'balloons'
+                game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
             
-            if is_election_end:
-                game.r_role_party = game.ruling_party
-                game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
+            if c2.button(t("❌ 拒絕並重談", "❌ Reject & Renegotiate"), use_container_width=True):
+                game.proposal_count += 1; game.p1_step = 'draft_r'; game.proposing_party = game.r_role_party; st.rerun()
             
-            game.proposing_party = game.r_role_party
-            game.last_year_report = None
+            if c3.button(t(f"🔄 同意但換位\n(雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
+                st.session_state.turn_data.update(game.p1_selected_plan)
+                engine.trigger_swap(game, penalty_amt, t("執政權轉移！", "Power Shift!"))
+                game.proposing_party = game.ruling_party; st.rerun()
             
-            for k in list(st.session_state.keys()):
-                if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
-            if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
-        st.rerun()
+            if game.proposing_party.name == game.h_role_party.name:
+                if c4.button(t("💥 逼迫最終提案 (通牒)", "💥 Force Final (Ultimatum)"), use_container_width=True):
+                    st.session_state.news_flash = t(f"🗞️ **【快訊】執行系統下達最後通牒！** {view_party.name} 逼迫監管系統只能再提最後一次案！", f"🗞️ **[BREAKING] H-System Ultimatum!** R-System has one last chance.")
+                    game.p1_step = 'ultimatum_draft_r'; game.proposing_party = game.r_role_party; st.rerun()
+
+    elif game.p1_step == 'ultimatum_resolve_h':
+        st.markdown(t("### 🚨 最終方案決斷 (執行系統專屬)", "### 🚨 Final Decision (H-System Only)"))
+        if view_party.name != game.h_role_party.name: 
+            st.warning(t(f"⏳ 等待執行系統 {game.h_role_party.name} 決斷...", f"⏳ Waiting for H-System {game.h_role_party.name}..."))
+        else:
+            ui_proposal.render_proposal_component(t('📜 監管系統最終底線/通牒方案', '📜 R-System Final Ultimatum Draft'), game.p1_selected_plan, game, view_party, cfg)
+            st.markdown("---")
+            c1, c2 = st.columns(2)
+            if c1.button(t("✅ 忍辱負重 (接受通牒)", "✅ Accept Ultimatum"), use_container_width=True, type="primary"):
+                st.session_state.turn_data.update(game.p1_selected_plan)
+                st.session_state.news_flash = t(f"🗞️ **【快訊】通牒生效！** 執行系統妥協吞下底線方案。", f"🗞️ **[BREAKING] Ultimatum Accepted!** H-System compromises.")
+                st.session_state.anim = 'balloons'
+                game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
+                
+            if c2.button(t(f"🔄 掀桌倒閣換位\n(警告: 雙方各繳 {penalty_amt:.1f} 予慈善團體)", f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
+                st.session_state.turn_data.update(game.p1_selected_plan)
+                engine.trigger_swap(game, penalty_amt, t("掀桌倒閣！", "Cabinet Fall!"))
+                game.proposing_party = game.r_role_party; st.rerun()
