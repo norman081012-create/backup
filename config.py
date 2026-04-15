@@ -44,6 +44,8 @@ DEFAULT_CONFIG = {
     # 🚀 支持度 2.0 新增常數
     'CLAIMED_DECAY_WEIGHT': 0.2,   # 預期影響的 20% 權重煞車皮
     'AMMO_MULTIPLIER': 50.0,       # 政績轉化為實體彈藥的放大倍數
+    'MAX_UPGRADE_SPEED': 20.0,     # 單次基礎最大升級速度
+    'UPGRADE_COST_MULT': 0.1,      # 二次方升級乘數
     
     'PERF_IMPACT_BASE': 1000.0,
     'OBS_ERR_BASE': 0.7,      
@@ -54,7 +56,7 @@ def get_config_translations():
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
-        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉彈藥倍率"
+        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率"
     }
     
 def get_intel_market_eval(unit_cost):
@@ -65,11 +67,11 @@ def get_intel_market_eval(unit_cost):
     else: return "💀 經濟結構惡化 (成本呈現毀滅性通膨，建議暫緩非必要開發)"
 
 def get_economic_forecast_text(drop_val):
-    if drop_val <= 10.0: return "🌟 景氣極佳 (跌幅微小)"
-    elif drop_val <= 30.0: return "📈 穩定成長 (跌幅可控)"
-    elif drop_val <= 50.0: return "⚖️ 持平放緩 (面臨衰退)"
-    elif drop_val <= 70.0: return "📉 衰退警報 (百業蕭條)"
-    else: return "⚠️ 經濟風暴 (系統性崩潰)"
+    if drop_val <= 10.0: return "🌟 景氣繁榮 (跌幅微小)：市場充滿活力，民間消費強勁！"
+    elif drop_val <= 30.0: return "📈 穩定成長 (跌幅可控)：經濟平穩過渡，投資市場信心尚可。"
+    elif drop_val <= 50.0: return "⚖️ 景氣放緩 (面臨衰退)：企業投資開始保守，需謹慎應對下行風險。"
+    elif drop_val <= 70.0: return "📉 衰退警報 (百業蕭條)：工廠開始裁員，民間消費急凍，必須擴大內需救市！"
+    else: return "⚠️ 經濟風暴 (系統性崩潰)：金融海嘯席捲全國，企業倒閉潮爆發，國家已在懸崖邊緣！"
 
 def get_civic_index_text(score):
     if score < 15: return f"易受灌輸 ({score:.1f})"
