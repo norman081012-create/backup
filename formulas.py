@@ -58,15 +58,11 @@ def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
     delta_E = -expected_loss_pct
 
     gap = delta_A - delta_E
-    
-    # 🚀 修正 1：大環境政績脫離純衰退綁架，更看重預期落差管理
-    # 公式：5%的絕對GDP變動 + 15%的預期落差紅利
     p_plan = (delta_A * 0.05) + (gap * 0.15)
 
     completion_rate = c_net / max(1.0, float(bid_cost))
     delta_C = (completion_rate - 0.5) * 2.0 
     
-    # 🚀 修正 2：專案政績直接與「專案本身的GDP貢獻度」掛鉤
     target_gdp_growth = (bid_cost * cfg.get('GDP_CONVERSION_RATE', 0.2)) / max(1.0, curr_gdp) * 100.0
     p_exec = target_gdp_growth * delta_C * 0.1
 
@@ -103,11 +99,10 @@ def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
     return correct_support * sign, wrong_support * sign, correct_prob
 
 def apply_media_spin(blind_support, my_media_power, opp_media_power, is_preview=False):
-    total_power = my_media_power + opp_media_power
-    if total_power <= 0:
-        spin_win_prob = 0.5 
-    else:
-        spin_win_prob = my_media_power / total_power
+    # 🚀 加入 Base Noise (錨點)，確保投資媒體的資金越多越平滑，不會第一塊錢就 100% 洗腦
+    base_noise = 50.0 
+    total_power = my_media_power + opp_media_power + (base_noise * 2)
+    spin_win_prob = (my_media_power + base_noise) / total_power
 
     if is_preview:
         if blind_support >= 0:
