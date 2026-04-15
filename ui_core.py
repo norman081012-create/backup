@@ -73,14 +73,16 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
     with c3:
         fc = view_party.current_forecast
         acc = min(100, max(0, int((1.0 - (cfg.get('OBS_ERR_BASE', 0.4) / (view_party.predict_ability/3.0))) * 100))) 
-        st.markdown(f"### 🕵️ {t('智庫')} {t('準確度')}: ~{acc}%")
+        st.markdown(f"### 🕵️ {t('智庫')} {t('預測情報')}")
         
         conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
         gdp_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
         req_infra_to_balance = gdp_loss / conv_rate
         
         st.write(f"預估衰退值: `{fc:.3f}`")
-        st.write(f"平抑衰退所需建設量: `{req_infra_to_balance:.1f}`")
+        # 🚀 景氣圖示與評語
+        eval_scenario = config.get_economic_forecast_text(fc * 100)
+        st.info(eval_scenario)
         
         if rep:
             my_is_h = view_party.name == rep['h_party_name']
@@ -122,10 +124,9 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                # 🚀 支援度 2.0 更新：合併顯示預期獲得的總彈藥量
                 my_perf = preview_data['my_perf_gdp'] + preview_data['my_perf_proj']
                 opp_perf = preview_data['opp_perf_gdp'] + preview_data['opp_perf_proj']
-                st.markdown(f"{t('預期產生彈藥量')}: 我方 **{my_perf:+.1f}** / 對方 **{opp_perf:+.1f}**")
+                st.markdown(f"{t('預期產生支持量')}: 我方 **{my_perf:+.1f}** / 對方 **{opp_perf:+.1f}**")
                 
     st.markdown("---")
 
@@ -287,26 +288,25 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"**(依據當前機構投資，明年維護費估算: -${total_maint:.1f})**")
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
-    a_c = (2**current_val - 1) * 50.0
-    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
-    
-    a_base = max(0.0, a_c - max_decay)
-    min_val = math.log2(a_base / 50.0 + 1)
-    
+    # 🚀 支援度 2.0 更新：全新二次方指數升級公式
     current_pct = current_val * 10.0
-    min_pct = min_val * 10.0
+    max_upgrade = cfg.get('MAX_UPGRADE_SPEED', 20.0) * (1.0 + build_ability / 10.0)
     
-    t_pct = st.slider(f"{label}", float(min_pct), 100.0, float(current_pct), 0.1, key=key)
-    t_val = t_pct / 10.0
+    min_pct = max(0.0, current_pct - 20.0)
+    max_pct = min(100.0, current_pct + max_upgrade)
     
-    cost = formulas.calculate_upgrade_cost(current_val, t_val, cfg, is_build, build_ability)
-    maint = formulas.get_ability_maintenance(current_val, cfg, is_build, build_ability)
+    t_pct = st.slider(f"{label}", float(min_pct), float(max_pct), float(current_pct), 0.1, key=key)
     
-    if t_val > current_val: 
-        st.caption(f"📈 <span style='color:orange'>**{t('擴編總花費')}**: ${cost:.1f}</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}%", unsafe_allow_html=True)
-    elif t_val < current_val: 
-        st.caption(f"📉 <span style='color:blue'>**{t('放任萎縮 (節省經費)')}**</span> | 能力: {current_pct:.1f}% ➔ {t_pct:.1f}% | 花費: ${cost:.1f} *(省下 ${maint - cost:.1f})*", unsafe_allow_html=True)
+    cost_mult = cfg.get('UPGRADE_COST_MULT', 0.1)
+    if t_pct > current_pct: 
+        cost = ((t_pct**2 - current_pct**2) * cost_mult) / (1.0 + build_ability / 10.0)
+        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (工程處放大升級量)</span>", unsafe_allow_html=True)
+    elif t_pct < current_pct: 
+        refund = ((current_pct**2 - t_pct**2) * cost_mult * 0.5) 
+        cost = -refund
+        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f}</span>", unsafe_allow_html=True)
     else: 
-        st.caption(f"🛡️ {t('穩定維持')} | 能力: {current_pct:.1f}% | {t('維護費')} ${cost:.1f}")
+        cost = 0.0
+        st.caption(f"🛡️ {t('維持現狀')}")
         
-    return t_val, cost
+    return t_pct / 10.0, cost
