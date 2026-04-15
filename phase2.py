@@ -1,5 +1,6 @@
 # ==========================================
 # phase2.py
+# 負責 第二階段 (政策執行與行動選擇) 的 UI 與邏輯
 # ==========================================
 import streamlit as st
 import config
@@ -23,15 +24,29 @@ def render(game, view_party, opponent_party, cfg):
     proj_fund = float(d.get('proj_fund') or 0.0)
     inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
     
+    # 🚀 預設變數，徹底避免 UnboundLocalError
+    h_corr_amt = 0.0
+    h_crony_amt = 0.0
+    
+    old_jud = float(view_party.last_acts.get('judicial_lvl', 0.0)) if not is_h else 0.0
+    judicial_lvl = old_jud
+    judicial_cost = 0.0
+    judicial_maint = old_jud * 1.0
+    
+    old_edu = float(view_party.edu_stance)
+    new_edu = old_edu
+    edu_shift_cost = 0.0
+    edu_maint_cost = abs(old_edu) * 0.5
+
+    last_media = min(float(view_party.last_acts.get('media', 0.0)), cw)
+    last_camp = min(float(view_party.last_acts.get('camp', 0.0)), cw)
+    last_incite = min(float(view_party.last_acts.get('incite', 0.0)), cw)
+    
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(t("#### 📣 政策、媒體與暗盤", "#### 📣 Policy & Media"))
         if is_h: st.caption(t("💡 **執行系統特性**: 媒體操控值 1.2 倍加成", "💡 **H-System Perk**: Media Control x1.2"))
         else: st.caption(t("💡 **監管系統特性**: 調查能力值 1.2 倍加成", "💡 **R-System Perk**: Intelligence x1.2"))
-        
-        h_corr_amt = 0.0; h_crony_amt = 0.0
-        judicial_cost = 0.0; new_edu = view_party.edu_stance
-        edu_shift_cost = 0.0; edu_maint_cost = 0.0
         
         if is_h:
             st.markdown("##### 🕵️ 檯面下操作 (線性查扣制)")
@@ -65,32 +80,27 @@ def render(game, view_party, opponent_party, cfg):
 
         else:
             st.markdown("##### 🎓 意識形態與媒體審查")
-            # 🚀 修正：改為曲線成本的 0~10 等級輸入
-            judicial_lvl = st.slider(t("⚖️ 媒體審查強度 (0~10) - 削弱對手媒體，並極化反對選民"), 0.0, 10.0, float(view_party.last_acts.get('judicial_lvl', 0.0)), 0.1)
-            judicial_cost = (judicial_lvl ** 2) * 1.0
+            # 🚀 媒體審查 (0~100 區間，每年最多變動 10)
+            min_jud = max(0.0, old_jud - 10.0)
+            max_jud = min(100.0, old_jud + 10.0)
+            judicial_lvl = st.slider(t("⚖️ 媒體審查強度 (0~100) - 削弱對手媒體並極化反對選民"), float(min_jud), float(max_jud), float(old_jud), 1.0)
+            judicial_cost = abs(judicial_lvl - old_jud) * 2.0
+            judicial_maint = judicial_lvl * 1.0
             
-            # 🚀 修正：鎖死教育方針每年最大變動值 10
-            max_edu_change = 10.0
-            min_edu = max(-100.0, view_party.edu_stance - max_edu_change)
-            max_edu = min(100.0, view_party.edu_stance + max_edu_change)
-            new_edu = st.slider(t("🎓 教育方針 (左: 極端填鴨 | 右: 極端思辨)", "🎓 Education Policy"), float(min_edu), float(max_edu), float(view_party.edu_stance), 1.0)
-            
-            edu_shift_cost = abs(new_edu - view_party.edu_stance) * 1.5
+            # 🚀 教育方針 (-100~100 區間，每年最多變動 10)
+            min_edu = max(-100.0, old_edu - 10.0)
+            max_edu = min(100.0, old_edu + 10.0)
+            new_edu = st.slider(t("🎓 教育方針 (左: 極端填鴨 | 右: 極端思辨)", "🎓 Education Policy"), float(min_edu), float(max_edu), float(old_edu), 1.0)
+            edu_shift_cost = abs(new_edu - old_edu) * 1.5
             edu_maint_cost = abs(new_edu) * 0.5
-            st.caption(f"💰 審查費: `${judicial_cost:.1f}` | 教育轉型: `${edu_shift_cost:.1f}` | 維護: `${edu_maint_cost:.1f}`")
             
-        st.markdown("##### 📺 競選與媒體公關")
-        # 🚀 修正：媒體操作全面改為 0~10 等級輸入
-        media_lvl = st.slider(t("📺 媒體操控強度 (0~10) - 改變施政政績歸因與甩鍋"), 0.0, 10.0, float(view_party.last_acts.get('media_lvl', 0.0)), 0.1)
-        media_cost = (media_lvl ** 2) * 1.0
-        
-        camp_lvl = st.slider(t("🎉 造勢競選強度 (0~10) - 直接轉換為民意支持"), 0.0, 10.0, float(view_party.last_acts.get('camp_lvl', 0.0)), 0.1)
-        camp_cost = (camp_lvl ** 2) * 1.0
-        
-        incite_lvl = st.slider(t("🔥 煽動情緒強度 (0~10) - 攻堅抗性短暫降智"), 0.0, 10.0, float(view_party.last_acts.get('incite_lvl', 0.0)), 0.1)
-        incite_cost = (incite_lvl ** 2) * 1.0
-        
-        st.caption(f"💰 媒體操控: `${media_cost:.1f}` | 造勢: `${camp_cost:.1f}` | 煽動: `${incite_cost:.1f}`")
+            st.caption(f"💰 審查轉型/維護費: `${judicial_cost:.1f}`/`${judicial_maint:.1f}` | 教育轉型/維護費: `${edu_shift_cost:.1f}`/`${edu_maint_cost:.1f}`")
+            
+        st.markdown("##### 📺 競選與媒體公關 (直接投入預算)")
+        # 🚀 媒體、造勢、煽動回歸「現金直接投入」，不卡維護費
+        media_amt = st.slider(t("📺 媒體操控 (投入資金) - 改變施政政績歸因與甩鍋", "📺 Media Control"), 0.0, cw, last_media)
+        camp_amt = st.slider(t("🎉 舉辦造勢競選 (投入資金) - 轉換為民意支持", "🎉 Campaign"), 0.0, cw, last_camp)
+        incite_amt = st.slider(t("🔥 煽動情緒 (投入資金) - 攻堅抗性與短暫降智", "🔥 Incite Emotion"), 0.0, cw, last_incite)
         
     with c2:
         c_dept1, c_dept2 = st.columns([0.65, 0.35])
@@ -110,8 +120,8 @@ def render(game, view_party, opponent_party, cfg):
         t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護貪污，干擾對手觀測)", "Counter-Intel"), f"up_stl_{view_party.name}_{game.year}", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
         t_bld, c_bld = ui_core.ability_slider(t("工程處 (降升級成本，提升建設效率)", "Engineering"), f"up_bld_{view_party.name}_{game.year}", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
-    tot_action = media_cost + camp_cost + incite_cost + judicial_cost + edu_shift_cost
-    tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld) + edu_maint_cost
+    tot_action = media_amt + camp_amt + incite_amt + judicial_cost + edu_shift_cost
+    tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld) + edu_maint_cost + judicial_maint
     tot_spending_now = tot_action + tot_maint
     
     st.write(f"**政策與媒體:** `{tot_action:.1f}` / **部門維護與升級:** `{tot_maint:.1f}` / **剩餘可用現金:** `{cw - tot_spending_now:.1f}`")
@@ -120,26 +130,26 @@ def render(game, view_party, opponent_party, cfg):
     if tot_spending_now > cw:
         st.error(f"🚨 資金不足！當前行動預算已超支 {tot_spending_now - cw:.1f} 元，請降低投入資金或放棄升級。")
     
-    # 紀錄各級數與費用
-    ra_dummy = {'media_lvl': media_lvl, 'media_cost': media_cost, 'camp_lvl': camp_lvl, 'camp_cost': camp_cost, 'incite_lvl': incite_lvl, 'incite_cost': incite_cost, 'edu_stance': new_edu, 'judicial_lvl': judicial_lvl, 'judicial_cost': judicial_cost}
-    ha_dummy = {'media_lvl': media_lvl, 'media_cost': media_cost, 'camp_lvl': camp_lvl, 'camp_cost': camp_cost, 'incite_lvl': incite_lvl, 'incite_cost': incite_cost, 'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt}
+    # 建立無錯誤的字典
+    my_acts_temp = {
+        'media': media_amt, 'camp': camp_amt, 'incite': incite_amt,
+        'edu_stance': new_edu, 'judicial_lvl': judicial_lvl, 
+        'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt
+    }
     
-    act_ra = ra_dummy if not is_h else {'media_lvl': 0, 'media_cost': 0, 'camp_lvl': 0, 'camp_cost': 0, 'incite_lvl': 0, 'incite_cost': 0, 'edu_stance': view_party.edu_stance, 'judicial_lvl': 0, 'judicial_cost': 0}
-    act_ha = ha_dummy if is_h else {'media_lvl': 0, 'media_cost': 0, 'camp_lvl': 0, 'camp_cost': 0, 'incite_lvl': 0, 'incite_cost': 0, 'corr_amt': 0, 'crony_amt': 0}
-    
-    if f"{opponent_party.name}_acts" in st.session_state:
-        opp_acts = st.session_state[f"{opponent_party.name}_acts"]
-        if is_h: act_ra = opp_acts
-        else: act_ha = opp_acts
+    if is_h:
+        act_ha = my_acts_temp
+        act_ra = st.session_state.get(f"{opponent_party.name}_acts", {'media': 0, 'camp': 0, 'incite': 0, 'edu_stance': opponent_party.edu_stance, 'judicial_lvl': 0})
+    else:
+        act_ra = my_acts_temp
+        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'media': 0, 'camp': 0, 'incite': 0, 'corr_amt': 0, 'crony_amt': 0})
 
     bid_cost = float(d.get('bid_cost') or 1.0)
     claimed_decay = float(d.get('claimed_decay') or 0.0)
     r_pays = float(d.get('r_pays') or 0.0)
 
-    corr_val = float(h_corr_amt) if is_h else 0.0
-    crony_val = float(h_crony_amt) if is_h else 0.0
-    orig_corr_amt = corr_val
-    orig_crony_income = crony_val * cfg.get('CRONY_PROFIT_RATE', 0.2)
+    orig_corr_amt = float(act_ha.get('corr_amt', 0.0))
+    orig_crony_income = float(act_ha.get('crony_amt', 0.0)) * cfg.get('CRONY_PROFIT_RATE', 0.2)
     
     h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     expected_h_wealth = cw - tot_spending_now + h_base_expected if is_h else float(game.h_role_party.wealth)
@@ -151,16 +161,15 @@ def render(game, view_party, opponent_party, cfg):
     hp_net_est = h_base + res_prev['h_project_profit'] + orig_corr_amt + orig_crony_income
     rp_net_est = r_base + res_prev['payout_r'] - r_pays
 
-    # 帶入媒體審查的動態預覽
     cramming_factor = max(0.0, (50.0 - game.sanity) / 100.0) 
     emo_factor = game.emotion / 100.0
     media_multiplier = max(0.1, 1.0 + cramming_factor + emo_factor)
     
     sim_judicial_lvl = float(act_ra.get('judicial_lvl', 0.0))
-    h_censor_penalty = max(0.1, 1.0 - (sim_judicial_lvl * 0.1)) # 預覽使用簡化版審查打壓係數
+    h_censor_penalty = max(0.1, 1.0 - (sim_judicial_lvl / 100.0)) 
     
-    h_media_pwr = float(act_ha.get('media_cost', 0.0)) * (game.h_role_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-    r_media_pwr = float(act_ra.get('media_cost', 0.0)) * (game.r_role_party.media_ability / 10.0) * media_multiplier
+    h_media_pwr = float(act_ha.get('media', 0.0)) * (game.h_role_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+    r_media_pwr = float(act_ra.get('media', 0.0)) * (game.r_role_party.media_ability / 10.0) * media_multiplier
 
     shift_preview = formulas.calc_performance_preview(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
@@ -183,10 +192,8 @@ def render(game, view_party, opponent_party, cfg):
     
     if tot_spending_now <= cw and st.button(t("確認行動/結算", "Confirm Action/Settle"), use_container_width=True, type="primary"):
         my_acts = {
-            'media_lvl': media_lvl, 'media_cost': media_cost, 
-            'camp_lvl': camp_lvl, 'camp_cost': camp_cost, 
-            'incite_lvl': incite_lvl, 'incite_cost': incite_cost, 
-            'edu_stance': new_edu, 'judicial_lvl': judicial_lvl, 'judicial_cost': judicial_cost,
+            'media': media_amt, 'camp': camp_amt, 'incite': incite_amt,
+            'edu_stance': new_edu, 'judicial_lvl': judicial_lvl,
             'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt, 
             't_inv': t_inv, 't_pre': t_pre, 't_med': t_med, 't_stl': t_stl, 't_bld': t_bld,
             'legal': req_pay, 'tot_action': tot_action, 'tot_maint': tot_maint
