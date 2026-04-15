@@ -17,9 +17,13 @@ DEFAULT_CONFIG = {
     'DECAY_AMOUNT_DEFAULT': 1500.0,
     'DECAY_AMOUNT_BUILD': 500.0,
     
-    # 🚀 暗盤機制：貪污基礎查扣率 (圖利將在程式碼中自動取其 20%)
+    # 線性查扣制核心參數
     'CATCH_RATE_PER_DOLLAR': 0.10,        
+    'CRONY_CATCH_RATE_DOLLAR': 0.05,      
     'CRONY_PROFIT_RATE': 0.20,            
+    'CORRUPTION_FINE_MULT': 0.4,          
+    'CATCH_RATE_PER_PERCENT': 0.02,
+    'CRONY_CATCH_RATE_PER_PERCENT': 0.01,
     
     'RESISTANCE_MULT': 1.0, 
     'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
@@ -45,8 +49,11 @@ DEFAULT_CONFIG = {
     
     'CLAIMED_DECAY_WEIGHT': 0.2,
     'AMMO_MULTIPLIER': 50.0,
+    
+    # 🚀 成本量級調整
     'MAX_UPGRADE_SPEED': 20.0,
-    'UPGRADE_COST_MULT': 0.05, 
+    'UPGRADE_COST_MULT': 0.15,      # (原本 0.05) 調貴：體制升級與轉型的花費變高
+    'PR_EFFICIENCY_MULT': 3.0,      # 🚀 新增：公關操作效率倍率 (讓媒體操控、造勢、煽動變便宜/效果變好)
     
     'PREDICT_ACCURACY_WEIGHT': 0.8,     
     'INVESTIGATE_ACCURACY_WEIGHT': 0.8, 
@@ -61,7 +68,8 @@ def get_config_translations():
         'CATCH_RATE_PER_DOLLAR': "貪污每元被查扣率",
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率",
-        'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重"
+        'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重",
+        'UPGRADE_COST_MULT': "機構升級成本基數", 'PR_EFFICIENCY_MULT': "公關操作效率倍率"
     }
 
 def get_intel_market_eval(unit_cost):
