@@ -76,13 +76,9 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # ==========================================
-        # 🚀 支援度 2.0 攻城掠地結算引擎
-        # ==========================================
-        # 1. 製造彈藥：獲取大環境紅利(P_plan)與執行政績(P_exec)
-        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_ammo(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
+        # 🚀 修正：正確呼叫 generate_raw_support
+        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
-        # 2. 進行思辨過濾：真實擲骰分發彈藥
         plan_correct, plan_wrong, correct_prob = formulas.apply_sanity_filter(raw_p_plan, game.sanity, game.emotion, is_preview=False)
         exec_correct, exec_wrong, _ = formulas.apply_sanity_filter(raw_p_exec, game.sanity, game.emotion, is_preview=False)
         
@@ -90,19 +86,16 @@ def render(game, cfg):
         ammo_B = 0.0
         ruling_name = game.ruling_party.name
 
-        # 歸屬 P_plan 彈藥
         if ruling_name == game.party_A.name:
             ammo_A += plan_correct; ammo_B += plan_wrong
         else:
             ammo_B += plan_correct; ammo_A += plan_wrong
 
-        # 歸屬 P_exec 彈藥
         if hp.name == game.party_A.name:
             ammo_A += exec_correct; ammo_B += exec_wrong
         else:
             ammo_B += exec_correct; ammo_A += exec_wrong
             
-        # 結算媒體造勢彈藥 (獨立於政績外)
         h_media = hp.media_ability / 10.0
         r_media = rp.media_ability / 10.0
         camp_A = (float(ha.get('camp', 0)) if hp.name == game.party_A.name else float(ra.get('camp', 0))) * (h_media if hp.name == game.party_A.name else r_media) * 0.5
@@ -111,19 +104,14 @@ def render(game, cfg):
         ammo_A += camp_A
         ammo_B += camp_B
 
-        # 3. 發動固著度陣列攻堅
         net_ammo_A = ammo_A - ammo_B
         old_boundary = game.boundary_B
         new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A)
         
-        # 寫入遊戲狀態
         game.boundary_B = new_boundary
         game.party_A.support = new_boundary * 0.5
         game.party_B.support = 100.0 - game.party_A.support
         
-        # ==========================================
-        # 社會指標變動
-        # ==========================================
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         emotion_delta = (float(ha.get('incite') or 0) + float(ra.get('incite') or 0)) * 0.1 - gdp_grw_bonus - (game.sanity * 0.20)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
@@ -131,6 +119,8 @@ def render(game, cfg):
         f_target_san = max(0.0, min(100.0, 50.0 + (float(ra.get('edu_amt') or 0) / 500.0) * 50.0))
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
+        
+        total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
         
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
@@ -146,7 +136,8 @@ def render(game, cfg):
             'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
             'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
             'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
-            'corr_caught': corr_caught, 'crony_caught': crony_caught
+            'corr_caught': corr_caught, 'crony_caught': crony_caught,
+            'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 'r_pays': r_pays, 'total_bonus_deduction': total_bonus_deduction
         }
         
         game.gdp = res_exec['est_gdp']
@@ -169,7 +160,7 @@ def render(game, cfg):
     
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"### 💰 {t('經濟與收益結算')}")
+        st.markdown(f"### 💰 {t('經濟與財政結算')}")
         st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
         
         with st.expander(f"📊 {rep['h_party_name']} ({t('執行系統')}) {t('收益明細')}"):
@@ -182,7 +173,13 @@ def render(game, cfg):
 
         with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) {t('收益明細')}"):
             st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['r_base']:.1f}`")
-            st.write(f"- {t('專案監管剩餘')}: `${rep['r_project_net']:.1f}`")
+            
+            unspent_proj = rep['proj_fund'] * (1.0 - rep['h_idx'])
+            st.write(f"- {t('未執行專案款繳回')}: `${unspent_proj:.1f}`")
+            
+            base_r_surplus = rep['old_budg'] - rep['total_bonus_deduction'] - rep['proj_fund']
+            st.write(f"- {t('監管預算結餘')}: `${max(0.0, base_r_surplus) - rep['r_pays']:.1f}`")
+            
             if rep['r_extra'] > 0:
                 st.write(f"- {t('沒收所得/查獲獎金')}: `${rep['r_extra']:.1f}`")
             st.write(f"- {t('行政與部門支出')}: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
@@ -192,7 +189,7 @@ def render(game, cfg):
         if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利爭議，關聯資金已全數凍結。"))
 
     with c2:
-        st.markdown(f"### 🧠 {t('社會指標與國家變化')}")
+        st.markdown(f"### 🧠 {t('社會指標與選民變化')}")
         s_move = game.sanity - rep['old_san']
         e_move = game.emotion - rep['old_emo']
         
@@ -200,26 +197,31 @@ def render(game, cfg):
         st.write(f"**{t('選民情緒 (波動)')}:** `{rep['old_emo']:.1f}` ➔ `{game.emotion:.1f}` ({e_move:+.1f})")
         
         st.markdown("---")
-        # 🚀 支援度 2.0 全新戰報 UI
-        st.markdown(f"### ⚔️ 支持度版圖推移 (200人陣列攻堅)")
-        st.caption(f"*(📡 今年大環境規劃政績: `{rep['raw_p_plan']/cfg['AMMO_MULTIPLIER']:+.2f}` | 執行政績: `{rep['raw_p_exec']/cfg['AMMO_MULTIPLIER']:+.2f}`)*")
+        st.markdown(f"### ⚔️ 支持度影響結算")
+        
+        # 🚀 修正：彈藥字眼全面替換為政績與支持量，並將明確的裝甲判定隱藏在 God Mode 中
+        if st.session_state.get('god_mode'):
+            st.caption(f"*(👁️ 上帝視角 | 大環境規劃政績: `{rep['raw_p_plan']/cfg['AMMO_MULTIPLIER']:+.2f}` | 執行政績: `{rep['raw_p_exec']/cfg['AMMO_MULTIPLIER']:+.2f}`)*")
+        
         st.caption(f"*(📡 今年度選民思辨正確歸因率: `{rep['correct_prob']*100:.1f}%`)*")
         
-        st.write(f"**{game.party_A.name} 總彈藥:** `{rep['ammo_A']:.1f}` | **{game.party_B.name} 總彈藥:** `{rep['ammo_B']:.1f}`")
+        st.write(f"**{game.party_A.name} 總支持量:** `{rep['ammo_A']:.1f}` | **{game.party_B.name} 總支持量:** `{rep['ammo_B']:.1f}`")
         
         net_ammo = rep['net_ammo_A']
         atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
         def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
         
         if abs(net_ammo) < 1.0:
-            st.info("🤝 雙方彈藥僵持不下，版圖無變化。")
+            st.info("🤝 雙方支持量僵持不下，民意版圖無變化。")
         else:
-            st.success(f"**淨優勢彈藥:** `{abs(net_ammo):.1f}` 點！由 **{atk_party}** 向 {def_party} 發起猛烈攻堅！")
-            st.write(f"💥 經歷殘酷的固著度裝甲檢定，消耗了 `{rep['used_ammo']:.1f}` 點彈藥，成功攻克 **{rep['conquered']}** 個對手陣地 (每格代表 0.5%)！")
+            st.success(f"**淨支持量優勢:** `{abs(net_ammo):.1f}` 點！由 **{atk_party}** 向 **{def_party}** 的選民發起影響！但選民怎麼想，只有上帝知道了...")
             
-            old_sup = rep['old_boundary'] * 0.5
-            new_sup = rep['new_boundary'] * 0.5
-            st.write(f"📊 **{game.party_A.name} 新支持度:** `{old_sup:.1f}%` ➔ `{new_sup:.1f}%`")
+            if st.session_state.get('god_mode'):
+                st.write(f"👁️ *(上帝視角)* 經歷殘酷的固著度裝甲檢定，消耗了 `{rep['used_ammo']:.1f}` 點支持量，成功攻克 **{rep['conquered']}** 個對手陣地 (每格 0.5%)！")
+                
+                old_sup = rep['old_boundary'] * 0.5
+                new_sup = rep['new_boundary'] * 0.5
+                st.write(f"📊 👁️ **{game.party_A.name} 新支持度:** `{old_sup:.1f}%` ➔ `{new_sup:.1f}%`")
 
     st.markdown("---")
     if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
