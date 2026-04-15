@@ -11,7 +11,8 @@ def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
 def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0):
-    amount = (2**current_val - 1) * 50.0
+    # 🚀 修正：維護費基數從 50 降到 20，讓維護費落在合理區間 (約佔收入 10%)
+    amount = (2**current_val - 1) * 20.0
     max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
     decay_amt = min(amount, max_decay)
     discount_factor = 1.0 / (1.0 + build_ability / 5.0)
@@ -21,7 +22,8 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     effective_build = build_abi * 2.0
     b_norm = max(0.01, effective_build / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-    base_cost = (0.5 / b_norm) * (2 ** (2 * decay - 1))
+    # 🚀 修正：常數從 0.5 提升至 0.85，確保 0.4 的衰退中位數能吃掉 60% 總預算
+    base_cost = (0.85 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0):
@@ -100,7 +102,6 @@ def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
 def get_rigidity(i, sanity=50.0):
     x = (i - 100.5) / 99.5
     base_rigidity = 0.95 * (x**2) + 0.05
-    # 填鴨度 (低思辨) 越高，選民固著值越強，最高額外增加 0.15 的絕對固著裝甲
     cramming_bonus = ((50.0 - sanity) / 50.0) * 0.15
     return base_rigidity + cramming_bonus
 
