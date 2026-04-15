@@ -1,6 +1,6 @@
 # ==========================================
 # ui_proposal.py
-# 負責 提案草案渲染 (修正換位模擬邏輯與支持度明細)
+# 負責 提案草案渲染 (補回 ROI 顯示)
 # ==========================================
 import streamlit as st
 import formulas
@@ -60,6 +60,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     my_net = (h_base + h_project_profit if my_is_h_in_sim else r_base + r_project_profit) - swap_penalty
     opp_net = (r_base + r_project_profit if my_is_h_in_sim else h_base + h_project_profit) - swap_penalty
     
+    # 🚀 補回 ROI 計算
+    o_h_roi = (h_project_profit / float(eval_h_pays)) * 100.0 if eval_h_pays > 0 else float('inf')
+    o_r_roi = (r_project_profit / float(eval_r_pays)) * 100.0 if eval_r_pays > 0 else float('inf')
+    
+    my_roi = o_h_roi if my_is_h_in_sim else o_r_roi
+    opp_roi = o_r_roi if my_is_h_in_sim else o_h_roi
+    
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
@@ -76,7 +83,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     opp_proj_perf = shift_preview[opp_party_name]['perf_proj']
     opp_total_perf = opp_gdp_perf + opp_proj_perf
     
-    # 🚀 動態判定思辨正確或錯誤
     my_gdp_label = "思辨正確" if my_is_ruling_in_sim else "思辨錯誤"
     opp_gdp_label = "思辨錯誤" if my_is_ruling_in_sim else "思辨正確"
     
@@ -84,11 +90,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     opp_proj_label = "思辨錯誤" if my_is_h_in_sim else "思辨正確"
 
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
-
-    st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}**")
-    st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}**")
     
-    # 🚀 實裝思辨歸因標籤與100%完工提示
+    def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
+
+    # 🚀 補回 ROI 顯示
+    st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
+    st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
+    
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} ({my_gdp_label}) | 專案: {my_proj_perf:+.1f} ({my_proj_label} / 100% 完工))*")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} ({opp_gdp_label}) | 專案: {opp_proj_perf:+.1f} ({opp_proj_label} / 100% 完工))*")
