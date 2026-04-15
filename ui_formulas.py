@@ -85,12 +85,13 @@ def render_formula_panel(game, view_party, cfg):
         st.write(f"> **計算**: `{gdp_str}` × (`{decay_str}` × `0.05{TAG_CON}` + `0{TAG_CON}`) = **{loss_v:.2f}**")
 
         st.markdown("**2. 單位工程成本 (含通膨) (Unit Construction Cost)**")
-        st.latex(r"Cost = \frac{0.5}{Build / 10} \times 2^{(2 \times Decay - 1)} \times (1 + Inflation)")
+        # 🚀 修正：同步了最新的 0.85 基數常數
+        st.latex(r"Cost = \frac{0.85}{Build / 10} \times 2^{(2 \times Decay - 1)} \times (1 + Inflation)")
         
         b_norm = max(0.01, build_val / 10.0)
         inflation = max(0.0, (gdp_val - 5000.0) / 10000.0)
-        unit_cost_v = (0.5 / b_norm) * (2 ** (2 * decay_val - 1)) * (1 + inflation)
-        st.write(f"> **計算**: (0.5 / `{build_val/10:.2f}{TAG_CFM}`) × 2^(2 × `{decay_val:.3f}{TAG_EST}` - 1) × (1 + `{inflation:.2f}通膨{TAG_CON}`) = **{unit_cost_v:.2f}**")
+        unit_cost_v = (0.85 / b_norm) * (2 ** (2 * decay_val - 1)) * (1 + inflation)
+        st.write(f"> **計算**: (0.85 / `{build_val/10:.2f}{TAG_CFM}`) × 2^(2 × `{decay_val:.3f}{TAG_EST}` - 1) × (1 + `{inflation:.2f}通膨{TAG_CON}`) = **{unit_cost_v:.2f}**")
 
         st.markdown("**3. 專案執行力與最終 GDP 預測**")
         st.latex(r"Required = BidCost \times UnitCost")
@@ -116,3 +117,34 @@ def render_formula_panel(game, view_party, cfg):
             st.write(f"> **結算**: `{gdp_str}` - `{loss_v:.2f}` + (`{c_net:.2f}{TAG_EST}` × `0.2{TAG_CON}`) = **{new_gdp:.2f}**")
         else:
             st.info("💡 部分關鍵數據（如獎勵金或效益）尚在 `pending (空)` 狀態，無法完成預測計算。")
+
+        st.markdown("---")
+        
+        # 🚀 全新區塊：徹底透明化我們剛剛大改的線性查扣與罰金機制
+        st.markdown("### ⚖️ 暗盤操作與司法查扣演算法 (線性預期模型)")
+        
+        rp = game.r_role_party
+        hp = game.h_role_party
+        
+        rp_inv_pct = rp.investigate_ability / 10.0
+        hp_stl_pct = hp.stealth_ability / 10.0
+        catch_mult = max(0.1, (rp_inv_pct * cfg.get('R_INV_BONUS', 1.2)) - hp_stl_pct + 1.0)
+        
+        corr_base_rate = cfg.get('CATCH_RATE_PER_DOLLAR', 0.10)
+        crony_base_rate = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)
+        
+        corr_catch_ratio = min(1.0, corr_base_rate * catch_mult)
+        crony_catch_ratio = min(1.0, crony_base_rate * catch_mult)
+        
+        st.write(f"**🛡️ 當前偵測倍率 (Catch Multiplier)**: `max(0.1, (監管情報 {rp_inv_pct:.2f} × 1.2) - 執行反情報 {hp_stl_pct:.2f} + 1.0) = {catch_mult:.2f}x`")
+        
+        st.markdown("**💸 貪污預期淨利 (Expected Corruption Profit)**")
+        st.latex(r"Caught_{corr} = Amount_{corr} \times \min(1.0, 10\% \times CatchMult)")
+        st.latex(r"Net_{corr} = Amount_{corr} - Caught_{corr} - (Caught_{corr} \times 0.4_{fine})")
+        st.write(f"> **當前貪污查扣率**: `{corr_base_rate*100:.1f}% × {catch_mult:.2f} = {corr_catch_ratio*100:.1f}%` (需經通膨矯正)")
+        
+        st.markdown("**🏢 圖利預期淨利 (Expected Cronyism Profit)**")
+        st.latex(r"Caught_{crony} = Amount_{crony} \times \min(1.0, 5\% \times CatchMult)")
+        st.latex(r"Net_{crony} = (Amount_{crony} - Caught_{crony}) \times 20\% - Caught_{crony} \times 0.7_{fine}")
+        st.write(f"> **當前合約查扣率**: `{crony_base_rate*100:.1f}% × {catch_mult:.2f} = {crony_catch_ratio*100:.1f}%`")
+        st.caption(f"*(⚖️ 圖利罰金 `0.7` 倍由來：吐回 `{cfg.get('CRONY_PROFIT_RATE', 0.20)*100:.0f}%` 已收利潤 + `50%` 懲罰性違約金)*")
