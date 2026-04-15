@@ -11,7 +11,6 @@ def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
 def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0):
-    # 🚀 修正：維護費基數從 50 降到 20，讓維護費落在合理區間 (約佔收入 10%)
     amount = (2**current_val - 1) * 20.0
     max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
     decay_amt = min(amount, max_decay)
@@ -22,7 +21,6 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     effective_build = build_abi * 2.0
     b_norm = max(0.01, effective_build / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
-    # 🚀 修正：常數從 0.5 提升至 0.85，確保 0.4 的衰退中位數能吃掉 60% 總預算
     base_cost = (0.85 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
@@ -99,6 +97,75 @@ def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
 
     return correct_support * sign, wrong_support * sign, correct_prob
 
+# 🚀 Patch 2 新增：媒體洗腦與甩鍋機制
+def apply_media_spin(blind_support, my_media_power, opp_media_power, is_preview=False):
+    """
+    處理那些「思辨錯誤」的政績點數。
+    如果是正政績(>0)，媒體強的搶功勞；如果是負政績(<0)，媒體強的成功甩鍋給對手。
+    """
+    total_power = my_media_power + opp_media_power
+    if total_power <= 0:
+        # 都沒投錢操控媒體，五五波盲猜
+        spin_win_prob = 0.5 
+    else:
+        spin_win_prob = my_media_power / total_power
+
+    if is_preview:
+        if blind_support >= 0:
+            return blind_support * spin_win_prob, blind_support * (1.0 - spin_win_prob)
+        else:
+            # 負面政績：我方甩鍋成功(spin_win_prob)，負分就丟給對手；甩鍋失敗，負分自己吃
+            return blind_support * (1.0 - spin_win_prob), blind_support * spin_win_prob
+
+    my_spun_support = 0.0
+    opp_spun_support = 0.0
+    sign = 1.0 if blind_support >= 0 else -1.0
+    abs_total = abs(blind_support)
+    int_parts = int(abs_total)
+    remainder = abs_total - int_parts
+
+    for _ in range(int_parts):
+        if random.random() < spin_win_prob:
+            if sign > 0: my_spun_support += 1.0
+            else: opp_spun_support -= 1.0 # 我甩鍋成功，對手扣分
+        else:
+            if sign > 0: opp_spun_support += 1.0
+            else: my_spun_support -= 1.0 # 甩鍋失敗，我扣分
+            
+    if remainder > 0:
+        if random.random() < spin_win_prob:
+            if sign > 0: my_spun_support += remainder
+            else: opp_spun_support -= remainder
+        else:
+            if sign > 0: opp_spun_support += remainder
+            else: my_spun_support -= remainder
+
+    return my_spun_support, opp_spun_support
+
+# 🚀 Patch 2 新增：非線性情緒煽動攻堅
+def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
+    """
+    每一點煽動力量都是一次擲骰。
+    當前情緒越高(越接近100)，煽動成功的機率越低。
+    """
+    if is_preview:
+        # 預覽用的期望值估算 (因為每次成功都會讓後續更難，這裡用簡單積分近似)
+        success_rate = (100.0 - current_emotion) / 100.0
+        return base_incite_rolls * success_rate
+
+    successful_incites = 0.0
+    temp_emotion = current_emotion
+    int_rolls = int(base_incite_rolls)
+    
+    for _ in range(int_rolls):
+        if temp_emotion >= 100.0: break
+        success_prob = (100.0 - temp_emotion) / 100.0
+        if random.random() < success_prob:
+            successful_incites += 1.0
+            temp_emotion += 1.0 # 成功煽動一次，情緒上升，下次更難
+            
+    return successful_incites
+
 def get_rigidity(i, sanity=50.0):
     x = (i - 100.5) / 99.5
     base_rigidity = 0.95 * (x**2) + 0.05
@@ -133,20 +200,40 @@ def run_conquest(boundary_B, net_support_A, sanity=50.0):
 
     return B, support_used, conquered
 
-def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
+def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net, h_media_pwr=0.0, r_media_pwr=0.0):
     p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
 
+    # 1. 思辨過濾
     plan_correct, plan_wrong, correct_prob = apply_sanity_filter(p_plan, sanity, emotion, is_preview=True)
     exec_correct, exec_wrong, _ = apply_sanity_filter(p_exec, sanity, emotion, is_preview=True)
-
+    
+    # 2. 媒體洗腦/甩鍋 (針對那些思辨錯誤的點數)
+    # 決定誰是誰的媒體力量
     if ruling_party_name == hp.name:
-        h_plan_sup = plan_correct; r_plan_sup = plan_wrong
+        ruling_media_pwr = h_media_pwr; opp_media_pwr = r_media_pwr
     else:
-        r_plan_sup = plan_correct; h_plan_sup = plan_wrong
+        ruling_media_pwr = r_media_pwr; opp_media_pwr = h_media_pwr
+        
+    # 大環境政績洗腦
+    ruling_spun_plan, opp_spun_plan = apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr, is_preview=True)
+    
+    # 專案政績洗腦 (H 是負責方)
+    h_spun_exec, r_spun_exec = apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr, is_preview=True)
+
+    # 3. 總結點數
+    if ruling_party_name == hp.name:
+        h_plan_sup = plan_correct + ruling_spun_plan
+        r_plan_sup = opp_spun_plan
+    else:
+        r_plan_sup = plan_correct + ruling_spun_plan
+        h_plan_sup = opp_spun_plan
+        
+    h_exec_sup = exec_correct + h_spun_exec
+    r_exec_sup = r_spun_exec
 
     return {
-        hp.name: {'perf_gdp': h_plan_sup, 'perf_proj': exec_correct},
-        rp.name: {'perf_gdp': r_plan_sup, 'perf_proj': exec_wrong},
+        hp.name: {'perf_gdp': h_plan_sup, 'perf_proj': h_exec_sup, 'spun_gdp': ruling_spun_plan if ruling_party_name == hp.name else opp_spun_plan, 'spun_proj': h_spun_exec},
+        rp.name: {'perf_gdp': r_plan_sup, 'perf_proj': r_exec_sup, 'spun_gdp': ruling_spun_plan if ruling_party_name == rp.name else opp_spun_plan, 'spun_proj': r_spun_exec},
         'correct_prob': correct_prob,
         'p_plan': p_plan, 'p_exec': p_exec,
         'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
