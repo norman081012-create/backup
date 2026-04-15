@@ -4,13 +4,13 @@
 # ==========================================
 import streamlit as st
 import formulas
+import ui_core
 import i18n
 
 t = i18n.t
 
 def render_formula_panel(game, view_party, cfg):
     with st.expander(t("🧮 遊戲公式與計算過程監控 (智庫解析)"), expanded=False):
-        # ... (前段抓取資料邏輯相同，保留不變) ...
         plan = None
         is_selected = False
         
@@ -36,8 +36,12 @@ def render_formula_panel(game, view_party, cfg):
         decay_val = view_party.current_forecast
         decay_str = f"{decay_val:.3f}{TAG_EST}"
         
-        build_val = game.h_role_party.build_ability
-        build_str = f"{build_val:.1f}{TAG_CFM}"
+        # 🚀 修正：改用受觀測扭曲的工程能力，而非赤裸的底層能力
+        obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
+        build_val = obs_abis['build']
+        is_my_h = (view_party.name == game.h_role_party.name)
+        build_tag = TAG_CFM if (is_my_h or st.session_state.get('god_mode')) else TAG_EST
+        build_str = f"{build_val:.1f}{build_tag}"
         
         h_wealth_val = game.h_role_party.wealth
         h_wealth_str = f"{h_wealth_val:.1f}{TAG_CFM}"
@@ -65,13 +69,13 @@ def render_formula_panel(game, view_party, cfg):
             st.write(f"- 監管出資: `{r_pays_s}`")
 
         st.markdown("---")
-        # 🚀 支援度 2.0 新增公式說明
         st.markdown("### 🧮 支持度演算法 (Support Engine 2.0)")
         st.markdown("**1. 規劃政績 (大環境紅利)** - *絕對落差模型與預期權重*")
         st.latex(r"P_{plan} = \Delta A + (\Delta A - \Delta E) \times W_{exp}")
         st.markdown("**2. 執行政績 (專案苦勞)** - *強制綁定大環境絕對規模*")
         st.latex(r"P_{exec} = |P_{plan}| \times \left(\frac{C_{actual}}{C_{target}} - 1\right)")
-        st.markdown("**3. 彈藥與版圖推移** - *200人 U型陣列攻堅*")
+        # 🚀 修正標題文字
+        st.markdown("**3. 支持量與支持度變化**")
         st.latex(r"WinProb = 1.0 - Rigidity(target\_index)")
 
         st.markdown("---")
