@@ -54,11 +54,11 @@ def render(game, cfg):
         
         rp_inv_pct = rp.investigate_ability / 10.0
         hp_stl_pct = hp.stealth_ability / 10.0
-        actual_catch_mult = max(0.1, (rp_inv_pct * cfg.get('R_INV_BONUS', 1.2)) - hp_stl_pct + 1.0)
+        actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
         
         inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
         
-        # 1. 貪污結算 
+        # 1. 貪污結算
         adj_corr_amt = corr_amt / (1.0 + inflation)
         rolls_corr = adj_corr_amt * actual_catch_mult
         catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.10)
@@ -104,22 +104,46 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # 🚀 Patch 2: 計算媒體力量與意識形態倍率
-        # 意識形態因子 (左傾負數=填鴨，右傾正數=思辨)
-        # 填鴨度越高，媒體洗腦與造勢越強。
-        cramming_factor = max(0.0, (50.0 - game.sanity) / 100.0) # 思辨越低，填鴨加成越高
-        emo_factor = game.emotion / 100.0
-        media_multiplier = (1.0 + cramming_factor + emo_factor)
+        # 🚀 媒體與意識形態準備階段
+        s_val = max(0.0, (game.sanity - 50.0) / 50.0) # 思辨度 (>50)
+        c_val = max(0.0, (50.0 - game.sanity) / 50.0) # 填鴨度 (<50)
+        censor_factor = 1.0 + s_val - c_val           # 用於媒體審查反噬的公式
         
-        # 媒體審查 (僅對 H 系統有效)
-        judicial_amt = float(ra.get('judicial', 0.0))
-        h_censor_penalty = max(0.1, 1.0 - (judicial_amt / max(1.0, float(hp.wealth)))) # 投入預算比例削弱對手媒體
-
-        h_media_raw = float(ha.get('media', 0.0)) * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2)
-        r_media_raw = float(ra.get('media', 0.0)) * (rp.media_ability / 10.0)
+        media_multiplier = max(0.1, 1.0 - s_val + c_val + (game.emotion / 100.0))
         
-        h_media_pwr = h_media_raw * media_multiplier * h_censor_penalty
-        r_media_pwr = r_media_raw * media_multiplier
+        # 🚀 媒體審查運作與固著度反噬
+        judicial_lvl = float(ra.get('judicial_lvl', 0.0))
+        judicial_cost = float(ra.get('judicial_cost', 0.0))
+        
+        B = game.boundary_B
+        opp_indices = range(B + 1, 201) if hp.name == game.party_A.name else range(1, B + 1)
+        censor_successes = 0
+        censor_failures = 0
+        
+        for i in opp_indices:
+            # 獲取對方選民當下的固著度
+            rig = formulas.get_rigidity(i, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
+            if random.random() > rig:
+                censor_successes += 1
+            else:
+                censor_failures += 1
+        
+        censor_weight = judicial_lvl * 0.1 # 0~10等轉為 0~1.0權重
+        censor_emotion_add = censor_weight * censor_successes * censor_factor
+        
+        if (censor_successes + censor_failures) > 0:
+            censor_rigidity_buff = censor_weight * (censor_successes / (censor_successes + censor_failures)) * censor_factor
+        else:
+            censor_rigidity_buff = 0.0
+            
+        if judicial_lvl > 0:
+            game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
+            
+        h_censor_penalty = max(0.1, 1.0 - censor_weight) # 審查會真實削弱對手媒體與造勢產出
+        
+        # 🚀 洗腦與甩鍋結算
+        h_media_pwr = float(ha.get('media_cost', 0.0)) * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+        r_media_pwr = float(ra.get('media_cost', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
         
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
@@ -132,41 +156,35 @@ def render(game, cfg):
         else:
             ruling_media_pwr = r_media_pwr; opp_media_pwr = h_media_pwr
             
-        # 🚀 實裝政績洗腦與甩鍋結算
         ruling_spun_plan, opp_spun_plan = formulas.apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr)
         h_spun_exec, r_spun_exec = formulas.apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr)
 
         ammo_A = 0.0; ammo_B = 0.0
 
-        # 分配大環境點數
         if ruling_name == game.party_A.name:
-            ammo_A += plan_correct + ruling_spun_plan
-            ammo_B += opp_spun_plan
+            ammo_A += plan_correct + ruling_spun_plan; ammo_B += opp_spun_plan
         else:
-            ammo_B += plan_correct + ruling_spun_plan
-            ammo_A += opp_spun_plan
+            ammo_B += plan_correct + ruling_spun_plan; ammo_A += opp_spun_plan
 
-        # 分配專案點數
         if hp.name == game.party_A.name:
-            ammo_A += exec_correct + h_spun_exec
-            ammo_B += r_spun_exec
+            ammo_A += exec_correct + h_spun_exec; ammo_B += r_spun_exec
         else:
-            ammo_B += exec_correct + h_spun_exec
-            ammo_A += r_spun_exec
+            ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
         # 🚀 實裝造勢競選點數
-        h_camp_raw = float(ha.get('camp', 0.0)) * (hp.media_ability / 10.0)
-        r_camp_raw = float(ra.get('camp', 0.0)) * (rp.media_ability / 10.0)
-        
-        h_camp_pwr = h_camp_raw * media_multiplier * h_censor_penalty * 0.5
-        r_camp_pwr = r_camp_raw * media_multiplier * 0.5
+        h_camp_pwr = float(ha.get('camp_cost', 0.0)) * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty
+        r_camp_pwr = float(ra.get('camp_cost', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
 
         if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
         else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
 
         net_ammo_A = ammo_A - ammo_B
         old_boundary = game.boundary_B
-        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity)
+        
+        # 傳遞 Buff 進攻堅函數
+        buff_amt = getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0)
+        buff_party = getattr(game, 'h_rigidity_buff', {}).get('party')
+        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity, buff_amt, buff_party, game.party_A.name)
         
         game.boundary_B = new_boundary
         game.party_A.support = new_boundary * 0.5
@@ -175,12 +193,14 @@ def render(game, cfg):
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         
         # 🚀 實裝非線性情緒煽動
-        h_incite_raw = float(ha.get('incite', 0.0)) * media_multiplier * h_censor_penalty
-        r_incite_raw = float(ra.get('incite', 0.0)) * media_multiplier
-        total_incite_rolls = h_incite_raw + r_incite_raw
+        h_incite_rolls = float(ha.get('incite_cost', 0.0)) * media_multiplier * h_censor_penalty
+        r_incite_rolls = float(ra.get('incite_cost', 0.0)) * media_multiplier
+        total_incite_rolls = h_incite_rolls + r_incite_rolls
         
         incite_points = formulas.calc_incite_success(total_incite_rolls, game.emotion)
-        emotion_delta = incite_points * 0.1 - gdp_grw_bonus - (game.sanity * 0.15)
+        
+        # 情緒加總：煽動結果 + 審查帶來的反噬激憤 - 經濟安定紅利 - 思辨冷靜值
+        emotion_delta = (incite_points * 0.1) + censor_emotion_add - gdp_grw_bonus - (game.sanity * 0.15)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
         
         f_target_san = max(0.0, min(100.0, 50.0 + (ha.get('edu_stance', 0) + ra.get('edu_stance', 0)) * 0.5))
@@ -197,7 +217,8 @@ def render(game, cfg):
             'ammo_A': ammo_A, 'ammo_B': ammo_B, 'net_ammo_A': net_ammo_A,
             'old_boundary': old_boundary, 'new_boundary': new_boundary, 'used_ammo': used_ammo, 'conquered': conquered,
             'correct_prob': correct_prob,
-            'h_spun_exec': h_spun_exec, 'r_spun_exec': r_spun_exec, # 記錄媒體洗腦影響
+            'h_spun_exec': h_spun_exec, 'r_spun_exec': r_spun_exec, 
+            'censor_successes': censor_successes, 'censor_failures': censor_failures, 'censor_emotion_add': censor_emotion_add, 'censor_buff': censor_rigidity_buff,
             'h_inc': hp_inc, 'r_inc': rp_inc, 
             'h_base': hp_base, 'r_base': rp_base, 
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
@@ -219,6 +240,12 @@ def render(game, cfg):
         
         hp.wealth += hp_inc - h_tot_action - h_tot_maint - hp_wealth_penalty
         rp.wealth += rp_inc - r_tot_action - r_tot_maint
+
+        # 🚀 推進 Buff 的持續時間
+        if hasattr(game, 'h_rigidity_buff') and game.h_rigidity_buff['duration'] > 0:
+            game.h_rigidity_buff['duration'] -= 1
+            if game.h_rigidity_buff['duration'] <= 0:
+                game.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
 
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
         if is_election_end:
@@ -280,9 +307,11 @@ def render(game, cfg):
         
         st.caption(f"*(📡 今年度選民思辨正確歸因率: `{rep['correct_prob']*100:.1f}%`)*")
         
-        # 🚀 顯示媒體洗腦效果
         if rep['h_spun_exec'] != 0 or rep['r_spun_exec'] != 0:
-            st.info(f"📺 **本年媒體風向：** 執行方透過媒體操控影響了 `{rep['h_spun_exec']:+.1f}` 點政績；監管方帶風向影響了 `{rep['r_spun_exec']:+.1f}` 點！")
+            st.info(f"📺 **本年媒體風向：** 執行方透過媒體操控轉移了 `{rep['h_spun_exec']:+.1f}` 點政績；監管方帶風向轉移了 `{rep['r_spun_exec']:+.1f}` 點！")
+            
+        if rep.get('censor_buff', 0) > 0:
+            st.warning(f"⚖️ **審查反噬：** 監管方強制打壓媒體，激怒了 `{rep['censor_successes']}` 單位對立選民！執行方支持者的固著度未來兩年內大幅強化 `+{rep['censor_buff']:.3f}`！")
 
         st.write(f"**{game.party_A.name} 總支持量:** `{rep['ammo_A']:.1f}` | **{game.party_B.name} 總支持量:** `{rep['ammo_B']:.1f}`")
         
