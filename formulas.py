@@ -3,6 +3,7 @@
 # 負責核心無狀態的純數學模型計算
 # ==========================================
 import math
+import random
 import i18n
 t = i18n.t
 
@@ -13,24 +14,17 @@ def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0)
     amount = (2**current_val - 1) * 50.0
     max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
     decay_amt = min(amount, max_decay)
-    
     discount_factor = 1.0 - (build_ability * 0.02)
-    # 乘上 0.1 的經濟規模轉換率，將龐大的物理點數轉化為合理的遊戲資金
     return decay_amt * max(0.1, discount_factor) * 0.1
 
 def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_ability=0.0):
     a_c = (2**current_val - 1) * 50.0
     a_t = (2**target_val - 1) * 50.0
     max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
-    
     a_base = max(0.0, a_c - max_decay)
-    
-    if a_t <= a_base:
-        return 0.0
-        
+    if a_t <= a_base: return 0.0
     req_amt = a_t - a_base
     discount_factor = 1.0 - (build_ability * 0.02)
-    # 乘上 0.1 的經濟規模轉換率
     return req_amt * max(0.1, discount_factor) * 0.1
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
@@ -41,12 +35,7 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
 
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
-    
-    if override_unit_cost is not None:
-        unit_cost = override_unit_cost
-    else:
-        unit_cost = calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
-        
+    unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
     req_cost = bid_cost * unit_cost
     available_fund = max(0.0, proj_fund + r_pays - corr_amt + h_wealth)
     
@@ -62,7 +51,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     payout_h = min(budget_t, proj_fund * h_idx)
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
-    
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
     h_project_profit = payout_h + r_pays - act_fund
     
@@ -73,11 +61,38 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
+def distribute_points_by_dice(total_points, correct_prob):
+    """
+    逐點擲骰機制：將總點數拆成 1 點 1 點，根據正確率機率擲骰。
+    回傳: (正確歸因獲得的點數, 錯誤歸因獲得的點數)
+    """
+    correct_pts = 0.0
+    wrong_pts = 0.0
+    sign = 1.0 if total_points >= 0 else -1.0
+    abs_total = abs(total_points)
+    int_parts = int(abs_total)
+    remainder = abs_total - int_parts
+    
+    # 針對每一個整數點進行擲骰
+    for _ in range(int_parts):
+        if random.random() < correct_prob:
+            correct_pts += 1.0
+        else:
+            wrong_pts += 1.0
+            
+    # 針對小數點餘額進行最後一次擲骰
+    if remainder > 0:
+        if random.random() < correct_prob:
+            correct_pts += remainder
+        else:
+            wrong_pts += remainder
+            
+    return correct_pts * sign, wrong_pts * sign
+
+def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net, is_preview=True):
     expected_drop_pct = claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
     expected_drop_amt = curr_gdp * expected_drop_pct
     actual_drop_amt = curr_gdp - new_gdp
-    
     perf_const = 0.01 
     
     if expected_drop_amt > 0.001:
@@ -85,32 +100,48 @@ def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     else:
         gdp_perf_base = - actual_drop_amt * perf_const
         
-    # 選民理智過濾器 (歸因能力)
+    # 選民理智過濾器 (正確歸因率)
     crit_think = sanity / 100.0
     emo_val = emotion / 100.0
-    s_filter = max(0.0, min(1.0, crit_think * (1.0 - emo_val * 0.5))) 
+    correct_prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5))) 
     
-    shifts = {hp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
-              rp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}}
-              
-    # 大環境政績歸因
-    # 理智選民歸因給當權者 (Ruling Party)
-    ruling_gdp_perf = gdp_perf_base * s_filter
-    # 盲目/情緒選民錯把大環境歸因給眼前做事的執行系統 (H-System)
-    exec_gdp_perf = gdp_perf_base * (1.0 - s_filter)
+    shifts = {
+        hp.name: {'perf': 0.0, 'perf_gdp': 0.0, 'perf_proj': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
+        rp.name: {'perf': 0.0, 'perf_gdp': 0.0, 'perf_proj': 0.0, 'camp': 0.0, 'backlash': 0.0}
+    }
     
+    # 1. 大環境 GDP 政績歸因
+    if is_preview:
+        ruling_gdp_perf = gdp_perf_base * correct_prob
+        exec_wrong_gdp_perf = gdp_perf_base * (1.0 - correct_prob)
+    else:
+        ruling_gdp_perf, exec_wrong_gdp_perf = distribute_points_by_dice(gdp_perf_base, correct_prob)
+        
+    shifts[ruling_party_name]['perf_gdp'] += ruling_gdp_perf
     shifts[ruling_party_name]['perf'] += ruling_gdp_perf
-    shifts[hp.name]['perf'] += exec_gdp_perf
     
-    # [修正] 專案執行政績 (苦勞紅利)：100% 歸給執行系統
-    # 不再固定給 50 點，而是根據實際建設量 (c_net) 佔國家規模 (GDP) 的比例給予，並乘上履約率作為懲罰/平衡
+    shifts[hp.name]['perf_gdp'] += exec_wrong_gdp_perf
+    shifts[hp.name]['perf'] += exec_wrong_gdp_perf
+    
+    # 2. 專案政績 (苦勞紅利) 歸因
     completion_rate = min(1.0, c_net / max(1.0, bid_cost))
-    # 基準：每建設等同於 1% GDP 規模的工程量，獲得 2.5 點政績
     project_perf_base = (c_net / max(1.0, curr_gdp)) * 250.0 * completion_rate
     
-    shifts[hp.name]['perf'] += project_perf_base
+    if is_preview:
+        h_proj_perf = project_perf_base * correct_prob
+        r_wrong_proj_perf = project_perf_base * (1.0 - correct_prob)
+    else:
+        # 正確歸因給執行方，錯誤判斷則被監管方白嫖
+        h_proj_perf, r_wrong_proj_perf = distribute_points_by_dice(project_perf_base, correct_prob)
+        
+    shifts[hp.name]['perf_proj'] += h_proj_perf
+    shifts[hp.name]['perf'] += h_proj_perf
+    
+    shifts[rp.name]['perf_proj'] += r_wrong_proj_perf
+    shifts[rp.name]['perf'] += r_wrong_proj_perf
     
     shifts['project_perf'] = project_perf_base
+    shifts['correct_prob'] = correct_prob
     
     return shifts
 
