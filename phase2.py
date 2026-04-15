@@ -153,4 +153,65 @@ def render(game, view_party, opponent_party, cfg):
     
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(view_party.current_forecast), corr_amt=orig_corr_amt, r_pays=r_pays, h_wealth=expected_h_wealth)
     h_base = h_base_expected
-    r_base =
+    r_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
+    
+    hp_net_est = h_base + res_prev['h_project_profit'] + orig_corr_amt + orig_crony_income
+    rp_net_est = r_base + res_prev['payout_r'] - r_pays
+
+    # 🚀 計算預覽 ROI
+    eval_req_cost = res_prev['req_cost']
+    eval_r_pays = r_pays
+    eval_h_pays = eval_req_cost - eval_r_pays
+    
+    o_h_roi = (res_prev['h_project_profit'] / eval_h_pays) * 100.0 if eval_h_pays > 0 else float('inf')
+    o_r_roi = ((res_prev['payout_r'] - eval_r_pays) / eval_r_pays) * 100.0 if eval_r_pays > 0 else float('inf')
+
+    cramming_factor = max(0.0, (50.0 - game.sanity) / 100.0) 
+    emo_factor = game.emotion / 100.0
+    media_multiplier = max(0.1, 1.0 + cramming_factor + emo_factor)
+    
+    sim_judicial_lvl = float(act_ra.get('judicial_lvl', 0.0))
+    h_censor_penalty = max(0.1, 1.0 - (sim_judicial_lvl / 100.0)) 
+    
+    pr_mult = cfg.get('PR_EFFICIENCY_MULT', 3.0)
+    h_media_pwr = float(act_ha.get('media', 0.0)) * pr_mult * (game.h_role_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+    r_media_pwr = float(act_ra.get('media', 0.0)) * pr_mult * (game.r_role_party.media_ability / 10.0) * media_multiplier
+
+    shift_preview = formulas.calc_performance_preview(
+        cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
+        res_prev['est_gdp'], game.gdp, 
+        claimed_decay, game.sanity, game.emotion, bid_cost, res_prev['c_net'],
+        h_media_pwr, r_media_pwr
+    )
+    
+    preview_data = {
+        'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
+        'san': game.sanity, 'emo': game.emotion,
+        'h_inc': hp_net_est, 'r_inc': rp_net_est,
+        'my_roi': o_h_roi if is_h else o_r_roi,
+        'opp_roi': o_r_roi if is_h else o_h_roi,
+        'my_perf_gdp': shift_preview[view_party.name]['perf_gdp'],
+        'my_perf_proj': shift_preview[view_party.name]['perf_proj'],
+        'opp_perf_gdp': shift_preview[opponent_party.name]['perf_gdp'],
+        'opp_perf_proj': shift_preview[opponent_party.name]['perf_proj']
+    }
+    
+    ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
+    
+    if tot_spending_now <= cw and st.button(t("確認行動/結算", "Confirm Action/Settle"), use_container_width=True, type="primary"):
+        my_acts = {
+            'media': media_amt, 'camp': camp_amt, 'incite': incite_amt,
+            'edu_stance': new_edu, 'judicial_lvl': judicial_lvl,
+            'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt, 
+            't_inv': t_inv, 't_pre': t_pre, 't_med': t_med, 't_stl': t_stl, 't_bld': t_bld,
+            'legal': req_pay, 'tot_action': tot_action, 'tot_maint': tot_maint, 'refund_action': refund_action
+        }
+        st.session_state[f"{view_party.name}_acts"] = my_acts
+        
+        if f"{opponent_party.name}_acts" not in st.session_state:
+            game.proposing_party = opponent_party
+            st.rerun()
+        else:
+            game.phase = 3
+            game.proposing_party = game.r_role_party
+            st.rerun()
