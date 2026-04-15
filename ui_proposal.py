@@ -22,6 +22,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_r_party = game.h_role_party
         sim_ruling_name = game.ruling_party.name 
         my_is_h_in_sim = (view_party.name == sim_h_party.name)
+        my_is_ruling_in_sim = (view_party.name == sim_ruling_name)
         swap_penalty = game.total_budget * cfg.get('TRUST_BREAK_PENALTY_RATIO', 0.05)
         st.warning("⚠️ 模擬換位中：您將模擬扮演對手角色進行損益評估。")
     else:
@@ -29,6 +30,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_r_party = game.r_role_party
         sim_ruling_name = game.ruling_party.name
         my_is_h_in_sim = (view_party.name == sim_h_party.name)
+        my_is_ruling_in_sim = (view_party.name == sim_ruling_name)
         swap_penalty = 0.0
 
     tt_decay = view_party.current_forecast
@@ -81,7 +83,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
-        cl_decay, game.sanity, game.emotion, bid_cost, res['c_net'],
+        cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net'],
         h_media_pwr, r_media_pwr
     )
     
@@ -101,7 +103,6 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
     st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
     
-    # 🚀 乾淨無標籤的點數顯示
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} | 專案: {my_proj_perf:+.1f})*")
     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} | 專案: {opp_proj_perf:+.1f})*")
