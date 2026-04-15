@@ -36,12 +36,9 @@ def render_formula_panel(game, view_party, cfg):
         decay_val = view_party.current_forecast
         decay_str = f"{decay_val:.3f}{TAG_EST}"
         
-        # 🚀 根據是否開啟模擬換位來決定當前 H-System 是誰
         is_simulating = st.session_state.get("sim_sw_📜 當前草案預覽_R") or st.session_state.get("sim_sw_📜 對手 (執行系統) 既有草案參考_H")
-        if is_simulating:
-            active_h = game.r_role_party
-        else:
-            active_h = game.h_role_party
+        if is_simulating: active_h = game.r_role_party
+        else: active_h = game.h_role_party
             
         obs_abis = ui_core.get_observed_abilities(view_party, active_h, game, cfg)
         build_val = obs_abis['build']
@@ -151,4 +148,3 @@ def render_formula_panel(game, view_party, cfg):
         st.latex(r"Caught_{crony} = Amount_{crony} \times \min(1.0, 5\% \times CatchMult)")
         st.latex(r"Net_{crony} = (Amount_{crony} - Caught_{crony}) \times 20\% - Caught_{crony} \times 0.7_{fine}")
         st.write(f"> **當前合約查扣率**: `{crony_base_rate*100:.1f}% × {catch_mult:.2f} = {crony_catch_ratio*100:.1f}%`")
-        st.caption(f"*(⚖️ 圖利罰金 `0.7` 倍由來：吐回 `{cfg.get('CRONY_PROFIT_RATE', 0.20)*100:.0f}%` 已收利潤 + `50%` 懲罰性違約金)*")
