@@ -22,6 +22,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_r_party = game.h_role_party
         sim_ruling_name = game.ruling_party.name 
         my_is_h_in_sim = (view_party.name == sim_h_party.name)
+        my_is_ruling_in_sim = (view_party.name == sim_ruling_name)
         swap_penalty = game.total_budget * cfg.get('TRUST_BREAK_PENALTY_RATIO', 0.05)
         st.warning("⚠️ 模擬換位中：您將模擬扮演對手角色進行損益評估。")
     else:
@@ -29,6 +30,7 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         sim_r_party = game.r_role_party
         sim_ruling_name = game.ruling_party.name
         my_is_h_in_sim = (view_party.name == sim_h_party.name)
+        my_is_ruling_in_sim = (view_party.name == sim_ruling_name)
         swap_penalty = 0.0
 
     tt_decay = view_party.current_forecast
@@ -74,17 +76,22 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     opp_proj_perf = shift_preview[opp_party_name]['perf_proj']
     opp_total_perf = opp_gdp_perf + opp_proj_perf
     
-    prob = shift_preview['correct_prob']
+    # 🚀 動態判定思辨正確或錯誤
+    my_gdp_label = "思辨正確" if my_is_ruling_in_sim else "思辨錯誤"
+    opp_gdp_label = "思辨錯誤" if my_is_ruling_in_sim else "思辨正確"
+    
+    my_proj_label = "思辨正確" if my_is_h_in_sim else "思辨錯誤"
+    opp_proj_label = "思辨錯誤" if my_is_h_in_sim else "思辨正確"
 
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
 
     st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}**")
     st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}**")
     
-    # 🚀 將思辨歸因率與 100% 完工提示直接內嵌在數值旁邊
+    # 🚀 實裝思辨歸因標籤與100%完工提示
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} (思辨正確歸因率 {prob*100:.1f}%) | 專案: {my_proj_perf:+.1f} (若 100% 完工))*")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} (思辨正確歸因率 {prob*100:.1f}%) | 專案: {opp_proj_perf:+.1f} (若 100% 完工))*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} ({my_gdp_label}) | 專案: {my_proj_perf:+.1f} ({my_proj_label} / 100% 完工))*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} ({opp_gdp_label}) | 專案: {opp_proj_perf:+.1f} ({opp_proj_label} / 100% 完工))*")
     
     st.markdown(f"4. {t('預期 GDP 變化', 'Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
