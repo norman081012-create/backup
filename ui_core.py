@@ -122,9 +122,11 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.markdown(f"{t('我方預估總收益')}: **{my_net:.1f}**")
                 st.markdown(f"{t('對方預估總收益')}: **{opp_net:.1f}**")
                 
-                st.markdown(f"{t('預期政績 (未經媒體)')}: 我方 **{preview_data['my_perf']:+.1f}** / 對方 **{preview_data['opp_perf']:+.1f}**")
-                if 'project_perf' in preview_data:
-                    st.caption(f"*(包含執行方當前貪污設定下的履約政績: `{preview_data['project_perf']:+.1f}`)*")
+                # 🚀 支援度 2.0 更新：合併顯示預期獲得的總彈藥量
+                my_perf = preview_data['my_perf_gdp'] + preview_data['my_perf_proj']
+                opp_perf = preview_data['opp_perf_gdp'] + preview_data['opp_perf_proj']
+                st.markdown(f"{t('預期產生彈藥量')}: 我方 **{my_perf:+.1f}** / 對方 **{opp_perf:+.1f}**")
+                
     st.markdown("---")
 
 def render_message_board(game):
@@ -150,12 +152,7 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
     </style>
     """, unsafe_allow_html=True)
 
-    a_pts = sum([x['val'] * (1.0 - (x['age']/7.0)) for x in game.support_queues[game.party_A.name]['perf']]) + \
-            sum([x['val'] * (1.0 - (x['age']/3.0)) for x in game.support_queues[game.party_A.name]['camp']]) + 5000.0
-    b_pts = sum([x['val'] * (1.0 - (x['age']/7.0)) for x in game.support_queues[game.party_B.name]['perf']]) + \
-            sum([x['val'] * (1.0 - (x['age']/3.0)) for x in game.support_queues[game.party_B.name]['camp']]) + 5000.0
-
-    for col, party, pts in zip([c1, c2], [view_party, opp], [a_pts if view_party.name == game.party_A.name else b_pts, b_pts if view_party.name == game.party_A.name else a_pts]):
+    for col, party in zip([c1, c2], [view_party, opp]):
         with col:
             is_h = (game.h_role_party.name == party.name)
             role_badge = t("🛡️ [執行系統]") if is_h else t("⚖️ [監管系統]")
@@ -193,7 +190,6 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 else:
                     disp_sup = "??? (需作民調)"
             
-            # [修改] 隱藏了裸露的 pts 支持量，僅顯示佔比/民調結果
             st.markdown(f"### 📊 支持度: **{disp_sup}**")
             
             if party.name == view_party.name and not is_election_year:
