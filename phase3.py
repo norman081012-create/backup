@@ -118,7 +118,6 @@ def render(game, cfg):
 
         net_ammo_A = ammo_A - ammo_B
         old_boundary = game.boundary_B
-        # 🚀 將 sanity 帶入陣列推移，反映填鴨度
         new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity)
         
         game.boundary_B = new_boundary
@@ -243,12 +242,14 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            # 🚀 確保每年剛開始時，監管系統必定是「上次勝選黨 (Ruling Party)」
             game.r_role_party = game.ruling_party
             game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             game.proposing_party = game.r_role_party
             
+            # 🚀 修復致命 Bug：進入下一年時，必須徹底清空上一年的結算指標，否則會陷入無限迴圈跳過升級！
+            game.last_year_report = None
+            
             for k in list(st.session_state.keys()):
-                if k.endswith('_acts'): del st.session_state[k]
+                if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
             if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
         st.rerun()
