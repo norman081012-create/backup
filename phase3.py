@@ -17,7 +17,6 @@ def render(game, cfg):
         ha = st.session_state.get(f"{hp.name}_acts", {})
         d = st.session_state.get('turn_data', {})
         
-        # 🚀 升級能力賦值：確保本回合的內部投資正式產生效果
         if 't_pre' in ra: rp.predict_ability = float(ra['t_pre'])
         if 't_inv' in ra: rp.investigate_ability = float(ra['t_inv'])
         if 't_med' in ra: rp.media_ability = float(ra['t_med'])
@@ -63,15 +62,18 @@ def render(game, cfg):
         rolls_crony = crony_pct_val * actual_catch_mult
         catch_prob_crony = 1.0 - (1.0 - cfg['CRONY_CATCH_RATE_PER_PERCENT'])**rolls_crony
         
+        # 🚀 修正 1：沒收所得獎金分配。監管系統領 20% 獎金，其餘 80% 充公回歸國家預算，避免通膨與一夜暴富
         if corr_amt > 0 and random.random() < catch_prob_corr:
-            returned_to_r += corr_amt
-            confiscated_to_budget += corr_amt * 0.4
+            bounty = corr_amt * 0.2
+            returned_to_r += bounty
+            confiscated_to_budget += (corr_amt - bounty)
             corr_caught = True
             corr_amt = 0
 
         if crony_base > 0 and random.random() < catch_prob_crony:
-            returned_to_r += crony_base
-            confiscated_to_budget += crony_base * 0.5
+            bounty = crony_base * 0.2
+            returned_to_r += bounty
+            confiscated_to_budget += (crony_base - bounty)
             crony_caught = True
             crony_base = 0
             crony_income = 0
@@ -161,12 +163,14 @@ def render(game, cfg):
         hp.wealth += hp_inc - h_tot_action - h_tot_maint
         rp.wealth += rp_inc - r_tot_action - r_tot_maint
 
-        if game.year % cfg['ELECTION_CYCLE'] == 1:
-            winner = hp if hp.support > rp.support else rp
+        # 🚀 修正 2：選舉只在任期結束 (第 4, 8, 12... 年) 才進行結算，確保執政黨當權穩定
+        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
+        if is_election_end:
+            winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
             game.ruling_party = winner
 
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
-        game.record_history(is_election=(game.year % cfg['ELECTION_CYCLE'] == 1))
+        game.record_history(is_election=is_election_end)
     
     rep = game.last_year_report
     
@@ -197,8 +201,8 @@ def render(game, cfg):
             st.write(f"- {t('行政與部門支出')}: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
             st.write(f"**{t('最終淨收益')}: `${rep['r_inc'] - (rep['r_pol_cost'] + rep['r_maint']):.1f}`**")
 
-        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污行為，非法資金已沒收並繳回國庫。"))
-        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利爭議，關聯資金已全數凍結。"))
+        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污行為，非法資金已充公，情報處獲頒 20% 查獲獎金。"))
+        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利爭議，關聯資金已全數凍結充公。"))
 
     with c2:
         st.markdown(f"### 🧠 {t('社會指標與選民變化')}")
@@ -236,17 +240,21 @@ def render(game, cfg):
 
     st.markdown("---")
     if st.button(t("⏩ 確認報告並進入下一年"), type="primary", use_container_width=True):
+        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
         game.year += 1
+        
         if game.year > cfg['END_YEAR']: game.phase = 4
         else:
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            game.r_role_party = game.ruling_party
-            game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
-            game.proposing_party = game.r_role_party
+            # 🚀 修正 3：只有在大選結束、新任期開始時，才強制重置當權黨為監管系統。
+            # 確保期間如果發生「倒閣換位」，少數派執政的狀態會一直保留到下次大選。
+            if is_election_end:
+                game.r_role_party = game.ruling_party
+                game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
-            # 🚀 修復致命 Bug：進入下一年時，必須徹底清空上一年的結算指標，否則會陷入無限迴圈跳過升級！
+            game.proposing_party = game.r_role_party
             game.last_year_report = None
             
             for k in list(st.session_state.keys()):
