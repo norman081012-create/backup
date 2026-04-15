@@ -55,22 +55,23 @@ def render(game, view_party, opponent_party, cfg):
         incite_emo = st.slider(t("🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)", "🔥 Incite Emotion (Reduces sanity short-term)"), 0.0, cw, last_incite)
         
     with c2:
-        # 🚀 修正：將放棄升級按鈕塞在標題右方
         c_dept1, c_dept2 = st.columns([0.65, 0.35])
         c_dept1.markdown(t("#### 🔒 內部部門投資", "#### 🔒 Dept. Investment"))
+        
+        # 🚀 修正：包含年份與黨派的專屬 UI Key，避免跨黨派與跨年狀態污染
         if c_dept2.button(t("🔄 放棄升級", "Reset to Current Maintenance"), use_container_width=True):
-            st.session_state['up_pre'] = view_party.predict_ability * 10.0
-            st.session_state['up_inv'] = view_party.investigate_ability * 10.0
-            st.session_state['up_med'] = view_party.media_ability * 10.0
-            st.session_state['up_stl'] = view_party.stealth_ability * 10.0
-            st.session_state['up_bld'] = view_party.build_ability * 10.0
+            st.session_state[f'up_pre_{view_party.name}_{game.year}'] = view_party.predict_ability * 10.0
+            st.session_state[f'up_inv_{view_party.name}_{game.year}'] = view_party.investigate_ability * 10.0
+            st.session_state[f'up_med_{view_party.name}_{game.year}'] = view_party.media_ability * 10.0
+            st.session_state[f'up_stl_{view_party.name}_{game.year}'] = view_party.stealth_ability * 10.0
+            st.session_state[f'up_bld_{view_party.name}_{game.year}'] = view_party.build_ability * 10.0
             st.rerun()
 
-        t_pre, c_pre = ui_core.ability_slider(t("智庫 (精準預測衰退，降低施政誤差)", "Think Tank (Accurate decay prediction, reduces policy errors)"), "up_pre", view_party.predict_ability, cw, cfg, view_party.build_ability, is_build=False)
-        t_inv, c_inv = ui_core.ability_slider(t("情報處 (抓包對手貪污圖利，提升觀測準確度)", "Intelligence (Catches opp. corruption/cronyism, improves observation accuracy)"), "up_inv", view_party.investigate_ability, cw, cfg, view_party.build_ability, is_build=False)
-        t_med, c_med = ui_core.ability_slider(t("黨媒 (放大媒體操控、煽動與競選效果)", "Media Dept (Amplifies media control, incite, and campaign effects)"), "up_med", view_party.media_ability, cw, cfg, view_party.build_ability, is_build=False)
-        t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護自身貪污圖利，干擾對手觀測)", "Counter-Intel (Covers own corruption/cronyism, disrupts opp. observation)"), "up_stl", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
-        t_bld, c_bld = ui_core.ability_slider(t("工程處 (提升建設產出，降低各部門升級成本)", "Engineering (Improves construction output, lowers dept. upgrade costs)"), "up_bld", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
+        t_pre, c_pre = ui_core.ability_slider(t("智庫 (精準預測衰退，降低施政誤差)", "Think Tank (Accurate decay prediction, reduces policy errors)"), f"up_pre_{view_party.name}_{game.year}", view_party.predict_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_inv, c_inv = ui_core.ability_slider(t("情報處 (抓包對手貪污圖利，提升觀測準確度)", "Intelligence (Catches opp. corruption/cronyism, improves observation accuracy)"), f"up_inv_{view_party.name}_{game.year}", view_party.investigate_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_med, c_med = ui_core.ability_slider(t("黨媒 (放大媒體操控、煽動與競選效果)", "Media Dept (Amplifies media control, incite, and campaign effects)"), f"up_med_{view_party.name}_{game.year}", view_party.media_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_stl, c_stl = ui_core.ability_slider(t("反情報處 (掩護自身貪污圖利，干擾對手觀測)", "Counter-Intel (Covers own corruption/cronyism, disrupts opp. observation)"), f"up_stl_{view_party.name}_{game.year}", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
+        t_bld, c_bld = ui_core.ability_slider(t("工程處 (提升建設產出，降低各部門升級成本)", "Engineering (Improves construction output, lowers dept. upgrade costs)"), f"up_bld_{view_party.name}_{game.year}", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
     tot_action = float(media_ctrl) + float(camp_amt) + float(incite_emo) + abs(float(edu_policy_amt)) + float(judicial_amt)
     tot_maint = float(c_inv) + float(c_pre) + float(c_med) + float(c_stl) + float(c_bld)
