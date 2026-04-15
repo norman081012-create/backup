@@ -142,6 +142,8 @@ def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     
     shifts['project_perf'] = project_perf_base
     shifts['correct_prob'] = correct_prob
+    shifts['h_proj_preview'] = h_proj_perf
+    shifts['r_proj_preview'] = r_wrong_proj_perf
     
     return shifts
 
