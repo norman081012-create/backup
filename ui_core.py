@@ -78,7 +78,6 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         
         conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
         gdp_loss = game.gdp * (fc * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
-        req_infra_to_balance = gdp_loss / conv_rate
         
         st.write(f"預估衰退值: `{fc:.3f}`")
         eval_scenario = config.get_economic_forecast_text(fc * 100)
@@ -252,18 +251,20 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     my_inv_raw_pct = view_party.investigate_ability / 10.0
     r_bonus = cfg['R_INV_BONUS'] if view_party.name == game.r_role_party.name else 1.0
     obs_stl_pct = obs_abis['stealth'] / 10.0
-    
     catch_mult = max(0.1, (my_inv_raw_pct * r_bonus) - obs_stl_pct + 1.0)
     
-    def get_catch_prob(c_pct, base_rate):
-        rolls = c_pct * catch_mult
-        return (1.0 - (1.0 - base_rate)**rolls) * 100.0
+    # 🚀 金額機率換算 (Sidebar展示)
+    inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
+    catch_rate_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005)
+    def get_catch_prob_amt(c_amt):
+        rolls = (c_amt / (1.0 + inflation)) * catch_mult
+        return (1.0 - (1.0 - catch_rate_dollar)**rolls) * 100.0
         
-    catch_10 = get_catch_prob(10.0, cfg['CATCH_RATE_PER_PERCENT'])
-    catch_30 = get_catch_prob(30.0, cfg['CATCH_RATE_PER_PERCENT'])
+    catch_100 = get_catch_prob_amt(100.0)
+    catch_300 = get_catch_prob_amt(300.0)
     
     st.write(f"**{t('防貪污能力估算')}**: 偵測擲骰倍率 `{catch_mult:.2f}x`")
-    st.caption(f"*(若對手貪污 10% $\\rightarrow$ 查獲率約 `{catch_10:.1f}%` | 貪 30% $\\rightarrow$ `{catch_30:.1f}%`)*")
+    st.caption(f"*(若對手貪污 $100 $\\rightarrow$ 查獲率約 `{catch_100:.1f}%` | 貪 $300 $\\rightarrow$ `{catch_300:.1f}%`)*")
     st.markdown("<br>", unsafe_allow_html=True)
     
     st.write(f"{t('工程處')}: {obs_abis['build']*10:.1f}%")
@@ -271,10 +272,9 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
-    inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
+    inflation_rate = inflation * 100.0
     
     st.write(f"**{t('建設估價')}**: {eval_txt}")
-    # 🚀 移除單價資訊中的通膨雜訊
     st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` )*")
 
     st.markdown("---")
@@ -294,9 +294,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
 
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
     current_pct = current_val * 10.0
-    
     max_upgrade = cfg.get('MAX_UPGRADE_SPEED', 20.0) * (1.0 + build_ability / 5.0)
-    
     min_pct = max(0.0, current_pct - 20.0)
     max_pct = min(100.0, current_pct + max_upgrade)
     
@@ -305,7 +303,6 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_b
     cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
     discount = 1.0 + build_ability / 5.0
     
-    # 🚀 動態計算變更後的預期維護費
     import formulas
     new_val = t_pct / 10.0
     eff_build = new_val if is_build else build_ability
@@ -313,13 +310,13 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_b
     
     if t_pct > current_pct: 
         cost = ((t_pct**2 - current_pct**2) * cost_mult) / discount
-        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處效率減免) | 預期維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
+        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處減免) | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
     elif t_pct < current_pct: 
         refund = ((current_pct**2 - t_pct**2) * cost_mult * 0.5) 
         cost = -refund
-        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f} | 預期維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
+        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f} | 維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
     else: 
         cost = 0.0
-        st.caption(f"🛡️ {t('維持現狀')} (預期維護費: ${new_maint:.1f})")
+        st.caption(f"🛡️ {t('維持現狀')} (維護費: ${new_maint:.1f})")
         
     return new_val, cost
