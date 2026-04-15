@@ -1,5 +1,6 @@
 # ==========================================
 # formulas.py
+# 負責核心無狀態的純數學模型計算
 # ==========================================
 import math
 import random
@@ -57,12 +58,17 @@ def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
     delta_E = -expected_loss_pct
 
     gap = delta_A - delta_E
-    weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
-    p_plan = delta_A + gap * weight
+    
+    # 🚀 修正 1：大環境政績脫離純衰退綁架，更看重預期落差管理
+    # 公式：5%的絕對GDP變動 + 15%的預期落差紅利
+    p_plan = (delta_A * 0.05) + (gap * 0.15)
 
     completion_rate = c_net / max(1.0, float(bid_cost))
     delta_C = (completion_rate - 0.5) * 2.0 
-    p_exec = abs(p_plan) * delta_C
+    
+    # 🚀 修正 2：專案政績直接與「專案本身的GDP貢獻度」掛鉤
+    target_gdp_growth = (bid_cost * cfg.get('GDP_CONVERSION_RATE', 0.2)) / max(1.0, curr_gdp) * 100.0
+    p_exec = target_gdp_growth * delta_C * 0.1
 
     support_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
     return p_plan * support_mult, p_exec * support_mult, delta_A, delta_E, delta_C
@@ -152,7 +158,6 @@ def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
             
     return successful_incites
 
-# 🚀 新增 Buff 支援的固著度判定
 def get_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
     x = (i - 100.5) / 99.5
     base_rigidity = 0.95 * (x**2) + 0.05
@@ -162,7 +167,6 @@ def get_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=100, 
     
     if buff_amt > 0 and buff_party and party_a_name:
         belongs_to_A = (i <= h_boundary)
-        # 如果該 index 屬於 Buff 持有的黨派，加上固著度抗性
         if (buff_party == party_a_name and belongs_to_A) or (buff_party != party_a_name and not belongs_to_A):
             final_rigidity += buff_amt
             
