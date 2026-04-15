@@ -34,18 +34,20 @@ DEFAULT_CONFIG = {
     'CORRUPTION_PENALTY': 2.0,
     'MAX_ABILITY': 10.0, 
     'ABILITY_DEFAULT': 3.0,          
-    'BUILD_ABILITY_DEFAULT': 6.0,    
+    'BUILD_ABILITY_DEFAULT': 3.0, # 🚀 修正：工程處初始值降回 30%
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
     'SANITY_DEFAULT': 50.0,   
     'EMOTION_DEFAULT': 30.0,
     
-    # 🚀 支持度 2.0 新增常數
-    'CLAIMED_DECAY_WEIGHT': 0.2,   # 預期影響的 20% 權重煞車皮
-    'AMMO_MULTIPLIER': 50.0,       # 政績轉化為實體彈藥的放大倍數
-    'MAX_UPGRADE_SPEED': 20.0,     # 單次基礎最大升級速度
-    'UPGRADE_COST_MULT': 0.1,      # 二次方升級乘數
+    'CLAIMED_DECAY_WEIGHT': 0.2,
+    'AMMO_MULTIPLIER': 50.0,
+    'MAX_UPGRADE_SPEED': 20.0,
+    'UPGRADE_COST_MULT': 0.15, # 🚀 修正：提高二次方升級基礎花費
+    
+    'PREDICT_ACCURACY_WEIGHT': 0.8,     # 🚀 新增：智庫預測準確權重
+    'INVESTIGATE_ACCURACY_WEIGHT': 0.8, # 🚀 新增：情報處觀測準確權重
     
     'PERF_IMPACT_BASE': 1000.0,
     'OBS_ERR_BASE': 0.7,      
@@ -56,7 +58,8 @@ def get_config_translations():
         'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
         'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
         'CATCH_RATE_PER_PERCENT': "貪污每%基礎被抓率", 'CRONY_CATCH_RATE_PER_PERCENT': "圖利每%基礎被抓率",
-        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率"
+        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率",
+        'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重"
     }
     
 def get_intel_market_eval(unit_cost):
