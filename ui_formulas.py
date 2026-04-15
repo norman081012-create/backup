@@ -36,13 +36,20 @@ def render_formula_panel(game, view_party, cfg):
         decay_val = view_party.current_forecast
         decay_str = f"{decay_val:.3f}{TAG_EST}"
         
-        obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
+        # 🚀 根據是否開啟模擬換位來決定當前 H-System 是誰
+        is_simulating = st.session_state.get("sim_sw_📜 當前草案預覽_R") or st.session_state.get("sim_sw_📜 對手 (執行系統) 既有草案參考_H")
+        if is_simulating:
+            active_h = game.r_role_party
+        else:
+            active_h = game.h_role_party
+            
+        obs_abis = ui_core.get_observed_abilities(view_party, active_h, game, cfg)
         build_val = obs_abis['build']
-        is_my_h = (view_party.name == game.h_role_party.name)
+        is_my_h = (view_party.name == active_h.name)
         build_tag = TAG_CFM if (is_my_h or st.session_state.get('god_mode')) else TAG_EST
         build_str = f"{build_val:.1f}{build_tag}"
         
-        h_wealth_val = game.h_role_party.wealth
+        h_wealth_val = active_h.wealth
         h_wealth_str = f"{h_wealth_val:.1f}{TAG_CFM}"
 
         plan_tag = TAG_CFM if is_selected else TAG_TMP
@@ -61,7 +68,7 @@ def render_formula_panel(game, view_party, cfg):
         with col1:
             st.write(f"- GDP: `{gdp_str}`")
             st.write(f"- 預估衰退: `{decay_str}`")
-            st.write(f"- 執行方工程能力 (H-System): `{build_str}`") 
+            st.write(f"- 執行方工程能力 (H-System): `{build_str}`" + (" *(模擬中)*" if is_simulating else "")) 
         with col2:
             st.write(f"- 計畫獎勵: `{proj_fund_s}`")
             st.write(f"- 總效益值: `{bid_cost_s}`")
@@ -85,7 +92,6 @@ def render_formula_panel(game, view_party, cfg):
         st.write(f"> **計算**: `{gdp_str}` × (`{decay_str}` × `0.05{TAG_CON}` + `0{TAG_CON}`) = **{loss_v:.2f}**")
 
         st.markdown("**2. 單位工程成本 (含通膨) (Unit Construction Cost)**")
-        # 🚀 修正：同步了最新的 0.85 基數常數
         st.latex(r"Cost = \frac{0.85}{Build / 10} \times 2^{(2 \times Decay - 1)} \times (1 + Inflation)")
         
         b_norm = max(0.01, build_val / 10.0)
@@ -119,8 +125,6 @@ def render_formula_panel(game, view_party, cfg):
             st.info("💡 部分關鍵數據（如獎勵金或效益）尚在 `pending (空)` 狀態，無法完成預測計算。")
 
         st.markdown("---")
-        
-        # 🚀 全新區塊：徹底透明化我們剛剛大改的線性查扣與罰金機制
         st.markdown("### ⚖️ 暗盤操作與司法查扣演算法 (線性預期模型)")
         
         rp = game.r_role_party
