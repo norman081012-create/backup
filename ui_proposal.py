@@ -60,16 +60,25 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     my_net = (h_base + h_project_profit if my_is_h_in_sim else r_base + r_project_profit) - swap_penalty
     opp_net = (r_base + r_project_profit if my_is_h_in_sim else h_base + h_project_profit) - swap_penalty
     
-    o_h_roi = (h_project_profit / float(eval_h_pays)) * 100.0 if eval_h_pays > 0 else float('inf')
-    o_r_roi = (r_project_profit / float(eval_r_pays)) * 100.0 if eval_r_pays > 0 else float('inf')
+    # 🚀 在預覽時帶入當前的媒體與意識形態數值進行洗腦試算
+    cramming_factor = max(0.0, (50.0 - game.sanity) / 100.0) 
+    emo_factor = game.emotion / 100.0
+    media_multiplier = (1.0 + cramming_factor + emo_factor)
     
-    my_roi = o_h_roi if my_is_h_in_sim else o_r_roi
-    opp_roi = o_r_roi if my_is_h_in_sim else o_h_roi
+    ha = st.session_state.get(f"{sim_h_party.name}_acts", {})
+    ra = st.session_state.get(f"{sim_r_party.name}_acts", {})
+    
+    judicial_amt = float(ra.get('judicial', 0.0))
+    h_censor_penalty = max(0.1, 1.0 - (judicial_amt / max(1.0, float(sim_h_party.wealth))))
+    
+    h_media_pwr = float(ha.get('media', 0.0)) * (sim_h_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+    r_media_pwr = float(ra.get('media', 0.0)) * (sim_r_party.media_ability / 10.0) * media_multiplier
     
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
-        cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net']
+        cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net'],
+        h_media_pwr, r_media_pwr
     )
     
     opp_party_name = sim_r_party.name if my_is_h_in_sim else sim_h_party.name
@@ -77,30 +86,34 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     my_gdp_perf = shift_preview[view_party.name]['perf_gdp']
     my_proj_perf = shift_preview[view_party.name]['perf_proj']
     my_total_perf = my_gdp_perf + my_proj_perf
+    my_spun_gdp = shift_preview[view_party.name]['spun_gdp']
+    my_spun_proj = shift_preview[view_party.name]['spun_proj']
     
     opp_gdp_perf = shift_preview[opp_party_name]['perf_gdp']
     opp_proj_perf = shift_preview[opp_party_name]['perf_proj']
     opp_total_perf = opp_gdp_perf + opp_proj_perf
+    opp_spun_gdp = shift_preview[opp_party_name]['spun_gdp']
+    opp_spun_proj = shift_preview[opp_party_name]['spun_proj']
     
-    # 🚀 動態判定思辨正確或錯誤
-    my_gdp_label = "思辨正確" if my_is_ruling_in_sim else "思辨錯誤"
-    opp_gdp_label = "思辨錯誤" if my_is_ruling_in_sim else "思辨正確"
+    my_gdp_label = "包含媒體引導" if my_spun_gdp != 0 else "思辨正確"
+    opp_gdp_label = "包含媒體引導" if opp_spun_gdp != 0 else "思辨正確"
     
-    my_proj_label = "思辨正確" if my_is_h_in_sim else "思辨錯誤"
-    opp_proj_label = "思辨錯誤" if my_is_h_in_sim else "思辨正確"
+    my_proj_label = "包含媒體引導" if my_spun_proj != 0 else "思辨正確"
+    opp_proj_label = "包含媒體引導" if opp_spun_proj != 0 else "思辨正確"
 
     prob = shift_preview['correct_prob']
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
     
     def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
 
-    st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
-    st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
+    st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}**")
+    st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}**")
     
-    # 🚀 將思辨歸因率與 100% 完工提示直接內嵌在數值旁邊
     st.markdown(f"3. {t('預期產生總支持量', 'Total Expected Support')}:")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} ({my_gdp_label} {prob*100:.1f}%) | 專案: {my_proj_perf:+.1f} ({my_proj_label} / 若 100% 完工))*")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} ({opp_gdp_label} {prob*100:.1f}%) | 專案: {opp_proj_perf:+.1f} ({opp_proj_label} / 若 100% 完工))*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **我方總和: `{my_total_perf:+.1f}`** *(大環境: {my_gdp_perf:+.1f} ({my_gdp_label}) | 專案: {my_proj_perf:+.1f} ({my_proj_label}))*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **對手總和: `{opp_total_perf:+.1f}`** *(大環境: {opp_gdp_perf:+.1f} ({opp_gdp_label}) | 專案: {opp_proj_perf:+.1f} ({opp_proj_label}))*")
+    
+    st.caption(f"*(⚠️ 注意：此預估包含大環境基本盤與【當前媒體預算設定】下的洗腦引導值。**專案政績需執行方 100% 履約才會完整發放**。)*")
     
     st.markdown(f"4. {t('預期 GDP 變化', 'Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
