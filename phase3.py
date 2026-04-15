@@ -54,7 +54,7 @@ def render(game, cfg):
         
         rp_inv_pct = rp.investigate_ability / 10.0
         hp_stl_pct = hp.stealth_ability / 10.0
-        actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
+        actual_catch_mult = max(0.1, (rp_inv_pct * cfg.get('R_INV_BONUS', 1.2)) - hp_stl_pct + 1.0)
         
         inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
         
@@ -104,16 +104,15 @@ def render(game, cfg):
         hp_inc = hp_base + hp_project_net + corr_amt + crony_income
         rp_inc = rp_base + rp_project_net + returned_to_r
         
-        # 🚀 媒體與意識形態準備階段
-        s_val = max(0.0, (game.sanity - 50.0) / 50.0) # 思辨度 (>50)
-        c_val = max(0.0, (50.0 - game.sanity) / 50.0) # 填鴨度 (<50)
-        censor_factor = 1.0 + s_val - c_val           # 用於媒體審查反噬的公式
+        # 媒體與意識形態準備階段
+        s_val = max(0.0, (game.sanity - 50.0) / 50.0) 
+        c_val = max(0.0, (50.0 - game.sanity) / 50.0) 
+        censor_factor = 1.0 + s_val - c_val           
         
         media_multiplier = max(0.1, 1.0 - s_val + c_val + (game.emotion / 100.0))
         
-        # 🚀 媒體審查運作與固著度反噬
+        # 媒體審查運作與固著度反噬
         judicial_lvl = float(ra.get('judicial_lvl', 0.0))
-        judicial_cost = float(ra.get('judicial_cost', 0.0))
         
         B = game.boundary_B
         opp_indices = range(B + 1, 201) if hp.name == game.party_A.name else range(1, B + 1)
@@ -121,14 +120,13 @@ def render(game, cfg):
         censor_failures = 0
         
         for i in opp_indices:
-            # 獲取對方選民當下的固著度
             rig = formulas.get_rigidity(i, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
             if random.random() > rig:
                 censor_successes += 1
             else:
                 censor_failures += 1
         
-        censor_weight = judicial_lvl * 0.1 # 0~10等轉為 0~1.0權重
+        censor_weight = judicial_lvl / 100.0 # 0~100等轉為 0~1.0權重
         censor_emotion_add = censor_weight * censor_successes * censor_factor
         
         if (censor_successes + censor_failures) > 0:
@@ -139,11 +137,11 @@ def render(game, cfg):
         if judicial_lvl > 0:
             game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
             
-        h_censor_penalty = max(0.1, 1.0 - censor_weight) # 審查會真實削弱對手媒體與造勢產出
+        h_censor_penalty = max(0.1, 1.0 - censor_weight) 
         
-        # 🚀 洗腦與甩鍋結算
-        h_media_pwr = float(ha.get('media_cost', 0.0)) * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-        r_media_pwr = float(ra.get('media_cost', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
+        # 洗腦與甩鍋結算 (取回的變數為 media，因為改為投入預算了)
+        h_media_pwr = float(ha.get('media', 0.0)) * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+        r_media_pwr = float(ra.get('media', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
         
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
@@ -171,9 +169,9 @@ def render(game, cfg):
         else:
             ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
-        # 🚀 實裝造勢競選點數
-        h_camp_pwr = float(ha.get('camp_cost', 0.0)) * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty
-        r_camp_pwr = float(ra.get('camp_cost', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
+        # 實裝造勢競選點數
+        h_camp_pwr = float(ha.get('camp', 0.0)) * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty * 0.5
+        r_camp_pwr = float(ra.get('camp', 0.0)) * (rp.media_ability / 10.0) * media_multiplier * 0.5
 
         if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
         else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
@@ -181,7 +179,6 @@ def render(game, cfg):
         net_ammo_A = ammo_A - ammo_B
         old_boundary = game.boundary_B
         
-        # 傳遞 Buff 進攻堅函數
         buff_amt = getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0)
         buff_party = getattr(game, 'h_rigidity_buff', {}).get('party')
         new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity, buff_amt, buff_party, game.party_A.name)
@@ -192,14 +189,13 @@ def render(game, cfg):
         
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         
-        # 🚀 實裝非線性情緒煽動
-        h_incite_rolls = float(ha.get('incite_cost', 0.0)) * media_multiplier * h_censor_penalty
-        r_incite_rolls = float(ra.get('incite_cost', 0.0)) * media_multiplier
+        # 實裝非線性情緒煽動
+        h_incite_rolls = float(ha.get('incite', 0.0)) * media_multiplier * h_censor_penalty
+        r_incite_rolls = float(ra.get('incite', 0.0)) * media_multiplier
         total_incite_rolls = h_incite_rolls + r_incite_rolls
         
         incite_points = formulas.calc_incite_success(total_incite_rolls, game.emotion)
         
-        # 情緒加總：煽動結果 + 審查帶來的反噬激憤 - 經濟安定紅利 - 思辨冷靜值
         emotion_delta = (incite_points * 0.1) + censor_emotion_add - gdp_grw_bonus - (game.sanity * 0.15)
         new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
         
@@ -241,7 +237,6 @@ def render(game, cfg):
         hp.wealth += hp_inc - h_tot_action - h_tot_maint - hp_wealth_penalty
         rp.wealth += rp_inc - r_tot_action - r_tot_maint
 
-        # 🚀 推進 Buff 的持續時間
         if hasattr(game, 'h_rigidity_buff') and game.h_rigidity_buff['duration'] > 0:
             game.h_rigidity_buff['duration'] -= 1
             if game.h_rigidity_buff['duration'] <= 0:
