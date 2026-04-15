@@ -36,7 +36,6 @@ def render_formula_panel(game, view_party, cfg):
         decay_val = view_party.current_forecast
         decay_str = f"{decay_val:.3f}{TAG_EST}"
         
-        # 🚀 修正：改用受觀測扭曲的工程能力，而非赤裸的底層能力
         obs_abis = ui_core.get_observed_abilities(view_party, game.h_role_party, game, cfg)
         build_val = obs_abis['build']
         is_my_h = (view_party.name == game.h_role_party.name)
@@ -62,7 +61,8 @@ def render_formula_panel(game, view_party, cfg):
         with col1:
             st.write(f"- GDP: `{gdp_str}`")
             st.write(f"- 預估衰退: `{decay_str}`")
-            st.write(f"- 工程能力: `{build_str}`")
+            # 🚀 修正：明確標示此為「執行方(H)」的工程能力，避免 R 系統玩家產生誤會
+            st.write(f"- 執行方工程能力 (H-System): `{build_str}`") 
         with col2:
             st.write(f"- 計畫獎勵: `{proj_fund_s}`")
             st.write(f"- 總效益值: `{bid_cost_s}`")
@@ -74,7 +74,6 @@ def render_formula_panel(game, view_party, cfg):
         st.latex(r"P_{plan} = \Delta A + (\Delta A - \Delta E) \times W_{exp}")
         st.markdown("**2. 執行政績 (專案苦勞)** - *強制綁定大環境絕對規模*")
         st.latex(r"P_{exec} = |P_{plan}| \times \left(\frac{C_{actual}}{C_{target}} - 1\right)")
-        # 🚀 修正標題文字
         st.markdown("**3. 支持量與支持度變化**")
         st.latex(r"WinProb = 1.0 - Rigidity(target\_index)")
 
