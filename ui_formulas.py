@@ -61,7 +61,6 @@ def render_formula_panel(game, view_party, cfg):
         with col1:
             st.write(f"- GDP: `{gdp_str}`")
             st.write(f"- 預估衰退: `{decay_str}`")
-            # 🚀 修正：明確標示此為「執行方(H)」的工程能力，避免 R 系統玩家產生誤會
             st.write(f"- 執行方工程能力 (H-System): `{build_str}`") 
         with col2:
             st.write(f"- 計畫獎勵: `{proj_fund_s}`")
@@ -85,7 +84,7 @@ def render_formula_panel(game, view_party, cfg):
         loss_v = gdp_val * (decay_val * 0.05)
         st.write(f"> **計算**: `{gdp_str}` × (`{decay_str}` × `0.05{TAG_CON}` + `0{TAG_CON}`) = **{loss_v:.2f}**")
 
-        st.markdown("**2. 單位工程成本 (Unit Construction Cost)**")
+        st.markdown("**2. 單位工程成本 (含通膨) (Unit Construction Cost)**")
         st.latex(r"Cost = \frac{0.5}{Build / 10} \times 2^{(2 \times Decay - 1)} \times (1 + Inflation)")
         
         b_norm = max(0.01, build_val / 10.0)
