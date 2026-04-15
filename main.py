@@ -46,12 +46,12 @@ if game.phase == 4:
 
 if 'turn_initialized' not in st.session_state:
     game.current_real_decay = max(0.0, round(random.uniform(cfg['DECAY_MIN'], cfg['DECAY_MAX']), 3))
-    
     real_infra_loss = game.gdp * (game.current_real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     
     for p in [game.party_A, game.party_B]:
-        # 🚀 智庫準確度大改版：30% 能力 = 70% 嚴重誤差
-        error_margin_pct = 1.0 - (p.predict_ability / 10.0)
+        # 🚀 修正：套用智庫權重
+        p_acc_weight = cfg.get('PREDICT_ACCURACY_WEIGHT', 0.8)
+        error_margin_pct = 1.0 - ((p.predict_ability / 10.0) * p_acc_weight)
         error_range = real_infra_loss * error_margin_pct
         observed_loss = max(0.0, real_infra_loss + random.uniform(-error_range, error_range))
         
@@ -82,7 +82,7 @@ with st.sidebar:
     ui_core.render_global_settings(cfg, game)
     ui_core.render_sidebar_intel_audit(game, view_party, cfg)
     god_mode = st.toggle(t("👁️ 上帝視角", "👁️ God Mode"), False)
-    st.session_state.god_mode = god_mode # 存入 session 供全域存取
+    st.session_state.god_mode = god_mode 
     if st.button(t("🔄 重新開始遊戲", "🔄 Restart Game"), use_container_width=True): st.session_state.clear(); st.rerun()
 
 st.title(t("🏛️ Symbiocracy 共生民主模擬器 v3.0.0", "🏛️ Symbiocracy Simulator v3.0.0"))
