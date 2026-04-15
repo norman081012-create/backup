@@ -1,6 +1,5 @@
 # ==========================================
 # phase3.py
-# 負責 第三階段 (年度總結算報告與視覺化)
 # ==========================================
 import streamlit as st
 import random
@@ -44,10 +43,13 @@ def render(game, cfg):
         claimed_decay = float(d.get('claimed_decay') or 0.0)
         r_pays = float(d.get('r_pays') or 0.0)
         
+        # 🚀 引入行動花費與退費
         h_tot_action = float(ha.get('tot_action') or 0)
         r_tot_action = float(ra.get('tot_action') or 0)
         h_tot_maint = float(ha.get('tot_maint') or 0)
         r_tot_maint = float(ra.get('tot_maint') or 0)
+        h_refund = float(ha.get('refund_action') or 0)
+        r_refund = float(ra.get('refund_action') or 0)
         
         corr_amt = float(ha.get('corr_amt') or 0.0)
         crony_base = float(ha.get('crony_amt') or 0.0)
@@ -94,7 +96,7 @@ def render(game, cfg):
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
-        actual_h_wealth_available = max(0.0, hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty + hp_base)
+        actual_h_wealth_available = max(0.0, hp.wealth - h_tot_action - h_tot_maint + h_refund - hp_wealth_penalty + hp_base)
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=actual_h_wealth_available)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
@@ -126,7 +128,7 @@ def render(game, cfg):
             else:
                 censor_failures += 1
         
-        censor_weight = judicial_lvl / 100.0 # 0~100等轉為 0~1.0權重
+        censor_weight = judicial_lvl / 100.0 
         censor_emotion_add = censor_weight * censor_successes * censor_factor
         
         if (censor_successes + censor_failures) > 0:
@@ -139,9 +141,10 @@ def render(game, cfg):
             
         h_censor_penalty = max(0.1, 1.0 - censor_weight) 
         
-        # 洗腦與甩鍋結算 (取回的變數為 media，因為改為投入預算了)
-        h_media_pwr = float(ha.get('media', 0.0)) * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-        r_media_pwr = float(ra.get('media', 0.0)) * (rp.media_ability / 10.0) * media_multiplier
+        # 🚀 套用公關金錢倍率
+        pr_mult = cfg.get('PR_EFFICIENCY_MULT', 3.0)
+        h_media_pwr = float(ha.get('media', 0.0)) * pr_mult * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+        r_media_pwr = float(ra.get('media', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier
         
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
@@ -169,9 +172,9 @@ def render(game, cfg):
         else:
             ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
-        # 實裝造勢競選點數
-        h_camp_pwr = float(ha.get('camp', 0.0)) * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty * 0.5
-        r_camp_pwr = float(ra.get('camp', 0.0)) * (rp.media_ability / 10.0) * media_multiplier * 0.5
+        # 實裝造勢競選點數 (套用倍率)
+        h_camp_pwr = float(ha.get('camp', 0.0)) * pr_mult * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty * 0.5
+        r_camp_pwr = float(ra.get('camp', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier * 0.5
 
         if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
         else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
@@ -189,9 +192,9 @@ def render(game, cfg):
         
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         
-        # 實裝非線性情緒煽動
-        h_incite_rolls = float(ha.get('incite', 0.0)) * media_multiplier * h_censor_penalty
-        r_incite_rolls = float(ra.get('incite', 0.0)) * media_multiplier
+        # 實裝非線性情緒煽動 (套用倍率)
+        h_incite_rolls = float(ha.get('incite', 0.0)) * pr_mult * media_multiplier * h_censor_penalty
+        r_incite_rolls = float(ra.get('incite', 0.0)) * pr_mult * media_multiplier
         total_incite_rolls = h_incite_rolls + r_incite_rolls
         
         incite_points = formulas.calc_incite_success(total_incite_rolls, game.emotion)
@@ -222,6 +225,7 @@ def render(game, cfg):
             'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
             'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
             'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
+            'h_refund': h_refund, 'r_refund': r_refund,
             'hp_penalty': hp_wealth_penalty,
             'corr_caught': corr_caught, 'crony_caught': crony_caught,
             'fine_mult': fine_mult,
@@ -234,8 +238,8 @@ def render(game, cfg):
         game.h_fund = res_exec['payout_h']
         game.total_budget = budg + confiscated_to_budget
         
-        hp.wealth += hp_inc - h_tot_action - h_tot_maint - hp_wealth_penalty
-        rp.wealth += rp_inc - r_tot_action - r_tot_maint
+        hp.wealth += hp_inc - h_tot_action - h_tot_maint + h_refund - hp_wealth_penalty
+        rp.wealth += rp_inc - r_tot_action - r_tot_maint + r_refund
 
         if hasattr(game, 'h_rigidity_buff') and game.h_rigidity_buff['duration'] > 0:
             game.h_rigidity_buff['duration'] -= 1
@@ -268,8 +272,11 @@ def render(game, cfg):
                 st.write(f"- 秘密所得 (洗白後貪污/圖利): `${rep['h_extra']:.1f}`")
             if rep.get('hp_penalty', 0) > 0:
                 st.write(f"- 🚨 查扣罰金繳納國庫 (倍率 {rep['fine_mult']}x): `-${rep['hp_penalty']:.1f}`")
-            st.write(f"- 政策行動與部門支出: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
-            st.write(f"**💰 最終總淨現金流: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']) - rep.get('hp_penalty', 0):.1f}`**")
+            st.write(f"- 公關行動與轉型費: `-${rep['h_pol_cost']:.1f}`")
+            st.write(f"- 部門與政策維護費: `-${rep['h_maint']:.1f}`")
+            if rep['h_refund'] > 0: st.write(f"- 降級退款回收: `+${rep['h_refund']:.1f}`")
+            net_cash = rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint'] + rep['h_refund'] - rep.get('hp_penalty', 0)
+            st.write(f"**💰 最終總淨現金流: `${net_cash:.1f}`**")
 
         with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) 結餘與收益明細"):
             st.write(f"- 基礎撥款 (含執政紅利): `${rep['r_base']:.1f}`")
@@ -280,8 +287,11 @@ def render(game, cfg):
             st.write(f"- 📥 監管預算結餘: `${max(0.0, base_r_surplus):.1f}`")
             if rep['r_extra'] > 0:
                 st.write(f"- 🏆 沒收對手全額違規金: `${rep['r_extra']:.1f}`")
-            st.write(f"- 政策行動與部門支出: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
-            st.write(f"**💰 最終總淨現金流: `${rep['r_inc'] - (rep['r_pol_cost'] + rep['r_maint']):.1f}`**")
+            st.write(f"- 公關行動與轉型費: `-${rep['r_pol_cost']:.1f}`")
+            st.write(f"- 部門與政策維護費: `-${rep['r_maint']:.1f}`")
+            if rep['r_refund'] > 0: st.write(f"- 降級退款回收: `+${rep['r_refund']:.1f}`")
+            net_cash_r = rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint'] + rep['r_refund']
+            st.write(f"**💰 最終總淨現金流: `${net_cash_r:.1f}`**")
 
         if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污！非法資金全額移交監管方，執行方並遭裁罰額外罰金入國庫。"))
         if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利廠商！執行方遭強制繳回全額合約金予監管方，並追加罰金入國庫。"))
