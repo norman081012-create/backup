@@ -1,6 +1,5 @@
 # ==========================================
 # engine.py
-# 負責遊戲引擎、政黨類別與全域事件觸發邏輯
 # ==========================================
 import random
 import streamlit as st
@@ -19,6 +18,7 @@ class Party:
         self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.predict_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.stealth_ability = cfg.get('ABILITY_DEFAULT', 3.0)
+        self.edu_stance = 0.0 
         
         self.current_forecast = 0.0
         self.poll_history = {'小型': [], '中型': [], '大型': []}
@@ -52,8 +52,6 @@ class GameEngine:
         self.swap_triggered_this_year = False
         self.last_year_report = None
         
-        # 🚀 支援度 2.0 更新：捨棄了舊的列隊衰減，改用 200人陣列交界線
-        # 初始支持度各 50%，因此 A 黨佔領 1~100 號，交界線 boundary_B 為 100
         self.boundary_B = 100 
 
     def record_history(self, is_election):
@@ -64,8 +62,8 @@ class GameEngine:
             'Is_Election': is_election, 'Is_Swap': self.swap_triggered_this_year,
             'Ruling': self.ruling_party.name, 'H_Party': self.h_role_party.name,
             'R_Party': self.r_role_party.name,
-            'A_Edu': float(self.party_A.last_acts.get('edu_amt', 0)),
-            'B_Edu': float(self.party_B.last_acts.get('edu_amt', 0)),
+            'A_Edu': float(self.party_A.last_acts.get('edu_stance', 0)),
+            'B_Edu': float(self.party_B.last_acts.get('edu_stance', 0)),
             'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
             'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
         })
