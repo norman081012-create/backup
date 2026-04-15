@@ -1,6 +1,5 @@
 # ==========================================
 # phase1.py
-# 負責 第一階段 (提案與談判) 的 UI 與邏輯
 # ==========================================
 import streamlit as st
 import formulas
@@ -51,6 +50,17 @@ def render(game, view_party, cfg):
                     st.session_state[widget_decay_key] = tt_decay
                     st.session_state[widget_cost_key] = tt_cost
                     st.rerun()
+
+            # 🚀 僅監管系統可以設定年度司法罰鍰倍率
+            if active_role == 'R':
+                st.markdown("##### ⚖️ 司法罰鍰設定 (僅監管系統設定)")
+                fine_mult = st.slider(t("設定本年度違規(貪污/圖利)的國庫罰金倍數", "Set penalty multiplier for corruption/cronyism"), 0.0, 5.0, 0.3, 0.1)
+                st.caption(f"*(若執行系統被查獲違規，除全額沒收違規金移交監管方外，還需從黨產額外支付違規本金的 `{fine_mult}` 倍罰金給國庫)*")
+            else:
+                fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
+                st.info(f"⚖️ 監管系統本年度設定的司法罰金倍數為：**{fine_mult} 倍**")
+
+            st.markdown("---")
 
             c_ann1, c_ann2 = st.columns(2)
             with c_ann1:
@@ -108,8 +118,9 @@ def render(game, view_party, cfg):
                 'r_pays': r_pays, 'h_pays': h_pays, 
                 'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
                 'author': active_role, 
-                'author_party': view_party.name, # 🚀 記錄是哪個黨發布的草案
-                'req_cost': req_cost
+                'author_party': view_party.name,
+                'req_cost': req_cost,
+                'fine_mult': fine_mult # 🚀 寫入草案變數中
             }
 
             st.markdown("<br>", unsafe_allow_html=True)
