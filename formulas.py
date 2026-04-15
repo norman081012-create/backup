@@ -17,16 +17,6 @@ def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0)
     discount_factor = 1.0 - (build_ability * 0.02)
     return decay_amt * max(0.1, discount_factor) * 0.1
 
-def calculate_upgrade_cost(current_val, target_val, cfg, is_build=False, build_ability=0.0):
-    a_c = (2**current_val - 1) * 50.0
-    a_t = (2**target_val - 1) * 50.0
-    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
-    a_base = max(0.0, a_c - max_decay)
-    if a_t <= a_base: return 0.0
-    req_amt = a_t - a_base
-    discount_factor = 1.0 - (build_ability * 0.02)
-    return req_amt * max(0.1, discount_factor) * 0.1
-
 def calc_unit_cost(cfg, gdp, build_abi, decay):
     b_norm = max(0.01, build_abi / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
@@ -63,8 +53,8 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
 
 # --- 支持度系統 2.0 核心演算法 ---
 
-def generate_raw_ammo(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net):
-    """階段一：產生原始政績 (彈藥製造) - 修正為絕對落差疊加模型"""
+def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net):
+    """階段一：產生原始政績 (轉換為支持量) - 修正為絕對落差疊加模型"""
     # 1. 規劃政績 (P_plan)
     delta_A = ((new_gdp - curr_gdp) / max(1.0, curr_gdp)) * 100.0
     expected_loss_pct = (claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']) * 100.0
@@ -76,93 +66,93 @@ def generate_raw_ammo(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net):
 
     # 2. 執行政績 (P_exec)
     completion_rate = c_net / max(1.0, float(bid_cost))
-    delta_C = completion_rate - 1.0 # 100% 完工則為 0，未滿則為負，超標為正
+    # 修正達成率算法：100% 完工給予 +1.0 倍，50% 為 0，0% 給予 -1.0 倍
+    delta_C = (completion_rate - 0.5) * 2.0 
     p_exec = abs(p_plan) * delta_C
 
-    # 將政績規模放大為「彈藥」
-    ammo_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
-    return p_plan * ammo_mult, p_exec * ammo_mult, delta_A, delta_E, delta_C
+    # 將政績規模放大為「支持量」
+    support_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
+    return p_plan * support_mult, p_exec * support_mult, delta_A, delta_E, delta_C
 
-def apply_sanity_filter(raw_ammo, sanity, emotion, is_preview=False):
+def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
     """階段二：思辨判定 (單一過濾器)"""
     crit_think = sanity / 100.0
     emo_val = emotion / 100.0
     correct_prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5)))
 
     if is_preview:
-        return raw_ammo * correct_prob, raw_ammo * (1.0 - correct_prob), correct_prob
+        return raw_support * correct_prob, raw_support * (1.0 - correct_prob), correct_prob
 
-    correct_ammo = 0.0
-    wrong_ammo = 0.0
-    sign = 1.0 if raw_ammo >= 0 else -1.0
-    abs_total = abs(raw_ammo)
+    correct_support = 0.0
+    wrong_support = 0.0
+    sign = 1.0 if raw_support >= 0 else -1.0
+    abs_total = abs(raw_support)
     int_parts = int(abs_total)
     remainder = abs_total - int_parts
 
     for _ in range(int_parts):
         if random.random() < correct_prob:
-            correct_ammo += 1.0
+            correct_support += 1.0
         else:
-            wrong_ammo += 1.0
+            wrong_support += 1.0
             
     if remainder > 0:
         if random.random() < correct_prob:
-            correct_ammo += remainder
+            correct_support += remainder
         else:
-            wrong_ammo += remainder
+            wrong_support += remainder
 
-    return correct_ammo * sign, wrong_ammo * sign, correct_prob
+    return correct_support * sign, wrong_support * sign, correct_prob
 
 def get_rigidity(i):
     """獲取 200 人陣列的 U 型固著度裝甲值"""
-    # i 介於 1~200，中心點為 100.5
     x = (i - 100.5) / 99.5
     return 0.95 * (x**2) + 0.05
 
-def run_conquest(boundary_B, net_ammo_A):
+def run_conquest(boundary_B, net_support_A):
     """階段三：固著度陣列攻城與版圖推移"""
     B = int(boundary_B)
-    ammo_used = 0.0
+    support_used = 0.0
     conquered = 0
 
-    if net_ammo_A > 0: # A 黨發起攻擊 (試圖將 B 往上推)
-        ammo = net_ammo_A
-        while ammo >= 1.0 and B < 200:
-            ammo -= 1.0
-            ammo_used += 1.0
+    if net_support_A > 0: 
+        sup = net_support_A
+        while sup >= 1.0 and B < 200:
+            sup -= 1.0
+            support_used += 1.0
             target = B + 1
             rigidity = get_rigidity(target)
             if random.random() < (1.0 - rigidity):
                 B += 1
                 conquered += 1
-    elif net_ammo_A < 0: # B 黨發起攻擊 (試圖將 B 往下推)
-        ammo = abs(net_ammo_A)
-        while ammo >= 1.0 and B > 0:
-            ammo -= 1.0
-            ammo_used += 1.0
+    elif net_support_A < 0: 
+        sup = abs(net_support_A)
+        while sup >= 1.0 and B > 0:
+            sup -= 1.0
+            support_used += 1.0
             target = B
             rigidity = get_rigidity(target)
             if random.random() < (1.0 - rigidity):
                 B -= 1
                 conquered += 1
 
-    return B, ammo_used, conquered
+    return B, support_used, conquered
 
 def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
     """預覽與智庫分析專用：將三階段濃縮打包回傳字典"""
-    p_plan, p_exec, d_a, d_e, d_c = generate_raw_ammo(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
+    p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
 
     plan_correct, plan_wrong, correct_prob = apply_sanity_filter(p_plan, sanity, emotion, is_preview=True)
     exec_correct, exec_wrong, _ = apply_sanity_filter(p_exec, sanity, emotion, is_preview=True)
 
     if ruling_party_name == hp.name:
-        h_plan_ammo = plan_correct; r_plan_ammo = plan_wrong
+        h_plan_sup = plan_correct; r_plan_sup = plan_wrong
     else:
-        r_plan_ammo = plan_correct; h_plan_ammo = plan_wrong
+        r_plan_sup = plan_correct; h_plan_sup = plan_wrong
 
     return {
-        hp.name: {'perf_gdp': h_plan_ammo, 'perf_proj': exec_correct},
-        rp.name: {'perf_gdp': r_plan_ammo, 'perf_proj': exec_wrong},
+        hp.name: {'perf_gdp': h_plan_sup, 'perf_proj': exec_correct},
+        rp.name: {'perf_gdp': r_plan_sup, 'perf_proj': exec_wrong},
         'correct_prob': correct_prob,
         'p_plan': p_plan, 'p_exec': p_exec,
         'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
