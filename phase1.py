@@ -6,7 +6,7 @@ import streamlit as st
 import formulas
 import engine
 import ui_core
-import ui_proposal  # 新增引用
+import ui_proposal  
 import i18n
 t = i18n.t
 
@@ -135,27 +135,34 @@ def render(game, view_party, cfg):
                     engine.trigger_swap(game, swap_cost, t("監管系統強制接管！", "R-System Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
 
-            if not is_invalid:
+            # 🚀 實作完美並排框架，分析報告和草案會左右各自包攬
+            if not is_invalid or opp_plan:
                 st.markdown("---")
-                ui_proposal.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
-
-            if opp_plan:
-                st.markdown("---")
-                ui_proposal.render_proposal_component(t('📜 對手 (執行系統) 既有草案參考', '📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
+                c_prop1, c_prop2 = st.columns(2)
+                if not is_invalid:
+                    with c_prop1:
+                        ui_proposal.render_proposal_component(t('📜 當前草案預覽', '📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
+                if opp_plan:
+                    with c_prop2:
+                        ui_proposal.render_proposal_component(t('📜 對手 (執行系統) 既有草案參考', '📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
 
     elif game.p1_step == 'voting_pick':
         st.markdown(t(f"### 🗳️ 執政黨定奪 ({game.ruling_party.name})", f"### 🗳️ Ruling Party Decision ({game.ruling_party.name})"))
         if view_party.name != game.ruling_party.name:
             st.warning(t("⏳ 等待執政黨定奪...", "⏳ Waiting for ruling party..."))
         else:
+            c_prop1, c_prop2 = st.columns(2)
             for idx, key in enumerate(['R', 'H']):
                 plan = game.p1_proposals.get(key)
-                if plan is None: st.info(t("等待對方發布草案...", "Waiting for opponent draft...")); continue
-                st.markdown("---")
-                ui_proposal.render_proposal_component(t('⚖️ 監管系統草案', '⚖️ R-System Draft') if key=='R' else t('🛡️ 執行系統草案', '🛡️ H-System Draft'), plan, game, view_party, cfg)
-                if st.button(t(f"✅ 選擇此方案", f"✅ Select this draft"), key=f"pick_{key}"):
-                    game.p1_selected_plan = plan; game.p1_step = 'voting_confirm'
-                    game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
+                col = c_prop1 if key == 'R' else c_prop2
+                with col:
+                    if plan is None:
+                        st.info(t("等待對方發布草案...", "Waiting for opponent draft..."))
+                        continue
+                    ui_proposal.render_proposal_component(t('⚖️ 監管系統草案', '⚖️ R-System Draft') if key=='R' else t('🛡️ 執行系統草案', '🛡️ H-System Draft'), plan, game, view_party, cfg)
+                    if st.button(t(f"✅ 選擇此方案", f"✅ Select this draft"), key=f"pick_{key}", use_container_width=True):
+                        game.p1_selected_plan = plan; game.p1_step = 'voting_confirm'
+                        game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
 
     elif game.p1_step == 'voting_confirm':
         if view_party.name != game.proposing_party.name: st.warning(t("⏳ 等待對手覆議...", "⏳ Waiting for opponent confirmation..."))
