@@ -258,4 +258,9 @@ def render(game, cfg):
                 game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
             game.proposing_party = game.r_role_party
-            game.last_year_report
+            game.last_year_report = None
+            
+            for k in list(st.session_state.keys()):
+                if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
+            if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
+        st.rerun()
