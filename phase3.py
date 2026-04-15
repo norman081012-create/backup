@@ -28,6 +28,13 @@ def render(game, cfg):
         r_pays = float(d.get('r_pays') or 0.0)
         h_pays = float(d.get('h_pays') or 0.0)
         
+        # === [修復] 將變數宣告提前，避免 UnboundLocalError ===
+        h_tot_action = float(ha.get('tot_action') or 0)
+        r_tot_action = float(ra.get('tot_action') or 0)
+        h_tot_maint = float(ha.get('tot_maint') or 0)
+        r_tot_maint = float(ra.get('tot_maint') or 0)
+        # ======================================================
+        
         corr_pct_val = float(ha.get('corr') or 0)
         crony_pct_val = float(ha.get('crony') or 0)
         
@@ -57,6 +64,7 @@ def render(game, cfg):
             crony_caught = True
             crony_base = 0
             crony_income = 0
+            
         actual_h_wealth_available = hp.wealth - h_tot_action - h_tot_maint
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=max(0.0, actual_h_wealth_available))
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -97,11 +105,6 @@ def render(game, cfg):
         f_target_san = max(0.0, min(100.0, 50.0 + (float(ra.get('edu_amt') or 0) / 500.0) * 50.0))
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
-        
-        h_tot_action = float(ha.get('tot_action') or 0)
-        r_tot_action = float(ra.get('tot_action') or 0)
-        h_tot_maint = float(ha.get('tot_maint') or 0)
-        r_tot_maint = float(ra.get('tot_maint') or 0)
         
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
