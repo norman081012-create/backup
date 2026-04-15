@@ -249,7 +249,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"{t('智庫')}: {obs_abis['predict']*10:.1f}% | {t('情報處')}: {obs_abis['investigate']*10:.1f}%")
     st.write(f"{t('黨媒')}: {obs_abis['media']*10:.1f}% | {t('反情報處')}: {obs_abis['stealth']*10:.1f}%")
     
-    # 🚀 抓貪污不吃觀測權重，使用真實能力值
     my_inv_raw_pct = view_party.investigate_ability / 10.0
     r_bonus = cfg['R_INV_BONUS'] if view_party.name == game.r_role_party.name else 1.0
     obs_stl_pct = obs_abis['stealth'] / 10.0
@@ -275,7 +274,8 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
     
     st.write(f"**{t('建設估價')}**: {eval_txt}")
-    st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` / 包含當前通膨 `{inflation_rate:.1f}%`)*")
+    # 🚀 移除單價資訊中的通膨雜訊
+    st.write(f"*(預估單位產出成本: `{est_unit_cost:.2f}` )*")
 
     st.markdown("---")
     st.title(t("🧾 審計處 - 內部部門報告"))
@@ -295,7 +295,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
 def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_build=False):
     current_pct = current_val * 10.0
     
-    # 🚀 工程處越高，能解鎖越快的升級上限，且減免極大花費
     max_upgrade = cfg.get('MAX_UPGRADE_SPEED', 20.0) * (1.0 + build_ability / 5.0)
     
     min_pct = max(0.0, current_pct - 20.0)
@@ -306,15 +305,21 @@ def ability_slider(label, key, current_val, wealth, cfg, build_ability=0.0, is_b
     cost_mult = cfg.get('UPGRADE_COST_MULT', 0.15)
     discount = 1.0 + build_ability / 5.0
     
+    # 🚀 動態計算變更後的預期維護費
+    import formulas
+    new_val = t_pct / 10.0
+    eff_build = new_val if is_build else build_ability
+    new_maint = formulas.get_ability_maintenance(new_val, cfg, is_build, eff_build)
+    
     if t_pct > current_pct: 
         cost = ((t_pct**2 - current_pct**2) * cost_mult) / discount
-        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處效率減免)</span>", unsafe_allow_html=True)
+        st.caption(f"📈 <span style='color:orange'>**{t('升級投入')}**: ${cost:.1f} (受工程處效率減免) | 預期維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
     elif t_pct < current_pct: 
         refund = ((current_pct**2 - t_pct**2) * cost_mult * 0.5) 
         cost = -refund
-        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f}</span>", unsafe_allow_html=True)
+        st.caption(f"📉 <span style='color:blue'>**{t('降級回收')}**: +${abs(cost):.1f} | 預期維護費: ${new_maint:.1f}</span>", unsafe_allow_html=True)
     else: 
         cost = 0.0
-        st.caption(f"🛡️ {t('維持現狀')}")
+        st.caption(f"🛡️ {t('維持現狀')} (預期維護費: ${new_maint:.1f})")
         
-    return t_pct / 10.0, cost
+    return new_val, cost
