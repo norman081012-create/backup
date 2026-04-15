@@ -1,6 +1,6 @@
 # ==========================================
 # ui_proposal.py
-# 負責 提案草案渲染
+# 負責 提案草案渲染 (修正換位模擬邏輯)
 # ==========================================
 import streamlit as st
 import formulas
@@ -15,42 +15,37 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     c_tog1, c_tog2 = st.columns(2)
     use_tt = c_tog1.toggle(t("切換至 智庫預估 試算", "Switch to Think Tank Estimate"), False, key=f"tg_tt_{title}_{plan.get('author', 'sys')}")
     use_claimed = not use_tt
-    simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位", "Simulate Swap"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
+    simulate_swap = c_tog2.toggle(t("模擬如果發生倒閣換位 (角色互換)", "Simulate Role Swap"), False, key=f"sim_sw_{title}_{plan.get('author', 'sys')}")
     
     if simulate_swap:
         sim_h_party = game.r_role_party
         sim_r_party = game.h_role_party
-        # 🚀 修正 1：換位只換 H/R 職責，執政黨(Ruling Party)不變，紅利不會跟著跑！
         sim_ruling_name = game.ruling_party.name 
-        my_is_h = (view_party.name == sim_h_party.name)
-        # 🚀 修正 2：將倒閣社會動盪罰金納入試算扣除額
+        my_is_h_in_sim = (view_party.name == sim_h_party.name)
         swap_penalty = game.total_budget * cfg.get('TRUST_BREAK_PENALTY_RATIO', 0.05)
+        st.warning("⚠️ 模擬換位中：您將模擬扮演對手角色進行損益評估。")
     else:
         sim_h_party = game.h_role_party
         sim_r_party = game.r_role_party
         sim_ruling_name = game.ruling_party.name
-        my_is_h = (view_party.name == sim_h_party.name)
+        my_is_h_in_sim = (view_party.name == sim_h_party.name)
         swap_penalty = 0.0
 
     tt_decay = view_party.current_forecast
     obs_abis = ui_core.get_observed_abilities(view_party, sim_h_party, game, cfg)
     obs_bld = obs_abis['build']
+    
     tt_unit_cost = round(formulas.calc_unit_cost(cfg, game.gdp, obs_bld, tt_decay), 2)
     
     cl_decay = plan.get('claimed_decay', tt_decay)
     cl_cost = plan.get('claimed_cost', tt_unit_cost)
 
-    if use_claimed:
-        eval_decay = cl_decay
-        eval_cost = cl_cost
-    else:
-        eval_decay = tt_decay
-        eval_cost = tt_unit_cost
+    eval_decay = cl_decay if use_claimed else tt_decay
+    eval_cost = cl_cost if use_claimed else tt_unit_cost
 
     res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=eval_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)
     
     eval_req_cost = res['req_cost']          
-    eval_unit_cost = res.get('unit_cost', 1.0)
     eval_r_pays = plan['r_pays']             
     eval_h_pays = eval_req_cost - eval_r_pays 
 
@@ -60,15 +55,8 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     h_project_profit = res['h_project_profit']
     r_project_profit = res['payout_r'] - eval_r_pays
     
-    o_h_roi = (h_project_profit / float(eval_h_pays)) * 100.0 if eval_h_pays > 0 else float('inf')
-    o_r_roi = (r_project_profit / float(eval_r_pays)) * 100.0 if eval_r_pays > 0 else float('inf')
-    
-    my_roi = o_h_roi if my_is_h else o_r_roi
-    opp_roi = o_r_roi if my_is_h else o_h_roi
-    
-    # 🚀 扣除倒閣罰款，呈現真實淨利
-    my_net = (h_base + h_project_profit if my_is_h else r_base + r_project_profit) - swap_penalty
-    opp_net = (r_base + r_project_profit if my_is_h else h_base + h_project_profit) - swap_penalty
+    my_net = (h_base + h_project_profit if my_is_h_in_sim else r_base + r_project_profit) - swap_penalty
+    opp_net = (r_base + r_project_profit if my_is_h_in_sim else h_base + h_project_profit) - swap_penalty
     
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
@@ -76,75 +64,54 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net']
     )
     
-    opp_party_name = sim_r_party.name if my_is_h else sim_h_party.name
-    base_my_perf = shift_preview[view_party.name]['perf_gdp']
-    base_opp_perf = shift_preview[opp_party_name]['perf_gdp']
+    opp_party_name = sim_r_party.name if my_is_h_in_sim else sim_h_party.name
+    
+    my_total_perf = shift_preview[view_party.name]['perf_gdp'] + shift_preview[view_party.name]['perf_proj']
+    opp_total_perf = shift_preview[opp_party_name]['perf_gdp'] + shift_preview[opp_party_name]['perf_proj']
     
     h_gain = shift_preview[sim_h_party.name]['perf_proj']
     r_gain = shift_preview[sim_r_party.name]['perf_proj']
     prob = shift_preview['correct_prob']
-    
-    o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
-    def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
 
-    st.markdown(f"1. {t('我方預估總收益', 'Our Est. Total Profit')}: **{my_net:.1f}** (專案 ROI: {fmt_roi(my_roi)})")
-    st.markdown(f"2. {t('對方預估總收益', 'Opp. Est. Total Profit')}: **{opp_net:.1f}** (專案 ROI: {fmt_roi(opp_roi)})")
-    
-    st.markdown(f"3. {t('預期大環境政績 (未經媒體)', 'Expected Base Perf (No Media)')}: 我方 **{base_my_perf:+.1f}** / 對手 **{base_opp_perf:+.1f}**")
+    o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
+
+    st.markdown(f"1. {t('我方預估總淨利', 'Our Est. Net Profit')}: **{my_net:.1f}**")
+    st.markdown(f"2. {t('對方預估總淨利', 'Opp. Est. Net Profit')}: **{opp_net:.1f}**")
+    st.markdown(f"3. {t('預期產生總支持量 (含專案)', 'Total Expected Support')}: 我方 **{my_total_perf:+.1f}** / 對手 **{opp_total_perf:+.1f}**")
     st.caption(f"*(⚠️ {t('草案階段不預設完工。若執行方 100% 履約，因選民正確歸因率僅', 'Draft phase does not assume completion. If H-System fulfills 100%, since voter correct attribution rate is just')} `{prob*100:.1f}%`, {t('預期：執行方獲得', 'Expected: H-System gets')} `{h_gain:+.1f}` {t('點 / 監管方獲得', 'pts / R-System gets')} `{r_gain:+.1f}` {t('點', 'pts')})*")
-    
     st.markdown(f"4. {t('預期 GDP 變化', 'Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
-    diff = cl_decay - tt_decay
-    abs_diff = abs(diff)
+    is_self_draft = (plan.get('author_party') == view_party.name)
     
-    author_role = plan.get('author')
-    viewer_role = 'H' if my_is_h else 'R'
-    is_self = (author_role == viewer_role)
-
-    if abs_diff > 0.3: 
+    diff = cl_decay - tt_decay
+    if abs(diff) > 0.3: 
         light = "🔴"
-        if is_self:
-            if cl_decay > tt_decay: risk_txt = t("高明的手法，長官。刻意高估衰退能有效壓低民眾期望，若結算超標，我們將收割巨大的預期紅利。", "Brilliant move, sir. Deliberately overstating the decay lowers public expectations; if we over-deliver, we will harvest a huge expectation bonus.")
-            else: risk_txt = t("明智的抉擇，長官。低估衰退粉飾太平雖有奇效，但若最終經濟不如預期，須防範民意反噬。", "Wise choice, sir. Understating the decay to paint a rosy picture has its tricks, but if the final economy falls short, we must guard against public backlash.")
+        if is_self_draft:
+            risk_txt = t("長官，這是我們精心設計的「反差紅利」方案。", "Sir, this is our contrast bonus strategy.")
         else:
-            if cl_decay > tt_decay: risk_txt = t("警報！對手惡意高估衰退率。企圖製造恐慌降低施政期望，藉此收割反差紅利！", "Alert! Opponent is maliciously exaggerating the decay rate. They intend to create panic to lower expectations and harvest a contrast bonus!")
-            else: risk_txt = t("根據比對，對手正惡意低估衰退率粉飾太平。若最終施政破功，他們將面臨嚴重的反撲！", "Based on comparisons, the opponent is maliciously understating the decay rate to whitewash reality. If their administration fails, they will face severe backlash!")
-    elif abs_diff > 0.1: 
-        light, risk_txt = "🟡", t("中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)", "Medium Risk (Claimed decay differs slightly from expectations, may affect voter psychology)")
-    else: 
-        light, risk_txt = "🟢", t("差異極小 (公告衰退率誠實，無心理預期操弄空間)", "Minimal Difference (Claimed decay is honest, no room for psychological manipulation)")
+            risk_txt = t("警告！對手正試圖操弄選民預期心理！", "Warning! Opponent is manipulating expectations!")
+    elif abs(diff) > 0.1: light, risk_txt = "🟡", t("中度預期誤差", "Medium Expectation Gap")
+    else: light, risk_txt = "🟢", t("誠實且精準", "Honest and Accurate")
         
-    st.markdown(f"5. {t('衰退值判讀', 'Drop Analysis')}: {light} {risk_txt} ({t('公告', 'Claimed')}: {cl_decay:.3f} / {t('智庫', 'Think Tank')}: {tt_decay:.3f})")
+    st.markdown(f"5. {t('衰退值判讀', 'Drop Analysis')}: {light} {risk_txt} (公告: {cl_decay:.3f} / 智庫: {tt_decay:.3f})")
     
     diff_c = cl_cost - tt_unit_cost
-    abs_diff_c = abs(diff_c)
-
-    if abs_diff_c > 0.5:
+    if abs(diff_c) > 0.5:
         light_c = "🔴"
-        if is_self:
-            if cl_cost > tt_unit_cost: risk_txt_c = t("收到，長官。高報單價將為我們爭取更寬裕的操作空間。", "Understood, sir. Inflating the unit cost will give us more flexible operational space.")
-            else: risk_txt_c = t("長官，刻意低報單價能展現行政效率，但過度壓榨預算恐引發工程隱患。", "Sir, deliberately low-balling the unit cost shows administrative efficiency, but excessively squeezing the budget might trigger engineering hazards.")
+        if is_self_draft:
+            risk_txt_c = t("長官，這份定價為後續行動預留了極大空間。", "Understood sir, pricing for future options.")
         else:
-            if cl_cost > tt_unit_cost:
-                risk_txt_c = t("對手（執行）意圖套取超額工程款！", "Opponent (H-System) intends to pocket excess engineering funds!") if author_role == 'H' else t("對手（監管）惡意墊高基準單價建立預算門檻！", "Opponent (R-System) is maliciously inflating the baseline unit cost to create a budget hurdle!")
-            else:
-                risk_txt_c = t("對手（執行）企圖掩飾低效能！", "Opponent (H-System) is trying to hide low efficiency!") if author_role == 'H' else t("對手（監管）正惡意低估單價剝削我們的預算！", "Opponent (R-System) is maliciously low-balling the unit cost to exploit our budget!")
-    elif abs_diff_c > 0.2:
-        light_c, risk_txt_c = "🟡", t("中度風險 (單價略有出入，需留意工程品質或超支)", "Medium Risk (Unit cost differs slightly, keep an eye on project quality or overspending)")
-    else:
-        light_c, risk_txt_c = "🟢", t("差異極小 (公告單價與情報處估算相符，屬正常估值)", "Minimal Difference (Claimed unit cost matches intel estimates, standard valuation)")
+            risk_txt_c = t("此定價與我方（模擬執行）成本嚴重脫節！", "This price is detached from our simulated costs!")
+    elif abs(diff_c) > 0.2: light_c, risk_txt_c = "🟡", t("單價偏離基準", "Price Deviation")
+    else: light_c, risk_txt_c = "🟢", t("符合市場行情", "Fair Market Value")
 
-    st.markdown(f"6. {t('建設單價判讀', 'Unit Cost Analysis')}: {light_c} {risk_txt_c} ({t('公告', 'Claimed')}: {cl_cost:.2f} / {t('情報', 'Intel')}: {tt_unit_cost:.2f})")
+    st.markdown(f"6. {t('建設單價判讀', 'Unit Cost Analysis')}: {light_c} {risk_txt_c} (公告: {cl_cost:.2f} / 智庫基準: {tt_unit_cost:.2f})")
 
     st.markdown("---")
-    
     st.markdown(f"#### {title}")
-    
     conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-    equiv_infra_loss = (game.gdp * (cl_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
-    
-    st.write(f"**{t('公告衰退率', 'Claimed Decay')}:** {cl_decay:.3f} **({t(f'相當於 {equiv_infra_loss:.1f} 建設損失', f'Equivalent to {equiv_infra_loss:.1f} construction loss')})**")
+    equiv_infra_loss = (game.gdp * (cl_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05))) / conv_rate
+    st.write(f"**{t('公告衰退率', 'Claimed Decay')}:** {cl_decay:.3f} **({t(f'相當於 {equiv_infra_loss:.1f} 建設損失', f'Equivalent to {equiv_infra_loss:.1f} loss')})**")
     st.write(f"**{t('計畫達成獎勵金', 'Plan Reward')}:** {plan['proj_fund']:.1f} | **{t('計畫總效益', 'Plan Total Benefit')}:** {plan['bid_cost']:.1f}")
     
     if simulate_swap:
