@@ -14,12 +14,10 @@ def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0)
     amount = (2**current_val - 1) * 50.0
     max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
     decay_amt = min(amount, max_decay)
-    # 工程處能力越高，維護費打折越多
     discount_factor = 1.0 / (1.0 + build_ability / 5.0)
     return decay_amt * discount_factor * 0.1
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
-    # 🚀 修正：工程處 30% 實際發揮 60% 的建造效率
     effective_build = build_abi * 2.0
     b_norm = max(0.01, effective_build / 10.0)
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
@@ -99,11 +97,14 @@ def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
 
     return correct_support * sign, wrong_support * sign, correct_prob
 
-def get_rigidity(i):
+def get_rigidity(i, sanity=50.0):
     x = (i - 100.5) / 99.5
-    return 0.95 * (x**2) + 0.05
+    base_rigidity = 0.95 * (x**2) + 0.05
+    # 填鴨度 (低思辨) 越高，選民固著值越強，最高額外增加 0.15 的絕對固著裝甲
+    cramming_bonus = ((50.0 - sanity) / 50.0) * 0.15
+    return base_rigidity + cramming_bonus
 
-def run_conquest(boundary_B, net_support_A):
+def run_conquest(boundary_B, net_support_A, sanity=50.0):
     B = int(boundary_B)
     support_used = 0.0
     conquered = 0
@@ -114,7 +115,7 @@ def run_conquest(boundary_B, net_support_A):
             sup -= 1.0
             support_used += 1.0
             target = B + 1
-            rigidity = get_rigidity(target)
+            rigidity = get_rigidity(target, sanity)
             if random.random() < (1.0 - rigidity):
                 B += 1
                 conquered += 1
@@ -124,7 +125,7 @@ def run_conquest(boundary_B, net_support_A):
             sup -= 1.0
             support_used += 1.0
             target = B
-            rigidity = get_rigidity(target)
+            rigidity = get_rigidity(target, sanity)
             if random.random() < (1.0 - rigidity):
                 B -= 1
                 conquered += 1
