@@ -37,8 +37,10 @@ def render_formula_panel(game, view_party, cfg):
         decay_str = f"{decay_val:.3f}{TAG_EST}"
         
         is_simulating = st.session_state.get("sim_sw_📜 當前草案預覽_R") or st.session_state.get("sim_sw_📜 對手 (執行系統) 既有草案參考_H")
-        if is_simulating: active_h = game.r_role_party
-        else: active_h = game.h_role_party
+        if is_simulating:
+            active_h = game.r_role_party
+        else:
+            active_h = game.h_role_party
             
         obs_abis = ui_core.get_observed_abilities(view_party, active_h, game, cfg)
         build_val = obs_abis['build']
@@ -73,10 +75,13 @@ def render_formula_panel(game, view_party, cfg):
 
         st.markdown("---")
         st.markdown("### 🧮 支持度演算法 (Support Engine 2.0)")
-        st.markdown("**1. 規劃政績 (大環境紅利)** - *絕對落差模型與預期權重*")
-        st.latex(r"P_{plan} = \Delta A + (\Delta A - \Delta E) \times W_{exp}")
-        st.markdown("**2. 執行政績 (專案苦勞)** - *強制綁定大環境絕對規模*")
-        st.latex(r"P_{exec} = |P_{plan}| \times \left(\frac{C_{actual}}{C_{target}} - 1\right)")
+        
+        # 🚀 更新了這裡的公式描述
+        st.markdown("**1. 規劃政績 (大環境紅利)** - *結合絕對成長與預期落差管理*")
+        st.latex(r"P_{plan} = (\Delta A \times 0.05) + (\Delta A - \Delta E) \times 0.15")
+        st.markdown("**2. 執行政績 (專案苦勞)** - *綁定專案規模與完成度*")
+        st.latex(r"TargetGrowth = \frac{BidCost \times 0.2}{GDP} \times 100\%")
+        st.latex(r"P_{exec} = TargetGrowth \times \left(\frac{C_{actual}}{C_{target}} - 0.5\right) \times 2.0 \times 0.1")
         st.markdown("**3. 支持量與支持度變化**")
         st.latex(r"WinProb = 1.0 - Rigidity(target\_index)")
 
@@ -148,3 +153,4 @@ def render_formula_panel(game, view_party, cfg):
         st.latex(r"Caught_{crony} = Amount_{crony} \times \min(1.0, 5\% \times CatchMult)")
         st.latex(r"Net_{crony} = (Amount_{crony} - Caught_{crony}) \times 20\% - Caught_{crony} \times 0.7_{fine}")
         st.write(f"> **當前合約查扣率**: `{crony_base_rate*100:.1f}% × {catch_mult:.2f} = {crony_catch_ratio*100:.1f}%`")
+        st.caption(f"*(⚖️ 圖利罰金 `0.7` 倍由來：吐回 `{cfg.get('CRONY_PROFIT_RATE', 0.20)*100:.0f}%` 已收利潤 + `50%` 懲罰性違約金)*")
