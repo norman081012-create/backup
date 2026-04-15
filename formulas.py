@@ -85,6 +85,7 @@ def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     else:
         gdp_perf_base = - actual_drop_amt * perf_const
         
+    # 選民理智過濾器 (歸因能力)
     crit_think = sanity / 100.0
     emo_val = emotion / 100.0
     s_filter = max(0.0, min(1.0, crit_think * (1.0 - emo_val * 0.5))) 
@@ -92,13 +93,21 @@ def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     shifts = {hp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
               rp.name: {'perf': 0.0, 'camp': 0.0, 'backlash': 0.0}}
               
+    # 大環境政績歸因
+    # 理智選民歸因給當權者 (Ruling Party)
     ruling_gdp_perf = gdp_perf_base * s_filter
+    # 盲目/情緒選民錯把大環境歸因給眼前做事的執行系統 (H-System)
     exec_gdp_perf = gdp_perf_base * (1.0 - s_filter)
     
     shifts[ruling_party_name]['perf'] += ruling_gdp_perf
     shifts[hp.name]['perf'] += exec_gdp_perf
     
-    project_perf_base = (c_net / max(1.0, bid_cost)) * curr_gdp * perf_const
+    # [修正] 專案執行政績 (苦勞紅利)：100% 歸給執行系統
+    # 不再固定給 50 點，而是根據實際建設量 (c_net) 佔國家規模 (GDP) 的比例給予，並乘上履約率作為懲罰/平衡
+    completion_rate = min(1.0, c_net / max(1.0, bid_cost))
+    # 基準：每建設等同於 1% GDP 規模的工程量，獲得 2.5 點政績
+    project_perf_base = (c_net / max(1.0, curr_gdp)) * 250.0 * completion_rate
+    
     shifts[hp.name]['perf'] += project_perf_base
     
     shifts['project_perf'] = project_perf_base
