@@ -61,99 +61,109 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def distribute_points_by_dice(total_points, correct_prob):
-    """
-    逐點擲骰機制：將總點數拆成 1 點 1 點，根據正確率機率擲骰。
-    回傳: (正確歸因獲得的點數, 錯誤歸因獲得的點數)
-    """
-    correct_pts = 0.0
-    wrong_pts = 0.0
-    sign = 1.0 if total_points >= 0 else -1.0
-    abs_total = abs(total_points)
-    int_parts = int(abs_total)
-    remainder = abs_total - int_parts
-    
-    # 針對每一個整數點進行擲骰
-    for _ in range(int_parts):
-        if random.random() < correct_prob:
-            correct_pts += 1.0
-        else:
-            wrong_pts += 1.0
-            
-    # 針對小數點餘額進行最後一次擲骰
-    if remainder > 0:
-        if random.random() < correct_prob:
-            correct_pts += remainder
-        else:
-            wrong_pts += remainder
-            
-    return correct_pts * sign, wrong_pts * sign
+# --- 支持度系統 2.0 核心演算法 ---
 
-def calc_performance_amounts(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net, is_preview=True):
-    expected_drop_pct = claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']
-    expected_drop_amt = curr_gdp * expected_drop_pct
-    actual_drop_amt = curr_gdp - new_gdp
-    perf_const = 0.01 
-    
-    if expected_drop_amt > 0.001:
-        gdp_perf_base = - (actual_drop_amt / expected_drop_amt) * curr_gdp * perf_const
-    else:
-        gdp_perf_base = - actual_drop_amt * perf_const
-        
-    # 選民理智過濾器 (正確歸因率)
+def generate_raw_ammo(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net):
+    """階段一：產生原始政績 (彈藥製造) - 修正為絕對落差疊加模型"""
+    # 1. 規劃政績 (P_plan)
+    delta_A = ((new_gdp - curr_gdp) / max(1.0, curr_gdp)) * 100.0
+    expected_loss_pct = (claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']) * 100.0
+    delta_E = -expected_loss_pct
+
+    gap = delta_A - delta_E
+    weight = cfg.get('CLAIMED_DECAY_WEIGHT', 0.2)
+    p_plan = delta_A + gap * weight
+
+    # 2. 執行政績 (P_exec)
+    completion_rate = c_net / max(1.0, float(bid_cost))
+    delta_C = completion_rate - 1.0 # 100% 完工則為 0，未滿則為負，超標為正
+    p_exec = abs(p_plan) * delta_C
+
+    # 將政績規模放大為「彈藥」
+    ammo_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
+    return p_plan * ammo_mult, p_exec * ammo_mult, delta_A, delta_E, delta_C
+
+def apply_sanity_filter(raw_ammo, sanity, emotion, is_preview=False):
+    """階段二：思辨判定 (單一過濾器)"""
     crit_think = sanity / 100.0
     emo_val = emotion / 100.0
-    correct_prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5))) 
-    
-    shifts = {
-        hp.name: {'perf': 0.0, 'perf_gdp': 0.0, 'perf_proj': 0.0, 'camp': 0.0, 'backlash': 0.0}, 
-        rp.name: {'perf': 0.0, 'perf_gdp': 0.0, 'perf_proj': 0.0, 'camp': 0.0, 'backlash': 0.0}
-    }
-    
-    # 1. 大環境 GDP 政績歸因
-    if is_preview:
-        ruling_gdp_perf = gdp_perf_base * correct_prob
-        exec_wrong_gdp_perf = gdp_perf_base * (1.0 - correct_prob)
-    else:
-        ruling_gdp_perf, exec_wrong_gdp_perf = distribute_points_by_dice(gdp_perf_base, correct_prob)
-        
-    shifts[ruling_party_name]['perf_gdp'] += ruling_gdp_perf
-    shifts[ruling_party_name]['perf'] += ruling_gdp_perf
-    
-    shifts[hp.name]['perf_gdp'] += exec_wrong_gdp_perf
-    shifts[hp.name]['perf'] += exec_wrong_gdp_perf
-    
-    # 2. 專案政績 (苦勞紅利) 歸因
-    completion_rate = min(1.0, c_net / max(1.0, bid_cost))
-    project_perf_base = (c_net / max(1.0, curr_gdp)) * 250.0 * completion_rate
-    
-    if is_preview:
-        h_proj_perf = project_perf_base * correct_prob
-        r_wrong_proj_perf = project_perf_base * (1.0 - correct_prob)
-    else:
-        # 正確歸因給執行方，錯誤判斷則被監管方白嫖
-        h_proj_perf, r_wrong_proj_perf = distribute_points_by_dice(project_perf_base, correct_prob)
-        
-    shifts[hp.name]['perf_proj'] += h_proj_perf
-    shifts[hp.name]['perf'] += h_proj_perf
-    
-    shifts[rp.name]['perf_proj'] += r_wrong_proj_perf
-    shifts[rp.name]['perf'] += r_wrong_proj_perf
-    
-    shifts['project_perf'] = project_perf_base
-    shifts['correct_prob'] = correct_prob
-    shifts['h_proj_preview'] = h_proj_perf
-    shifts['r_proj_preview'] = r_wrong_proj_perf
-    
-    return shifts
+    correct_prob = max(0.05, min(0.95, crit_think * (1.0 - emo_val * 0.5)))
 
-def get_formula_explanation(game, view_party, plan, cfg):
-    tt_drop = view_party.current_forecast
-    build_abi = game.h_role_party.build_ability
-    res = calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], build_abi, tt_drop, r_pays=plan.get('r_pays', 0.0), h_wealth=game.h_role_party.wealth)
-    
-    lines = []
-    lines.append(f"**我方預估試算完成。**")
-    lines.append(f"**預期 GDP 變化:** `{res['est_gdp']:.1f}`")
-    lines.append(f"> 估算建設淨值 (C_net): {res['c_net']:.1f} / 標案承諾 (Bid_cost): {plan['bid_cost']:.1f}")
-    return lines
+    if is_preview:
+        return raw_ammo * correct_prob, raw_ammo * (1.0 - correct_prob), correct_prob
+
+    correct_ammo = 0.0
+    wrong_ammo = 0.0
+    sign = 1.0 if raw_ammo >= 0 else -1.0
+    abs_total = abs(raw_ammo)
+    int_parts = int(abs_total)
+    remainder = abs_total - int_parts
+
+    for _ in range(int_parts):
+        if random.random() < correct_prob:
+            correct_ammo += 1.0
+        else:
+            wrong_ammo += 1.0
+            
+    if remainder > 0:
+        if random.random() < correct_prob:
+            correct_ammo += remainder
+        else:
+            wrong_ammo += remainder
+
+    return correct_ammo * sign, wrong_ammo * sign, correct_prob
+
+def get_rigidity(i):
+    """獲取 200 人陣列的 U 型固著度裝甲值"""
+    # i 介於 1~200，中心點為 100.5
+    x = (i - 100.5) / 99.5
+    return 0.95 * (x**2) + 0.05
+
+def run_conquest(boundary_B, net_ammo_A):
+    """階段三：固著度陣列攻城與版圖推移"""
+    B = int(boundary_B)
+    ammo_used = 0.0
+    conquered = 0
+
+    if net_ammo_A > 0: # A 黨發起攻擊 (試圖將 B 往上推)
+        ammo = net_ammo_A
+        while ammo >= 1.0 and B < 200:
+            ammo -= 1.0
+            ammo_used += 1.0
+            target = B + 1
+            rigidity = get_rigidity(target)
+            if random.random() < (1.0 - rigidity):
+                B += 1
+                conquered += 1
+    elif net_ammo_A < 0: # B 黨發起攻擊 (試圖將 B 往下推)
+        ammo = abs(net_ammo_A)
+        while ammo >= 1.0 and B > 0:
+            ammo -= 1.0
+            ammo_used += 1.0
+            target = B
+            rigidity = get_rigidity(target)
+            if random.random() < (1.0 - rigidity):
+                B -= 1
+                conquered += 1
+
+    return B, ammo_used, conquered
+
+def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net):
+    """預覽與智庫分析專用：將三階段濃縮打包回傳字典"""
+    p_plan, p_exec, d_a, d_e, d_c = generate_raw_ammo(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net)
+
+    plan_correct, plan_wrong, correct_prob = apply_sanity_filter(p_plan, sanity, emotion, is_preview=True)
+    exec_correct, exec_wrong, _ = apply_sanity_filter(p_exec, sanity, emotion, is_preview=True)
+
+    if ruling_party_name == hp.name:
+        h_plan_ammo = plan_correct; r_plan_ammo = plan_wrong
+    else:
+        r_plan_ammo = plan_correct; h_plan_ammo = plan_wrong
+
+    return {
+        hp.name: {'perf_gdp': h_plan_ammo, 'perf_proj': exec_correct},
+        rp.name: {'perf_gdp': r_plan_ammo, 'perf_proj': exec_wrong},
+        'correct_prob': correct_prob,
+        'p_plan': p_plan, 'p_exec': p_exec,
+        'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
+    }
