@@ -52,50 +52,9 @@ class GameEngine:
         self.swap_triggered_this_year = False
         self.last_year_report = None
         
-        self.support_queues = {
-            self.party_A.name: {'perf': [], 'camp': []},
-            self.party_B.name: {'perf': [], 'camp': []}
-        }
-
-    def update_support_queues(self, shifts):
-        a_name = self.party_A.name
-        b_name = self.party_B.name
-        
-        self.support_queues[a_name]['perf'].append({'val': shifts[a_name]['perf'], 'age': 0})
-        self.support_queues[b_name]['perf'].append({'val': shifts[b_name]['perf'], 'age': 0})
-        self.support_queues[a_name]['camp'].append({'val': shifts[a_name]['camp'], 'age': 0})
-        self.support_queues[b_name]['camp'].append({'val': shifts[b_name]['camp'], 'age': 0})
-        
-        a_sup_amt = 5000.0; b_sup_amt = 5000.0 
-        
-        for p_name in [a_name, b_name]:
-            for q in self.support_queues[p_name]['perf']: q['age'] += 1
-            for q in self.support_queues[p_name]['camp']: q['age'] += 1
-            
-            self.support_queues[p_name]['perf'] = [x for x in self.support_queues[p_name]['perf'] if x['age'] <= 6]
-            self.support_queues[p_name]['camp'] = [x for x in self.support_queues[p_name]['camp'] if x['age'] <= 2]
-            
-            for x in self.support_queues[p_name]['perf']: 
-                val = x['val'] * (1.0 - (x['age']/7.0))
-                if p_name == a_name: a_sup_amt += val
-                else: b_sup_amt += val
-                
-            for x in self.support_queues[p_name]['camp']: 
-                val = x['val'] * (1.0 - (x['age']/3.0))
-                if p_name == a_name: a_sup_amt += val
-                else: b_sup_amt += val
-
-        a_sup_amt += shifts[a_name]['backlash']
-        b_sup_amt += shifts[b_name]['backlash']
-        
-        a_sup_amt = max(0.0, a_sup_amt)
-        b_sup_amt = max(0.0, b_sup_amt)
-        
-        total = max(1.0, a_sup_amt + b_sup_amt)
-        self.party_A.support = (a_sup_amt / total) * 100.0
-        self.party_B.support = 100.0 - self.party_A.support
-        
-        return a_sup_amt, b_sup_amt
+        # 🚀 支援度 2.0 更新：捨棄了舊的列隊衰減，改用 200人陣列交界線
+        # 初始支持度各 50%，因此 A 黨佔領 1~100 號，交界線 boundary_B 為 100
+        self.boundary_B = 100 
 
     def record_history(self, is_election):
         self.history.append({
