@@ -31,6 +31,7 @@ def render(game, cfg):
         
         returned_to_r = 0.0
         confiscated_to_budget = 0.0
+        hp_wealth_penalty = 0.0 # 🚀 新增：專門記錄 H 黨被抓包後的自掏腰包罰金
         corr_caught = False
         crony_caught = False
         
@@ -56,29 +57,35 @@ def render(game, cfg):
         hp_stl_pct = hp.stealth_ability / 10.0
         actual_catch_mult = max(0.1, (rp_inv_pct * cfg['R_INV_BONUS']) - hp_stl_pct + 1.0)
         
-        rolls_corr = corr_pct_val * actual_catch_mult
-        catch_prob_corr = 1.0 - (1.0 - cfg['CATCH_RATE_PER_PERCENT'])**rolls_corr
+        # 🚀 貪污判定改寫：金額與通膨掛鉤，一元一骰
+        inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
+        adj_corr_amt = corr_amt / (1.0 + inflation)
+        rolls_corr = adj_corr_amt * actual_catch_mult
+        catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.005) # 預設一元 0.5% 機率，可在 config 調整
+        catch_prob_corr = 1.0 - (1.0 - catch_rate_per_dollar)**rolls_corr
         
+        # 🚀 圖利維持原始判定，因為沒指明修改擲骰機制
         rolls_crony = crony_pct_val * actual_catch_mult
         catch_prob_crony = 1.0 - (1.0 - cfg['CRONY_CATCH_RATE_PER_PERCENT'])**rolls_crony
         
-        # 🚀 修正 1：沒收所得獎金分配。監管系統領 20% 獎金，其餘 80% 充公回歸國家預算，避免通膨與一夜暴富
         if corr_amt > 0 and random.random() < catch_prob_corr:
-            bounty = corr_amt * 0.2
-            returned_to_r += bounty
-            confiscated_to_budget += (corr_amt - bounty)
+            original_corr_amt = corr_amt
+            returned_to_r += original_corr_amt             # 貪污全額奉送對手
+            hp_wealth_penalty += original_corr_amt * 0.4   # 貪污方付 0.4 倍給國庫
+            confiscated_to_budget += original_corr_amt * 0.4
             corr_caught = True
-            corr_amt = 0
+            corr_amt = 0 # 貪污方沒拿到錢
 
         if crony_base > 0 and random.random() < catch_prob_crony:
-            bounty = crony_base * 0.2
-            returned_to_r += bounty
-            confiscated_to_budget += (crony_base - bounty)
+            original_crony_base = crony_base
+            penalty = original_crony_base * 1.5            # 繳回全額圖利金 (1.0) + 0.5倍罰金 = 1.5倍扣款
+            hp_wealth_penalty += penalty                   # 從貪污方黨產強制扣除
+            confiscated_to_budget += penalty               # 國庫笑納
             crony_caught = True
             crony_base = 0
             crony_income = 0
             
-        actual_h_wealth_available = hp.wealth - h_tot_action - h_tot_maint
+        actual_h_wealth_available = hp.wealth - h_tot_action - h_tot_maint - hp_wealth_penalty
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=max(0.0, actual_h_wealth_available))
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
@@ -150,6 +157,7 @@ def render(game, cfg):
             'h_extra': corr_amt + crony_income, 'r_extra': returned_to_r,
             'h_pol_cost': h_tot_action, 'r_pol_cost': r_tot_action,
             'h_maint': h_tot_maint, 'r_maint': r_tot_maint,
+            'hp_penalty': hp_wealth_penalty,
             'corr_caught': corr_caught, 'crony_caught': crony_caught,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 'r_pays': r_pays, 'total_bonus_deduction': total_bonus_deduction
         }
@@ -160,10 +168,10 @@ def render(game, cfg):
         game.h_fund = res_exec['payout_h']
         game.total_budget = budg + confiscated_to_budget
         
-        hp.wealth += hp_inc - h_tot_action - h_tot_maint
+        # 扣除額外罰金
+        hp.wealth += hp_inc - h_tot_action - h_tot_maint - hp_wealth_penalty
         rp.wealth += rp_inc - r_tot_action - r_tot_maint
 
-        # 🚀 修正 2：選舉只在任期結束 (第 4, 8, 12... 年) 才進行結算，確保執政黨當權穩定
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
         if is_election_end:
             winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
@@ -184,8 +192,10 @@ def render(game, cfg):
             st.write(f"- {t('專案執行利潤')}: `${rep['h_project_net']:.1f}`")
             if rep['h_extra'] > 0:
                 st.write(f"- {t('秘密所得 (貪污/圖利)')}: `${rep['h_extra']:.1f}`")
+            if rep.get('hp_penalty', 0) > 0:
+                st.write(f"- {t('司法罰金與沒收')}: `-${rep['hp_penalty']:.1f}`")
             st.write(f"- {t('行政與部門支出')}: `-${rep['h_pol_cost'] + rep['h_maint']:.1f}`")
-            st.write(f"**{t('最終淨收益')}: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']):.1f}`**")
+            st.write(f"**{t('最終淨收益')}: `${rep['h_inc'] - (rep['h_pol_cost'] + rep['h_maint']) - rep['hp_penalty']:.1f}`**")
 
         with st.expander(f"📊 {rep['r_party_name']} ({t('監管系統')}) {t('收益明細')}"):
             st.write(f"- {t('基礎撥款 (含執政紅利)')}: `${rep['r_base']:.1f}`")
@@ -201,8 +211,8 @@ def render(game, cfg):
             st.write(f"- {t('行政與部門支出')}: `-${rep['r_pol_cost'] + rep['r_maint']:.1f}`")
             st.write(f"**{t('最終淨收益')}: `${rep['r_inc'] - (rep['r_pol_cost'] + rep['r_maint']):.1f}`**")
 
-        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污行為，非法資金已充公，情報處獲頒 20% 查獲獎金。"))
-        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利爭議，關聯資金已全數凍結充公。"))
+        if rep.get('corr_caught'): st.error(t("🚨 偵獲執行方貪污！非法資金全數移交監管方，執行方並遭裁罰 0.4 倍罰金入國庫。"))
+        if rep.get('crony_caught'): st.error(t("🚨 偵獲執行方圖利廠商！執行方遭強制繳回全額圖利金，並追加 0.5 倍罰金入國庫。"))
 
     with c2:
         st.markdown(f"### 🧠 {t('社會指標與選民變化')}")
@@ -248,8 +258,6 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            # 🚀 修正 3：只有在大選結束、新任期開始時，才強制重置當權黨為監管系統。
-            # 確保期間如果發生「倒閣換位」，少數派執政的狀態會一直保留到下次大選。
             if is_election_end:
                 game.r_role_party = game.ruling_party
                 game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
