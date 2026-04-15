@@ -108,7 +108,7 @@ def render(game, view_party, cfg):
                 'r_pays': r_pays, 'h_pays': h_pays, 
                 'claimed_decay': claimed_decay, 'claimed_cost': claimed_cost,
                 'author': active_role, 
-                'author_party': view_party.name, # 🚀 標記這份草案是哪個黨發布的
+                'author_party': view_party.name, # 🚀 記錄是哪個黨發布的草案
                 'req_cost': req_cost
             }
 
