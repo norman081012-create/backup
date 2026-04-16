@@ -4,6 +4,7 @@
 # ==========================================
 import math
 import random
+import numpy as np
 import i18n
 t = i18n.t
 
@@ -24,11 +25,38 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = (0.85 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
+# --- 🚀 新增：逐元判定的骰子邏輯 ---
+def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: float):
+    """
+    對每一塊錢獨立進行被抓判定。
+    返回: (沒收金額, 安全過關金額, 衍生罰款)
+    """
+    if total_amount <= 0:
+        return 0.0, 0.0, 0.0
+        
+    int_amount = int(total_amount)
+    remainder = total_amount - int_amount
+    
+    # 處理整數部分 (使用二項式分佈優化效能)
+    caught_int = float(np.random.binomial(n=int_amount, p=catch_prob))
+    
+    # 處理小數部分
+    caught_remainder = remainder if random.random() < catch_prob else 0.0
+    
+    caught_total = caught_int + caught_remainder
+    safe_total = total_amount - caught_total
+    fine = caught_total * fine_mult
+    
+    return caught_total, safe_total, fine
+# -----------------------------------
+
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
     req_cost = bid_cost * unit_cost
-    available_fund = max(0.0, proj_fund + r_pays - corr_amt + h_wealth)
+    
+    # 這裡的可用資金不再預先扣除 corr_amt (因為可能沒被抓到)
+    available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
     if req_cost <= available_fund:
         act_fund = req_cost
@@ -43,6 +71,8 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
+    
+    # 執行方 (Executive) 在這包專案上的原始利潤
     h_project_profit = payout_h + r_pays - act_fund
     
     return {
@@ -98,42 +128,40 @@ def apply_sanity_filter(raw_support, sanity, emotion, is_preview=False):
 
     return correct_support * sign, wrong_support * sign, correct_prob
 
-def apply_media_spin(blind_support, my_media_power, opp_media_power, is_preview=False):
-    # 🚀 加入 Base Noise (錨點)，確保投資媒體的資金越多越平滑，不會第一塊錢就 100% 洗腦
-    base_noise = 50.0 
-    total_power = my_media_power + opp_media_power + (base_noise * 2)
-    spin_win_prob = (my_media_power + base_noise) / total_power
+def apply_media_spin(blind_support, rightful_media, opp_media, is_preview=False):
+    base_inertia = 5.0 
+    total_power = rightful_media + opp_media + base_inertia
+    
+    if blind_support >= 0:
+        move_prob = rightful_media / total_power
+    else:
+        move_prob = opp_media / total_power
 
     if is_preview:
-        if blind_support >= 0:
-            return blind_support * spin_win_prob, blind_support * (1.0 - spin_win_prob)
-        else:
-            return blind_support * (1.0 - spin_win_prob), blind_support * spin_win_prob
+        goes_to_rightful = blind_support * move_prob
+        stays_with_opp = blind_support * (1.0 - move_prob)
+        return goes_to_rightful, stays_with_opp
 
-    my_spun_support = 0.0
-    opp_spun_support = 0.0
+    goes_to_rightful = 0.0
+    stays_with_opp = 0.0
     sign = 1.0 if blind_support >= 0 else -1.0
     abs_total = abs(blind_support)
     int_parts = int(abs_total)
     remainder = abs_total - int_parts
 
     for _ in range(int_parts):
-        if random.random() < spin_win_prob:
-            if sign > 0: my_spun_support += 1.0
-            else: opp_spun_support -= 1.0 
+        if random.random() < move_prob:
+            goes_to_rightful += 1.0
         else:
-            if sign > 0: opp_spun_support += 1.0
-            else: my_spun_support -= 1.0 
+            stays_with_opp += 1.0
             
     if remainder > 0:
-        if random.random() < spin_win_prob:
-            if sign > 0: my_spun_support += remainder
-            else: opp_spun_support -= remainder
+        if random.random() < move_prob:
+            goes_to_rightful += remainder
         else:
-            if sign > 0: opp_spun_support += remainder
-            else: my_spun_support -= remainder
+            stays_with_opp += remainder
 
-    return my_spun_support, opp_spun_support
+    return goes_to_rightful * sign, stays_with_opp * sign
 
 def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
     if is_preview:
@@ -206,22 +234,22 @@ def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
     else:
         ruling_media_pwr = r_media_pwr; opp_media_pwr = h_media_pwr
         
-    ruling_spun_plan, opp_spun_plan = apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr, is_preview=True)
-    h_spun_exec, r_spun_exec = apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr, is_preview=True)
+    ruling_reclaimed, opp_kept_plan = apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr, is_preview=True)
+    h_reclaimed_exec, r_kept_exec = apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr, is_preview=True)
 
     if ruling_party_name == hp.name:
-        h_plan_sup = plan_correct + ruling_spun_plan
-        r_plan_sup = opp_spun_plan
+        h_plan_sup = plan_correct + ruling_reclaimed
+        r_plan_sup = opp_kept_plan
     else:
-        r_plan_sup = plan_correct + ruling_spun_plan
-        h_plan_sup = opp_spun_plan
+        r_plan_sup = plan_correct + ruling_reclaimed
+        h_plan_sup = opp_kept_plan
         
-    h_exec_sup = exec_correct + h_spun_exec
-    r_exec_sup = r_spun_exec
+    h_exec_sup = exec_correct + h_reclaimed_exec
+    r_exec_sup = r_kept_exec
 
     return {
-        hp.name: {'perf_gdp': h_plan_sup, 'perf_proj': h_exec_sup, 'spun_gdp': ruling_spun_plan if ruling_party_name == hp.name else opp_spun_plan, 'spun_proj': h_spun_exec},
-        rp.name: {'perf_gdp': r_plan_sup, 'perf_proj': r_exec_sup, 'spun_gdp': ruling_spun_plan if ruling_party_name == rp.name else opp_spun_plan, 'spun_proj': r_spun_exec},
+        hp.name: {'perf_gdp': h_plan_sup, 'perf_proj': h_exec_sup, 'spun_gdp': ruling_reclaimed if ruling_party_name == hp.name else opp_kept_plan, 'spun_proj': h_reclaimed_exec},
+        rp.name: {'perf_gdp': r_plan_sup, 'perf_proj': r_exec_sup, 'spun_gdp': ruling_reclaimed if ruling_party_name == rp.name else opp_kept_plan, 'spun_proj': r_kept_exec},
         'correct_prob': correct_prob,
         'p_plan': p_plan, 'p_exec': p_exec,
         'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
