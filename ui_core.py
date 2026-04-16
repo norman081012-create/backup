@@ -262,18 +262,6 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"{t('Media Dept')}: {obs_abis['media']*10:.1f}% | {t('Counter-Intel')}: {obs_abis['stealth']*10:.1f}%")
     st.write(f"{t('Engineering')}: {obs_abis['build']*10:.1f}% | {t('Edu Dept')}: {obs_abis['edu']*10:.1f}%")
     
-    my_inv_raw_pct = view_party.investigate_ability / 10.0
-    r_bonus = cfg['R_INV_BONUS'] if view_party.name == game.r_role_party.name else 1.0
-    obs_stl_pct = obs_abis['stealth'] / 10.0
-    catch_mult = max(0.1, (my_inv_raw_pct * r_bonus) - obs_stl_pct + 1.0)
-    
-    corr_rate = min(1.0, cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * catch_mult)
-    crony_rate = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * catch_mult)
-    
-    st.write(f"**{t('Anti-Corruption Est.')}**: Catch Multiplier `{catch_mult:.2f}x`")
-    st.caption(f"*(Expected Opp. Corruption Catch Rate: `{corr_rate*100:.1f}%` | Cronyism Catch Rate: `{crony_rate*100:.1f}%`)*")
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
