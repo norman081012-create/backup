@@ -34,7 +34,7 @@ def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float,
     
     return caught_fake_ev, safe_fake_ev, caught_value, fine
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, r_pays=0.0, h_wealth=0.0, c_net_override=None, override_unit_cost=None, fake_ev=0.0):
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, r_pays=0.0, h_wealth=0.0, c_net_override=None, override_unit_cost=None, fake_ev_spent=0.0, fake_ev_safe=0.0):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
     req_cost = bid_cost * unit_cost
@@ -43,19 +43,19 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
     
     if c_net_override is not None:
         c_net_real = min(float(bid_cost), c_net_override)
-        c_net_total = c_net_real + fake_ev
-        act_fund = (c_net_real + fake_ev * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost
+        c_net_total = c_net_real + fake_ev_safe
+        act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost
         h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
     else:
         if req_cost <= available_fund:
             act_fund = req_cost
             c_net_real = float(bid_cost)
-            c_net_total = c_net_real + fake_ev
-            h_idx = 1.0
+            c_net_total = c_net_real + fake_ev_safe
+            h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
         else:
             act_fund = available_fund
             c_net_real = act_fund / max(0.01, unit_cost)
-            c_net_total = c_net_real + fake_ev
+            c_net_total = c_net_real + fake_ev_safe
             h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
 
     payout_h = min(budget_t, proj_fund * h_idx)
@@ -208,7 +208,7 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, buff_amt
             if random.random() < (1.0 - rigidity):
                 B -= 1; perf_conquered += 1
             
-    # 2. 公關火力 (Spin Ammo) - 面對理智裝甲 (Spin Rigidity = Base + Sanity Defense)
+    # 2. 公關火力 (Spin Ammo) - 面對理智裝甲 (Spin Rigidity)
     spin_used = 0.0; spin_conquered = 0
     if net_spin_A > 0:
         sup = net_spin_A
