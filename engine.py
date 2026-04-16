@@ -1,3 +1,4 @@
+
 # ==========================================
 # engine.py
 # ==========================================
@@ -36,7 +37,7 @@ class GameEngine:
         self.total_budget = cfg['BASE_TOTAL_BUDGET'] + (self.gdp * cfg['HEALTH_MULTIPLIER'])
         self.h_fund = cfg['H_FUND_DEFAULT']
         
-        self.phase = 0 
+        self.phase = 0 # 📌 Phase 0 為遊戲初始設定階段
         self.is_pve = False
         self.human_party_name = None
         self.ai_party_name = None
@@ -44,10 +45,9 @@ class GameEngine:
         self.p1_step = 'draft_r' 
         self.p1_proposals = {'R': None, 'H': None}
         self.p1_selected_plan = None
-        
         self.ruling_party = self.party_A
-        self.r_role_party = self.ruling_party
-        self.h_role_party = self.party_B if self.ruling_party.name == self.party_A.name else self.party_A
+        self.r_role_party = self.party_A
+        self.h_role_party = self.party_B  
         
         self.sanity = cfg['SANITY_DEFAULT']
         self.emotion = cfg['EMOTION_DEFAULT']
@@ -90,12 +90,13 @@ def execute_poll(game, view_party, cost):
     game.party_B.poll_history[poll_type].append(b_poll)
     view_party.poll_count += 1
 
-# 📌 恢復 Swap 換位機制
-def trigger_swap(game, penalty_amt, msg_prefix="Political Turmoil!"):
+def trigger_swap(game, penalty_amt, msg_prefix="政治動盪！"):
     game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
     game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
     game.swap_triggered_this_year = True
+    game.emotion = min(100.0, game.emotion + 30.0) 
     
-    st.session_state.news_flash = f"🗞️ **[BREAKING] {msg_prefix}** Both parties forced to pay {penalty_amt:.1f} to charities, triggering an immediate Cabinet Swap!"
+    st.session_state.news_flash = f"🗞️ **[快訊] {msg_prefix}** 雙方被迫向慈善機構支付 {penalty_amt:.1f} 罰金，觸發立即的內閣倒閣換位！"
     st.session_state.anim = 'snow'
     game.phase = 2
+
