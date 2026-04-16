@@ -279,4 +279,3 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.0f} | {t('Counter-Intel')}: {view_party.stealth_ability*10:.0f}")
     st.write(f"{t('Engineering')}: {view_party.build_ability*10:.0f} | {t('Edu Dept')}: {view_party.edu_ability*10:.0f}")
     st.write(f"**(Next Year's Maint. Est. EV: -{total_maint:.1f} EV)**")
-
