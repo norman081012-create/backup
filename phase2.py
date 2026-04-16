@@ -196,7 +196,6 @@ def render(game, view_party, opponent_party, cfg):
     r_pays = float(d.get('r_pays', 0.0))
     proj_fund = float(d.get('proj_fund', 0.0))
     
-    # Preview using fake_ev_spent and fake_ev_safe as the same since it's not audited yet
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(game.current_real_decay), r_pays=r_pays, c_net_override=eval_c_net, fake_ev_spent=eval_fake_ev, fake_ev_safe=eval_fake_ev)
     
     h_media_pwr = float(act_ha.get('alloc_med_control', 0.0))
@@ -209,24 +208,22 @@ def render(game, view_party, opponent_party, cfg):
         h_media_pwr, r_media_pwr
     )
     
-    # --- NEW CALCULATION LOGIC ADDED HERE ---
-    # 1. Calculate Base Income
+    # 1. 預估基礎收入
     h_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
     r_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
 
-    # 2. Calculate Project Profit
+    # 2. 預估專案利潤
     r_project_profit = res_prev['payout_r'] + (proj_fund * (1.0 - res_prev['h_idx'])) - r_pays
     
     h_inc_prev = h_base_prev + res_prev['h_project_profit']
     r_inc_prev = r_base_prev + r_project_profit
 
-    # 3. Calculate ROI
+    # 3. 預估投資報酬率 (ROI)
     eval_h_pays = max(0.0, req_cost - r_pays)
     h_roi = (res_prev['h_project_profit'] / eval_h_pays) * 100.0 if eval_h_pays > 0 else float('inf')
     r_roi = (r_project_profit / r_pays) * 100.0 if r_pays > 0 else float('inf')
-    # --- END NEW LOGIC ---
 
-    # Include the calculated keys in the dictionary
+    # 注入修復缺失的預覽變數
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
