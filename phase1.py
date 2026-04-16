@@ -79,7 +79,6 @@ def render(game, view_party, cfg):
                 claimed_cost = st.number_input("Claimed Unit Cost", step=0.01, key=widget_cost_key, label_visibility="collapsed")
                 st.session_state[input_cost_key] = claimed_cost
             
-            # Phase 1 MAX BUDGET FIX (Reward max = budget - salaries)
             total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
             max_proj_fund = max(0.0, float(game.total_budget) - total_bonus_deduction)
             
