@@ -39,11 +39,12 @@ def render(game, cfg):
         h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
         net_fin_ev = r_inv_fin - h_ci_fin
         
+        # 📌 修正：無論總額多少，每 5 單位為一塊；機率隨調查強度遞增
         if net_fin_ev > 0:
-            num_chunks = max(1, int(net_fin_ev / 2.0))
-            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
+            chunk_size = 5.0
+            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.20) + (net_fin_ev * 0.01))
         else:
-            num_chunks = 0
+            chunk_size = float('inf')
             catch_prob = 0.0
 
         unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
@@ -55,7 +56,7 @@ def render(game, cfg):
              st.session_state.pending_dice_roll = {
                  'fake_ev': fake_ev,
                  'catch_prob': catch_prob,
-                 'num_chunks': num_chunks, 
+                 'chunk_size': chunk_size,
                  'fine_mult': fine_mult,
                  'unit_cost_real': unit_cost_real,
                  'is_rolled': False
@@ -201,7 +202,7 @@ def render(game, cfg):
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
             'fake_ev_attempted': fake_ev,
-            'num_chunks': num_chunks, 
+            'chunk_size': chunk_size,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
@@ -222,32 +223,27 @@ def render(game, cfg):
             if game.h_rigidity_buff['duration'] <= 0:
                 game.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
 
-        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
-        if is_election_end:
-            winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
-            game.ruling_party = winner
-
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
-        game.record_history(is_election=is_election_end)
+        game.record_history(is_election=False) # 暫存紀錄，這筆會在下方被正確取代
     
     dice_data = st.session_state.get('pending_dice_roll')
     if dice_data and not dice_data['is_rolled']:
         st.markdown("---")
         st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
-        if dice_data['num_chunks'] == 0:
-            st.info("The Regulator lacks sufficient ops capacity to initiate an audit. Financial flows obscured successfully.")
+        if dice_data['chunk_size'] == float('inf') or dice_data['fake_ev'] <= 0:
+            st.info("No significant audit triggers detected. Financial flows obscured successfully.")
             if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
                 st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
                 st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun()
         else:
-            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per chunk (Divided into `{dice_data['num_chunks']}` audit chunks).")
+            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']}` units.")
 
             if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
                 with st.spinner('Investigators are tracking the financial flows...'):
                     import time
                     time.sleep(1.5) 
-                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['num_chunks'], dice_data['unit_cost_real'])
+                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
                     st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
                     st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun() 
@@ -260,10 +256,8 @@ def render(game, cfg):
     if rep.get('caught_fake_ev', 0) > 0:
         st.error(f"**[FINANCIAL PENALTY] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
     else:
-        if rep.get('num_chunks', 0) == 0:
-            st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
-        elif rep.get('fake_ev_attempted', 0) > 0:
-            st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
+        if rep.get('fake_ev_attempted', 0) > 0:
+            st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite an investigation, the ruling party's 'special accounts' remained watertight. All funds cleared.")
         else:
             st.success(f"**[CLEAN GOV] ZERO FAKE ENGINEERING DETECTED!**\n\nInvestigators turned the ledgers upside down and confirmed all projects are 100% genuine.")
             
@@ -280,13 +274,24 @@ def render(game, cfg):
         if rep['fine_value'] > 0:
             st.success(f"Treasury Revenue: +`${rep['fine_value']:.1f}` (Punitive Fines)")
             
-        with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
+        with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials", expanded=True):
             st.write(f"**Net Project Profit:** `${rep['h_project_net']:.1f}`")
             st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
-            if rep['caught_fake_ev'] > 0:
-                st.write(f"- Fraud Forfeiture: `-${rep['caught_value']:.1f}`")
-                st.write(f"- Punitive Fines: `-${rep['fine_value']:.1f}`")
             st.write(f"- Eng. Costs: `-${rep['h_invest_wealth']:.1f}`")
+            
+            # 📌 修正：明確註記雙方因為豆腐工程被抓到的得失
+            if rep['fake_ev_attempted'] > 0:
+                st.markdown("---")
+                st.write(f"⚠️ **Tofu Project (Fake EV) Audit:**")
+                st.write(f"- Attempted Fake EV: `{rep['fake_ev_attempted']:.1f}` units")
+                st.write(f"- Caught Fake EV: `{rep['caught_fake_ev']:.1f}` units")
+                if rep['caught_fake_ev'] > 0:
+                    st.write(f"🚨 **Fraud Forfeiture (To {rep['r_party_name']}):** `-${rep['caught_value']:.1f}`")
+                    st.write(f"🚨 **Punitive Fines (To Treasury):** `-${rep['fine_value']:.1f}`")
+                else:
+                    st.write(f"✅ **Audit Evaded:** No financial penalty.")
+            
+            st.markdown("---")
             st.write(f"**Final Cash Flow:** `{rep['h_inc']:+.1f}`")
 
         with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
@@ -294,9 +299,13 @@ def render(game, cfg):
             st.write(f"- Paid R-Subsidy: `-${rep['r_pays']:.1f}`")
             st.write(f"+ Recovered Funds: `${rep['unspent_proj']:.1f}`")
             st.write(f"+ Budget Surplus: `${rep['base_r_surplus']:.1f}`")
-            if rep['r_extra'] > 0: 
-                st.write(f"+ Fraud Bounty: `${rep['r_extra']:.1f}`")
             st.write(f"- Eng. Costs: `-${rep['r_invest_wealth']:.1f}`")
+            
+            if rep['r_extra'] > 0: 
+                st.markdown("---")
+                st.write(f"🏆 **Audit Success Bounty:** `+${rep['r_extra']:.1f}`")
+            
+            st.markdown("---")
             st.write(f"**Final Cash Flow:** `{rep['r_inc']:+.1f}`")
 
     with c2:
@@ -341,6 +350,10 @@ def render(game, cfg):
         if 'pending_dice_roll' in st.session_state: del st.session_state.pending_dice_roll
         
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
+        
+        # 📌 修正：更新歷史紀錄中的選舉標記
+        game.history[-1]['Is_Election'] = is_election_end 
+        
         game.year += 1
         
         if game.year > cfg['END_YEAR']: game.phase = 4
@@ -348,7 +361,7 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            # 📌 修正：年度重置，Ruling 永遠是 R，Candidate 永遠是 H
+            # 📌 修正：年度跨年強制重置， Ruling 永遠是 R
             if is_election_end:
                 winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
                 game.ruling_party = winner
