@@ -35,14 +35,11 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
     rep = game.last_year_report
     st.markdown("---")
     
-    # 🛡️ 加入 preview_data 防呆 (避免完全沒傳入時崩潰)
-    if preview_data is None: preview_data = {}
-    
-    disp_gdp = preview_data.get('gdp', game.gdp) if is_preview else game.gdp
-    disp_san = preview_data.get('san', game.sanity) if is_preview else game.sanity
-    disp_emo = preview_data.get('emo', game.emotion) if is_preview else game.emotion
-    disp_h_fund = preview_data.get('h_fund', game.h_fund) if is_preview else game.h_fund
-    disp_budg = preview_data.get('budg', game.total_budget) if is_preview else game.total_budget
+    disp_gdp = preview_data['gdp'] if is_preview else game.gdp
+    disp_san = preview_data['san'] if is_preview else game.sanity
+    disp_emo = preview_data['emo'] if is_preview else game.emotion
+    disp_h_fund = preview_data['h_fund'] if is_preview else game.h_fund
+    disp_budg = preview_data['budg'] if is_preview else game.total_budget
     
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -120,23 +117,21 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 st.caption(f"*(➖ Invested `{inv_w:.1f}` | Fine `{penalty:.1f}`)*")
         else:
             if is_preview:
-                # 🛡️ 終極防呆：強制使用 .get()，沒抓到就給 0.0，絕對不會 KeyError！
-                my_net = preview_data.get('h_inc', 0.0) if (view_party.name == game.h_role_party.name) else preview_data.get('r_inc', 0.0)
-                opp_net = preview_data.get('r_inc', 0.0) if (view_party.name == game.h_role_party.name) else preview_data.get('h_inc', 0.0)
+                my_net = preview_data['h_inc'] if (view_party.name == game.h_role_party.name) else preview_data['r_inc']
+                opp_net = preview_data['r_inc'] if (view_party.name == game.h_role_party.name) else preview_data['h_inc']
                 
                 st.markdown(t("### 📊 Think Tank Report"))
                 def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
                 
-                st.markdown(f"{t('Our Est. Net Profit')}: **{my_net:.1f}** (Project ROI: {fmt_roi(preview_data.get('my_roi', 0.0))})")
-                st.markdown(f"{t('Opp. Est. Net Profit')}: **{opp_net:.1f}** (Project ROI: {fmt_roi(preview_data.get('opp_roi', 0.0))})")
+                st.markdown(f"{t('Our Est. Net Profit')}: **{my_net:.1f}** (Project ROI: {fmt_roi(preview_data.get('my_roi', 0))})")
+                st.markdown(f"{t('Opp. Est. Net Profit')}: **{opp_net:.1f}** (Project ROI: {fmt_roi(preview_data.get('opp_roi', 0))})")
                 
-                # 🛡️ 防呆讀取支持度
-                my_gdp_perf = preview_data.get('my_perf_gdp', 0.0)
-                my_proj_perf = preview_data.get('my_perf_proj', 0.0)
+                my_gdp_perf = preview_data['my_perf_gdp']
+                my_proj_perf = preview_data['my_perf_proj']
                 my_total_perf = my_gdp_perf + my_proj_perf
 
-                opp_gdp_perf = preview_data.get('opp_perf_gdp', 0.0)
-                opp_proj_perf = preview_data.get('opp_perf_proj', 0.0)
+                opp_gdp_perf = preview_data['opp_perf_gdp']
+                opp_proj_perf = preview_data['opp_perf_proj']
                 opp_total_perf = opp_gdp_perf + opp_proj_perf
 
                 st.markdown(f"{t('Total Expected Support')}:")
