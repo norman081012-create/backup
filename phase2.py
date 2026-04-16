@@ -205,7 +205,7 @@ def render(game, view_party, opponent_party, cfg):
     base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
     unspent_proj = proj_fund * (1.0 - res_prev['h_idx'])
 
-    # 📌 將遺失的 h_inc, r_inc, my_roi, opp_roi 補回字典中
+    # 📌 關鍵補回：確保 h_inc 與 r_inc 存在於 preview_data 字典中，供 UI Core 提取！
     hp_net_est = h_base_expected + res_prev['payout_h'] + r_pays - float(act_ha.get('invest_wealth', 0))
     rp_net_est = r_base_expected + base_r_surplus + unspent_proj - r_pays - float(act_ra.get('invest_wealth', 0))
 
@@ -226,7 +226,7 @@ def render(game, view_party, opponent_party, cfg):
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
-        'h_inc': hp_net_est, 'r_inc': rp_net_est,
+        'h_inc': hp_net_est, 'r_inc': rp_net_est,  # 📌 修復 KeyError 來源
         'my_roi': o_h_roi if is_h else o_r_roi,
         'opp_roi': o_r_roi if is_h else o_h_roi,
         'my_perf_gdp': shift_preview[view_party.name]['perf_gdp'],
