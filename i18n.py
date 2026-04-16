@@ -71,6 +71,8 @@ DYNAMIC_REPLACEMENTS = {
     "Media Control": "媒體識讀與控制",
     "Campaign": "公關與造勢活動",
     "Incite Emotion": "煽動選民情緒",
+    "Investigate Fin.": "調查金流",
+    "Hide Fin.": "隱藏金流",
     
     "Think Tank": "智庫預測處",
     "Intelligence": "情報調查處",
@@ -147,3 +149,4 @@ def t(text, fallback=None):
     text = text.replace("__PROTECT_EV__", "EV")
 
     return text
+
