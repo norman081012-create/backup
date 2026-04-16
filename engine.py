@@ -21,7 +21,7 @@ class Party:
         self.edu_stance = 0.0 
         
         self.current_forecast = 0.0
-        self.poll_history = {'小型': [], '中型': [], '大型': []}
+        self.poll_history = {'Small': [], 'Medium': [], 'Large': []}
         self.latest_poll = None
         self.poll_count = 0
         self.last_acts = {}
@@ -53,7 +53,7 @@ class GameEngine:
         self.last_year_report = None
         
         self.boundary_B = 100 
-        # 🚀 新增：儲存媒體審查帶來的極化固著度 Buff (持續2年)
+        # 🚀 Store Media Censorship Polarization Buff (lasts 2 years)
         self.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
 
     def record_history(self, is_election):
@@ -77,7 +77,7 @@ def execute_poll(game, view_party, cost):
     a_actual = game.party_A.support
     a_poll = max(0.0, min(100.0, a_actual + random.uniform(-error_margin, error_margin)))
     
-    poll_type = '小型' if cost == 5 else '中型' if cost == 10 else '大型'
+    poll_type = 'Small' if cost == 5 else 'Medium' if cost == 10 else 'Large'
     game.party_A.latest_poll = a_poll
     game.party_A.poll_history[poll_type].append(a_poll)
     b_poll = 100.0 - a_poll
@@ -85,12 +85,12 @@ def execute_poll(game, view_party, cost):
     game.party_B.poll_history[poll_type].append(b_poll)
     view_party.poll_count += 1
 
-def trigger_swap(game, penalty_amt, msg_prefix="政局動盪！"):
+def trigger_swap(game, penalty_amt, msg_prefix="Political Turmoil!"):
     game.party_A.wealth -= penalty_amt; game.party_B.wealth -= penalty_amt
     game.h_role_party, game.r_role_party = game.r_role_party, game.h_role_party
     game.swap_triggered_this_year = True
     game.emotion = min(100.0, game.emotion + 30.0) 
     
-    st.session_state.news_flash = f"🗞️ **【快訊】{msg_prefix}** 雙方被迫各繳納 {penalty_amt:.1f} 資金給第三方慈善團體，觸發換位！"
+    st.session_state.news_flash = f"🗞️ **[BREAKING] {msg_prefix}** Both parties forced to pay {penalty_amt:.1f} to charities, triggering an immediate Cabinet Swap!"
     st.session_state.anim = 'snow'
     game.phase = 2
