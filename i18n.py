@@ -1,148 +1,178 @@
 # ==========================================
 # i18n.py
-# 負責全系統的多語系文字切換字典
+# 攔截器版本：全自動中英翻譯轉換 (保護 GDP & ROI)
 # ==========================================
 import streamlit as st
+import re
 
-TRANSLATIONS = {
-    "🎛️ 控制台": "🎛️ Control Panel",
-    "📝 參數調整(即時)": "📝 Live Parameters",
-    "🌐 國家總體現況": "🌐 National Status",
-    "💰 執行系統資源": "💰 Executive Resources",
-    "📊 財報": "📊 Financial Report",
-    "📊 智庫評估報告": "📊 Think Tank Report",
-    "👤 玩家頁面": "👤 Player Dashboard",
-    "🕵️ 情報處 - 對手機構指標": "🕵️ Intelligence - Opponent Stats",
-    "📈 審計處 - 內部部門投資": "📈 Audit - Internal Dept. Investments",
-    "資訊辨識": "Civic Literacy",
-    "選民情緒": "Voter Emotion",
-    "當前 GDP": "Current GDP",
-    "預期 GDP": "Expected GDP",
-    "總預算池": "Total Budget Pool",
-    "獎勵基金": "Reward Fund",
-    "可用淨資產": "Available Net Assets",
-    "去年施政花費": "Last Yr Policy Cost",
-    "維護成本": "Maintenance Cost",
-    "收益總結": "Profit Summary",
-    "智庫": "Think Tank",
-    "情報處": "Intelligence",
-    "黨媒": "Media Dept",
-    "反情報處": "Counter-Intel",
-    "工程處": "Engineering",
-    "🤝 Phase 1: 監管系統委託執行系統建設提案": "🤝 Phase 1: R-System Proposal",
-    "🚨 **最後通牒啟動中：** 監管系統必須擬定最終裁決草案！": "🚨 **Ultimatum Active:** R-System must draft final resolution!",
-    "⏳ 等待對手公布草案...": "⏳ Waiting for opponent's draft...",
-    "草案擬定室": "Draft Room",
-    "對手公告": "Opp. Claimed",
-    "等待對手公告": "Awaiting Opp.",
-    "公告衰退率(0~1)": "Claimed Decay",
-    "公告建設單價": "Claimed Unit Cost",
-    "當前公告:": "Current Claim:",
-    "目標 GDP 成長率 (%)": "Target GDP Growth (%)",
-    "計畫獎勵金 (執行方100%完成計畫之獎勵金，最高不超過當年總預算)": "Total Plan Reward (Max=Budget)",
-    "計畫總效益 (計畫100%完成時產生之建設量)": "Plan Total Benefit (Construction Volume)",
-    "💰 監管出資額 (從監管方預算中支付的補貼)": "💰 R-Pays",
-    "監管出資": "R-Pays",
-    "執行出資": "H-Pays",
-    "總額": "Total",
-    "出資總額": "Total Req. Cost",
-    "模擬執行方出資": "Simulated H-System Pays",
-    "監管補貼": "R-Subsidy",
-    "工程成本": "Act. Fund",
-    "國庫剩餘": "Treasury Remainder",
-    "提案出資": "Proposal Pays",
-    "模擬如果發生倒閣換位 (依據新定位試算)": "Toggle: Simulate if Swap Happens (Calculated by new roles)",
-    "切換至 智庫預估 試算 (預設為公告數值)": "Toggle to use Think Tank Values (Default: Claimed)",
-    "📤 送出常規草案": "📤 Submit Draft",
-    "💥 發布最後通牒": "💥 Issue Ultimatum",
-    "🔄 強制通過並換位": "🔄 Force Pass & Swap",
-    "📜 當前草案預覽": "📜 Current Draft Preview",
-    "📜 對手 (執行系統) 既有草案參考": "📜 Opponent Draft Ref.",
-    "⚖️ 監管系統草案": "⚖️ R-System Draft",
-    "🛡️ 執行系統草案": "🛡️ H-System Draft",
-    "✅ 選擇此方案": "✅ Select this draft",
-    "📜 待覆議草案內容": "📜 Draft to Confirm",
-    "✅ 同意法案": "✅ Agree to Bill",
-    "❌ 拒絕並重談": "❌ Reject & Renegotiate",
-    "🔄 同意但換位": "🔄 Agree & Swap",
-    "💥 逼迫最終提案 (通牒)": "💥 Force Final (Ultimatum)",
-    "🚨 最終方案決斷 (執行系統專屬)": "🚨 Final Decision (H-System Only)",
-    "✅ 忍辱負重 (接受通牒)": "✅ Accept Ultimatum",
-    "🔄 掀桌倒閣換位": "🔄 Flip Table & Swap",
-    "🛠️ Phase 2: 政策執行與行動 - 輪到": "🛠️ Phase 2: Execution - Turn:",
-    "🛡️ 執行系統": "🛡️ H-System",
-    "⚖️ 監管系統": "⚖️ R-System",
-    "#### 📣 政策與媒體": "#### 📣 Policy & Media",
-    "💡 **執行系統特性**: 媒體操控值 1.2 倍加成": "💡 **H-System Perk**: Media Control x1.2",
-    "💡 **監管系統特性**: 調查能力值 1.2 倍加成": "💡 **R-System Perk**: Intelligence x1.2",
-    "💸 秘密貪污 (%)": "💸 Secret Corruption (%)",
-    "🏢 圖利自身廠商 (%)": "🏢 Cronyism (%)",
-    "⚖️ 媒體審查 (投入資金)(打壓對手黨媒效率，依對手當前支持度反噬自身民調)": "⚖️ Media Censorship (Reduces opp. media, penalizes own support)",
-    "📺 媒體操控 (投入資金)(改變施政產生的影響力 像是 甩鍋搶功勞邀功)": "📺 Media Control (Changes policy impact)",
-    "🎓 教育方針 (投入資金)(左:填鴨(提升低媒體影響) 右:思辨(降低媒體影響))": "🎓 Education Policy (Left: Canned, Right: Critical)",
-    "🎉 舉辦競選 (投入資金)(思辨越低填鴨越高越有效)": "🎉 Campaign (Lower sanity = higher effect)",
-    "🔥 煽動情緒 (投入資金)(高情緒高於思辨降低思辨力 / 高情緒高填鴨降低生產力，時效短)": "🔥 Incite Emotion (Reduces sanity short-term)",
-    "#### 🔒 內部部門投資": "#### 🔒 Dept. Investment",
-    "🔄 全部回歸當前維護費 (放棄升級)": "🔄 Reset to Current Maintenance",
-    "當前": "Current",
-    "確認行動/結算": "Confirm & Execute",
-    "🚨 資金不足！當前行動預算已超支": "🚨 Insufficient Funds! Over budget by",
-    "⚖️ Phase 3: 年度結算報告": "⚖️ Phase 3: Annual Report",
-    "#### 💰 經濟與財政": "#### 💰 Economy & Finance",
-    "GDP 變化": "GDP Shift",
-    "執行系統收益總結:": "H-System Profit Summary:",
-    "監管系統收益總結:": "R-System Profit Summary:",
-    "🚨 貪污醜聞爆發！執行系統貪污被情報處查獲，沒收非法所得。": "🚨 Corruption Caught! Funds seized.",
-    "🚨 圖利爭議！執行系統圖利遭舉發，強制沒收資金。": "🚨 Cronyism Caught! Funds seized.",
-    "#### 🧠 社會與民意 (新增量)": "#### 🧠 Society & Opinion (New Shifts)",
-    "施政滿意度位移 (執行/監管)": "Performance Shift (H / R)",
-    "⏩ 確認報告並進入下一年": "⏩ Confirm & Next Year",
-    "🏁 遊戲結束！共生內閣軌跡總結算": "🏁 Game Over! Final History Report",
-    "👑 當權": "👑 Ruling",
-    "🎯 候選": "🎯 Candidate",
-    "黨產資金": "Party Wealth",
-    "預估": "Est.",
-    "支持度": "Support",
-    "準確度": "Accuracy",
-    "經濟預估": "Economic Forecast",
-    "預估衰退值": "Est. Decay",
-    "變動": "Change",
-    "佔比": "Share",
-    "淨利": "Net Profit",
-    "真": "Real",
-    "去年估": "Last Est.",
-    "我方預估總收益": "Our Est Profit",
-    "對方預估總收益": "Opp Est Profit",
-    "新增支持量預估": "Est Support Points",
-    "衰退值判讀": "Drop Analysis",
-    "建設單價判讀": "Unit Cost Analysis",
-    "預期大環境政績 (未經媒體)": "Expected Base Perf (No Media)",
-    
-    "中度風險 (公告衰退率與預期略有出入，可能影響選民心理預期)": "🟡 Med Risk (Slight discrepancy in drop, affects psychological expectation)",
-    "差異極小 (公告衰退率誠實，無心理預期操弄空間)": "🟢 Low Risk (Honest drop claim, no expectation manipulation)",
-    "研判對手惡意高估衰退率。企圖製造恐慌降低施政期望，藉此收割反差紅利！": "🔴 High Risk (Exaggerating drop to lower expectations & harvest contrast bonus)",
-    "研判對手低估衰退率粉飾太平。若最終施政未達標將遭民意反噬！": "🔴 High Risk (Understating drop to paint a rosy picture, risks backlash)",
-
-    "研判對手惡意高估單價，企圖浮報預算與墊高門檻！": "🔴 High Risk (Opp. inflating unit cost for higher budget)",
-    "研判對手惡意高估單價，意圖套取過高工程款！": "🔴 High Risk (Opp. inflating unit cost for more funds)",
-    "研判對手低估單價，企圖壓榨我方建設量！": "🔴 High Risk (Opp. low-balling unit cost to exploit construction)",
-    "研判對手低估單價，企圖掩飾低效能！": "🔴 High Risk (Opp. low-balling unit cost to hide low efficiency)",
-    "中度風險 (單價略有出入，需留意工程品質或超支)": "🟡 Med Risk (Slight unit cost discrepancy)",
-    "差異極小 (公告單價與情報處估算相符，屬正常估值)": "🟢 Low Risk (Unit cost matches intel)",
-    
-    "建設估價": "Construction Valuation",
-    "判讀": "Analysis",
-    "情報": "Intel",
-    "防貪污能力估算": "Anti-Corruption Estimate",
-    "穩定維持": "Stable",
-    "維護費": "Maint",
-    "小民調 ($5)": "Small Poll ($5)",
-    "中民調 ($10)": "Med Poll ($10)",
-    "大民調 ($20)": "Big Poll ($20)"
+# ==========================================
+# 1. 靜態精確比對字典 (針對完全固定的 UI 字串)
+# ==========================================
+EXACT_MATCH_DICT = {
+    "👁️ God Mode": "👁️ 上帝模式",
+    "🔄 Restart Game": "🔄 重新開始遊戲",
+    "🎛️ Control Panel": "🎛️ 遊戲控制面板",
+    "🌐 Switch to Chinese": "🌐 切換至繁體中文",
+    "🌐 Switch to English": "🌐 Switch to English",
+    "📝 Live Parameters": "📝 即時參數設定",
+    "🔄 Auto-Fill Intel": "🔄 自動帶入智庫預測",
+    "📤 Submit Draft": "📤 送出提案草案",
+    "💥 Issue Ultimatum": "💥 下達最後通牒",
+    "✅ Select this draft": "✅ 選擇此草案",
+    "✅ Agree to Bill": "✅ 同意法案並簽署",
+    "❌ Reject & Renegotiate": "❌ 拒絕並重新談判",
+    "✅ Accept Ultimatum": "✅ 接受最後通牒",
+    "🔄 Reset to Current Maintenance": "🔄 重置為當前維護狀態",
+    "Confirm Action & Execute": "確認行動並執行 (進入結算)",
+    "⏩ Confirm Report & Next Year": "⏩ 確認報告並進入下一年",
+    "🔄 Restart a New Game": "🔄 重新開始新一局遊戲",
+    "Switch to Think Tank Estimate": "切換至智庫預估數值",
+    "Simulate Role Swap": "模擬對方視角 (換位思考)"
 }
 
-def t(zh_text, en_text=None):
-    lang = st.session_state.get('lang', 'ZH')
-    if lang == 'ZH': return zh_text
-    if en_text is not None: return en_text
-    return TRANSLATIONS.get(zh_text, zh_text)
+# ==========================================
+# 2. 動態關鍵字替換字典 (處理 f-string 組合或長句子)
+# 優先替換長句子，再替換短詞彙，避免翻譯衝突
+# ==========================================
+DYNAMIC_REPLACEMENTS = {
+    # 系統與階段
+    "Symbiocracy Simulator v3.0.0": "共生體制模擬器 v3.0.0",
+    "Phase 1: R-System Proposal": "第一階段：監管系統 (Regulator) 提案",
+    "Phase 2: Execution - Turn:": "第二階段：政策執行 - 輪到：",
+    "Phase 3: Annual Resolution Report": "第三階段：年度結算與社會影響報告",
+    "Game Over! Final Symbiocracy Summary": "🏁 遊戲結束！共生體制最終歷史結算",
+    
+    # 年度通知與廣播
+    "[ANNUAL NOTICE]": "[年度通知]",
+    "A new year begins. The nation awaits rebuilding; initiate budget negotiations immediately.": "新的一年開始了。百廢待舉，請立即展開預算協商。",
+    "A new year begins. Initiate budget negotiations.": "新的一年開始了。請展開預算協商。",
+    
+    # 角色與選舉狀態
+    "Ruling": "當權",
+    "Candidate": "候選",
+    "(Won!)": "(勝選!)",
+    "(Lost)": "(敗選)",
+    
+    # 儀表板與面板
+    "National Status": "國家總體狀態",
+    "Executive Resources": "執行系統資源池",
+    "Think Tank Intel": "智庫情報分析",
+    "Financial Report": "財務收支報告",
+    "Party Overview": "政黨狀態總覽",
+    "Control Panel": "控制面板",
+    "Economy & Finance": "經濟與財政結算",
+    "Society & Opinion": "社會與民意變化",
+    "Support Shift Resolution": "民意支持度板塊位移",
+    
+    # 專有名詞與屬性
+    "Total Budget Pool": "國家總預算池",
+    "Reward Fund": "執行系統專案獎金",
+    "Civic Literacy": "公民素養 (理性)",
+    "Voter Emotion": "選民情緒 (狂熱)",
+    "Party Wealth": "政黨資金",
+    "Total Plan Reward (Max=Budget)": "專案總獎金 (上限=總預算)",
+    "Plan Total Benefit (Construction Volume)": "專案總效益 (建設規模/產值)",
+    "R-Pays": "監管方墊付款",
+    "H-Pays": "執行方自籌款",
+    "Total Req. Cost": "專案總需成本",
+    "Claimed Decay": "宣告衰退率",
+    "Claimed Unit Cost": "宣告單位成本",
+    
+    # 動作與部門
+    "Secret Corruption ($)": "隱蔽貪污金額 ($)",
+    "Cronyism ($)": "圖利特定廠商 ($)",
+    "Media Censorship (0~100)": "媒體審查與言論控制 (0~100)",
+    "Education Policy (Left: Rote | Right: Critical)": "教育方針 (左: 填鴨愚民 | 右: 批判思考)",
+    "Media Control ($)": "媒體識讀與控制 ($)",
+    "Campaign ($)": "公關與造勢活動 ($)",
+    "Incite Emotion ($)": "煽動選民情緒 ($)",
+    
+    "Think Tank": "智庫預測部",
+    "Intelligence": "情報調查部",
+    "Media Dept": "公關媒體部",
+    "Counter-Intel": "反情報與隱蔽部",
+    "Engineering": "工程建設部",
+    
+    # 提案與預覽
+    "Current Draft Preview": "當前草案預覽",
+    "Opponent Draft Ref.": "對手草案參考",
+    "Ruling Party Decision": "執政黨最終裁決",
+    "Final Decision (H-System Only)": "最終決定 (僅限執行系統)",
+    "Think Tank Analysis Report": "智庫分析報告",
+    "Our Est. Net Profit": "我方預估淨利",
+    "Opp. Est. Net Profit": "對手預估淨利",
+    "Total Expected Support": "預估獲得總支持度",
+    "Expected GDP Shift": "預期 GDP 變化",
+    "Drop Analysis": "衰退宣告分析",
+    "Unit Cost Analysis": "單位成本分析",
+    
+    # 支持度明細
+    "Our Total:": "我方總和:",
+    "Opp. Total:": "對手總和:",
+    "Base:": "大環境:",
+    "Proj:": "專案:",
+    
+    # 智庫評價
+    "Honest and Accurate": "誠實且精準",
+    "Medium Expectation Gap": "中度預期落差",
+    "Warning! Opponent is manipulating expectations!": "警告！對手正在操縱預期數值！",
+    "Sir, this is our contrast bonus strategy.": "長官，這是我們為了製造反差紅利的策略。",
+    
+    # 其他零碎詞彙
+    "Available Net Assets": "可用淨資產",
+    "Est.": "預估",
+    "Round:": "回合：",
+    "Year": "年",
+    "Support:": "支持度:",
+    "Share": "佔比",
+    "Waiting for opponent's draft...": "等待對手提出草案...",
+    "Waiting for ruling party...": "等待執政黨裁決...",
+    "Waiting for opponent confirmation...": "等待對手確認..."
+}
+
+def t(text, fallback=None):
+    """
+    核心翻譯攔截器
+    """
+    if not isinstance(text, str):
+        return text
+
+    # 取得當前語言，預設為 EN (英文)
+    lang = st.session_state.get('lang', 'EN')
+    if lang == 'EN':
+        # 如果是英文模式，把中文標籤替換成英文
+        text = text.replace("切換至繁體中文", "Switch to Chinese")
+        text = text.replace("執行系統", "Executive").replace("監管系統", "Regulator")
+        return text
+
+    # ==========================================
+    # 中文模式處理流程
+    # ==========================================
+
+    # 1. 檢查是否在靜態字典中 (完美符合)
+    if text in EXACT_MATCH_DICT:
+        return EXACT_MATCH_DICT[text]
+
+    # 2. 保護免翻名詞：將 GDP、ROI 等替換為亂碼標籤，避免後續被誤翻
+    # 這裡順便把 H-System 和 R-System 替換成您要求的名稱
+    protected_map = {
+        "GDP": "__PROTECT_GDP__",
+        "ROI": "__PROTECT_ROI__",
+        "H-System": "執行系統",
+        "R-System": "監管系統",
+        "Executive": "執行系統",
+        "Regulator": "監管系統"
+    }
+    
+    for en_word, placeholder in protected_map.items():
+        text = text.replace(en_word, placeholder)
+
+    # 3. 動態字串替換 (掃描句子中包含的英文關鍵字並替換)
+    for en_phrase, zh_phrase in DYNAMIC_REPLACEMENTS.items():
+        text = text.replace(en_phrase, zh_phrase)
+
+    # 4. 恢復受保護的名詞
+    text = text.replace("__PROTECT_GDP__", "GDP")
+    text = text.replace("__PROTECT_ROI__", "ROI")
+
+    return text
