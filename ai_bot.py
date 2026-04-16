@@ -73,13 +73,13 @@ def take_turn(game, cfg):
                 game.proposal_count += 1
                 game.p1_step = 'draft_r'
                 game.proposing_party = game.r_role_party
-                st.session_state.news_flash = f"🗞️ **[快訊]** {ai_party.name} 拒絕了草案，重新展開談判。"
+                st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} rejected the draft. Renegotiation started."
             else:
                 # 妥協接受
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 game.phase = 2
                 game.proposing_party = game.ruling_party
-                st.session_state.news_flash = f"🗞️ **[快訊]** {ai_party.name} 接受了草案，法案通過！"
+                st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} accepted the draft. Bill passed!"
 
     # ==========================================
     # PHASE 2: 資源分配與部門操作
@@ -144,4 +144,3 @@ def take_turn(game, cfg):
         else:
             game.phase = 3
             game.proposing_party = game.r_role_party
-
