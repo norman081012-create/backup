@@ -40,10 +40,10 @@ def render(game, cfg):
         net_fin_ev = r_inv_fin - h_ci_fin
         
         if net_fin_ev > 0:
-            chunk_size = max(0.01, 10.0 / net_fin_ev)
+            num_chunks = max(1, int(net_fin_ev / 2.0))
             catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
         else:
-            chunk_size = float('inf')
+            num_chunks = 0
             catch_prob = 0.0
 
         unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
@@ -55,7 +55,7 @@ def render(game, cfg):
              st.session_state.pending_dice_roll = {
                  'fake_ev': fake_ev,
                  'catch_prob': catch_prob,
-                 'chunk_size': chunk_size,
+                 'num_chunks': num_chunks, 
                  'fine_mult': fine_mult,
                  'unit_cost_real': unit_cost_real,
                  'is_rolled': False
@@ -86,7 +86,6 @@ def render(game, cfg):
         base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
         unspent_proj = proj_fund * (1.0 - res_exec['h_idx'])
         
-        # 📌 修正：精確計算最終淨利變化
         h_invest_wealth = float(ha.get('invest_wealth', 0))
         r_invest_wealth = float(ra.get('invest_wealth', 0))
         
@@ -107,7 +106,6 @@ def render(game, cfg):
             else: censor_failures += 1
         
         censor_weight = max(0.0, censor_diff / 100.0) 
-        # 拔除了政治醜聞情緒連動
         censor_emotion_add = censor_weight * censor_successes
         censor_rigidity_buff = censor_weight * (censor_successes / (censor_successes + censor_failures)) if (censor_successes + censor_failures) > 0 else 0.0
             
@@ -203,7 +201,7 @@ def render(game, cfg):
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
             'fake_ev_attempted': fake_ev,
-            'chunk_size': chunk_size,
+            'num_chunks': num_chunks, 
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
@@ -236,7 +234,7 @@ def render(game, cfg):
     if dice_data and not dice_data['is_rolled']:
         st.markdown("---")
         st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
-        if dice_data['chunk_size'] == float('inf'):
+        if dice_data['num_chunks'] == 0:
             st.info("The Regulator lacks sufficient ops capacity to initiate an audit. Financial flows obscured successfully.")
             if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
                 st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
@@ -260,10 +258,9 @@ def render(game, cfg):
     st.markdown("---")
     st.markdown("### 🗞️ **[FRONT PAGE HEADLINE]**")
     if rep.get('caught_fake_ev', 0) > 0:
-        # 移除政治醜聞相關的文字，純粹財務懲罰
         st.error(f"**[FINANCIAL PENALTY] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
     else:
-        if rep.get('chunk_size', float('inf')) == float('inf'):
+        if rep.get('num_chunks', 0) == 0:
             st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
         elif rep.get('fake_ev_attempted', 0) > 0:
             st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
@@ -351,9 +348,13 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
+            # 📌 修正：年度重置，Ruling 永遠是 R，Candidate 永遠是 H
             if is_election_end:
-                game.r_role_party = game.ruling_party
-                game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
+                winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
+                game.ruling_party = winner
+                
+            game.r_role_party = game.ruling_party
+            game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
             game.proposing_party = game.r_role_party
             game.last_year_report = None
