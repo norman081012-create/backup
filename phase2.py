@@ -196,24 +196,9 @@ def render(game, view_party, opponent_party, cfg):
     r_pays = float(d.get('r_pays', 0.0))
     proj_fund = float(d.get('proj_fund', 0.0))
     
-    # 計算經濟預覽
+    # Preview using fake_ev_spent and fake_ev_safe as the same since it's not audited yet
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(game.current_real_decay), r_pays=r_pays, c_net_override=eval_c_net, fake_ev_spent=eval_fake_ev, fake_ev_safe=eval_fake_ev)
     
-    # 📌 補回：計算預期收入 (h_inc, r_inc, my_roi, opp_roi)
-    h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
-    r_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
-    
-    total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
-    base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
-    unspent_proj = proj_fund * (1.0 - res_prev['h_idx'])
-
-    hp_net_est = h_base_expected + res_prev['payout_h'] + r_pays - float(act_ha.get('invest_wealth', 0))
-    rp_net_est = r_base_expected + base_r_surplus + unspent_proj - r_pays - float(act_ra.get('invest_wealth', 0))
-
-    act_fund = res_prev['act_fund']
-    o_h_roi = ((res_prev['payout_h'] + r_pays - act_fund) / act_fund) * 100.0 if act_fund > 0 else float('inf')
-    o_r_roi = ((base_r_surplus + unspent_proj - r_pays) / r_pays) * 100.0 if r_pays > 0 else float('inf')
-
     h_media_pwr = float(act_ha.get('alloc_med_control', 0.0))
     r_media_pwr = float(act_ra.get('alloc_med_control', 0.0))
 
@@ -224,13 +209,9 @@ def render(game, view_party, opponent_party, cfg):
         h_media_pwr, r_media_pwr
     )
     
-    # 📌 補回：完整寫入 preview_data 字典
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
-        'h_inc': float(hp_net_est), 'r_inc': float(rp_net_est),
-        'my_roi': float(o_h_roi if is_h else o_r_roi),
-        'opp_roi': float(o_r_roi if is_h else o_h_roi),
         'my_perf_gdp': shift_preview[view_party.name]['perf_gdp'],
         'my_perf_proj': shift_preview[view_party.name]['perf_proj'],
         'opp_perf_gdp': shift_preview[opponent_party.name]['perf_gdp'],
