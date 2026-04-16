@@ -17,17 +17,20 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = (0.85 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
-def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: float):
-    if total_amount <= 0:
-        return 0.0, 0.0, 0.0
+def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: float, chunk_size: float = 1.0):
+    if total_amount <= 0 or chunk_size <= 0:
+        return 0.0, total_amount, 0.0
         
-    int_amount = int(total_amount)
-    remainder = total_amount - int_amount
+    num_full_chunks = int(total_amount / chunk_size)
+    remainder = total_amount - (num_full_chunks * chunk_size)
     
-    caught_int = float(np.random.binomial(n=int_amount, p=catch_prob))
+    # 確保 n 為整數且大於 0
+    caught_chunks = float(np.random.binomial(n=num_full_chunks, p=catch_prob)) if num_full_chunks > 0 else 0.0
+    caught_int_amount = caught_chunks * chunk_size
+    
     caught_remainder = remainder if random.random() < catch_prob else 0.0
     
-    caught_total = caught_int + caught_remainder
+    caught_total = caught_int_amount + caught_remainder
     safe_total = total_amount - caught_total
     fine = caught_total * fine_mult
     
