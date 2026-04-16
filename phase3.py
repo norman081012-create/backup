@@ -39,11 +39,12 @@ def render(game, cfg):
         h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
         net_fin_ev = r_inv_fin - h_ci_fin
         
+        # 修正：根據調查能力決定切成幾塊進行調查
         if net_fin_ev > 0:
-            chunk_size = max(0.01, 10.0 / net_fin_ev)
-            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
+            num_chunks = max(1, int(net_fin_ev / 2.0)) # 每 2 點淨能力多一塊調查次數
+            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.20) * max(1.0, net_fin_ev * 0.1))
         else:
-            chunk_size = float('inf')
+            num_chunks = 0
             catch_prob = 0.0
 
         unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
@@ -55,7 +56,7 @@ def render(game, cfg):
              st.session_state.pending_dice_roll = {
                  'fake_ev': fake_ev,
                  'catch_prob': catch_prob,
-                 'chunk_size': chunk_size,
+                 'num_chunks': num_chunks, # 更新傳入變數
                  'fine_mult': fine_mult,
                  'unit_cost_real': unit_cost_real,
                  'is_rolled': False
@@ -100,7 +101,6 @@ def render(game, cfg):
         censor_successes = 0; censor_failures = 0
         
         for i in opp_indices:
-            # 修正呼叫：改為 get_spin_rigidity
             rig = formulas.get_spin_rigidity(i, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
             if random.random() > rig: censor_successes += 1
             else: censor_failures += 1
@@ -126,7 +126,6 @@ def render(game, cfg):
         ruling_spun_plan, opp_spun_plan = formulas.apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr)
         h_spun_exec, r_spun_exec = formulas.apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr)
 
-        # ---------------- 分離真實政績與公關火力 ----------------
         perf_A = 0.0; perf_B = 0.0
         spin_A = 0.0; spin_B = 0.0
 
@@ -158,7 +157,6 @@ def render(game, cfg):
         net_spin_A = spin_A - spin_B
         old_boundary = game.boundary_B
         
-        # 🛡️ 雙軌戰鬥結算：傳入分離的火力值
         new_boundary, perf_used, perf_conquered, spin_used, spin_conquered = formulas.run_conquest_split(
             game.boundary_B, net_perf_A, net_spin_A, game.sanity, 
             getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name
@@ -188,7 +186,7 @@ def render(game, cfg):
             'spin_A': spin_A, 'spin_B': spin_B, 'net_spin_A': net_spin_A,
             'perf_used': perf_used, 'perf_conquered': perf_conquered,
             'spin_used': spin_used, 'spin_conquered': spin_conquered,
-            'old_boundary': old_boundary, 'new_boundary': new_boundary,
+            'old_boundary': old_boundary, 'new_boundary': new_boundary, 
             'correct_prob': correct_prob,
             'h_spun_exec': h_spun_exec, 'r_spun_exec': r_spun_exec, 
             'censor_successes': censor_successes, 'censor_failures': censor_failures, 'censor_emotion_add': censor_emotion_add, 'censor_buff': censor_rigidity_buff,
@@ -203,7 +201,7 @@ def render(game, cfg):
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
             'fake_ev_attempted': fake_ev,
-            'chunk_size': chunk_size,
+            'num_chunks': num_chunks, # 顯示更新
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
@@ -236,20 +234,21 @@ def render(game, cfg):
     if dice_data and not dice_data['is_rolled']:
         st.markdown("---")
         st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
-        if dice_data['chunk_size'] == float('inf'):
+        if dice_data['num_chunks'] == 0:
             st.info("The Regulator lacks sufficient ops capacity to initiate an audit. Financial flows obscured successfully.")
             if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
                 st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
                 st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun()
         else:
-            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']:.2f}` units.")
+            # 顯示修正：顯示將進行多少次查核判定
+            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per chunk (Divided into `{dice_data['num_chunks']}` audit chunks).")
 
             if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
                 with st.spinner('Investigators are tracking the financial flows...'):
                     import time
                     time.sleep(1.5) 
-                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
+                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['num_chunks'], dice_data['unit_cost_real'])
                     st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
                     st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun() 
@@ -262,7 +261,7 @@ def render(game, cfg):
     if rep.get('caught_fake_ev', 0) > 0:
         st.error(f"**[CORRUPTION SCANDAL] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
     else:
-        if rep.get('chunk_size', float('inf')) == float('inf'):
+        if rep.get('num_chunks', 0) == 0:
             st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
         elif rep.get('fake_ev_attempted', 0) > 0:
             st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
