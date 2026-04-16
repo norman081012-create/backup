@@ -205,7 +205,7 @@ def render(game, view_party, opponent_party, cfg):
     base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
     unspent_proj = proj_fund * (1.0 - res_prev['h_idx'])
 
-    # 📌 關鍵字典鍵值：確保這兩行確實存在，並傳遞給 preview_data
+    # 📌 確保這兩行確實存在
     hp_net_est = h_base_expected + res_prev['payout_h'] + r_pays - float(act_ha.get('invest_wealth', 0))
     rp_net_est = r_base_expected + base_r_surplus + unspent_proj - r_pays - float(act_ra.get('invest_wealth', 0))
 
@@ -223,12 +223,13 @@ def render(game, view_party, opponent_party, cfg):
         h_media_pwr, r_media_pwr
     )
     
+    # 📌 確保 preview_data 完整傳遞 h_inc 和 r_inc
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
-        'h_inc': hp_net_est, 'r_inc': rp_net_est,  # 👈 修正點：就是這兩個變數
-        'my_roi': o_h_roi if is_h else o_r_roi,
-        'opp_roi': o_r_roi if is_h else o_h_roi,
+        'h_inc': float(hp_net_est), 'r_inc': float(rp_net_est),
+        'my_roi': float(o_h_roi if is_h else o_r_roi),
+        'opp_roi': float(o_r_roi if is_h else o_h_roi),
         'my_perf_gdp': shift_preview[view_party.name]['perf_gdp'],
         'my_perf_proj': shift_preview[view_party.name]['perf_proj'],
         'opp_perf_gdp': shift_preview[opponent_party.name]['perf_gdp'],
