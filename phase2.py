@@ -191,21 +191,22 @@ def render(game, view_party, opponent_party, cfg):
         act_ra = my_acts
         act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'fake_ev': 0, 'c_net': float(d.get('bid_cost') or 1.0), 'alloc_ci_hidefin': 0, 'invest_wealth': 0})
 
-    h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
-    r_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
-    
     eval_c_net = float(act_ha.get('c_net', 0))
     eval_fake_ev = float(act_ha.get('fake_ev', 0))
     r_pays = float(d.get('r_pays', 0.0))
     proj_fund = float(d.get('proj_fund', 0.0))
     
+    # 計算經濟預覽
     res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(game.current_real_decay), r_pays=r_pays, c_net_override=eval_c_net, fake_ev_spent=eval_fake_ev, fake_ev_safe=eval_fake_ev)
+    
+    # 📌 補回：計算預期收入 (h_inc, r_inc, my_roi, opp_roi)
+    h_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    r_base_expected = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
     
     total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
     unspent_proj = proj_fund * (1.0 - res_prev['h_idx'])
 
-    # 📌 確保這兩行確實存在
     hp_net_est = h_base_expected + res_prev['payout_h'] + r_pays - float(act_ha.get('invest_wealth', 0))
     rp_net_est = r_base_expected + base_r_surplus + unspent_proj - r_pays - float(act_ra.get('invest_wealth', 0))
 
@@ -223,7 +224,7 @@ def render(game, view_party, opponent_party, cfg):
         h_media_pwr, r_media_pwr
     )
     
-    # 📌 確保 preview_data 完整傳遞 h_inc 和 r_inc
+    # 📌 補回：完整寫入 preview_data 字典
     preview_data = {
         'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
         'san': game.sanity, 'emo': game.emotion,
