@@ -5,9 +5,9 @@ import i18n
 t = i18n.t
 
 DEFAULT_CONFIG = {
-    'CALENDAR_NAME': "星曆", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
+    'CALENDAR_NAME': "Star Era", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
     'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
-    'CROWN_WINNER': "👑 當權", 'CROWN_LOSER': "🎯 候選",
+    'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
     'INITIAL_WEALTH': 1000.0, 'END_YEAR': 12,
     
     'DECAY_MIN': 0.1, 'DECAY_MAX': 0.7,  
@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     'DECAY_AMOUNT_DEFAULT': 1500.0,
     'DECAY_AMOUNT_BUILD': 500.0,
     
-    # 線性查扣制核心參數
+    # Linear Confiscation Core Parameters
     'CATCH_RATE_PER_DOLLAR': 0.10,        
     'CRONY_CATCH_RATE_DOLLAR': 0.05,      
     'CRONY_PROFIT_RATE': 0.20,            
@@ -50,10 +50,10 @@ DEFAULT_CONFIG = {
     'CLAIMED_DECAY_WEIGHT': 0.2,
     'AMMO_MULTIPLIER': 50.0,
     
-    # 🚀 成本量級調整
+    # 🚀 Cost Scale Adjustments
     'MAX_UPGRADE_SPEED': 20.0,
-    'UPGRADE_COST_MULT': 0.15,      # (原本 0.05) 調貴：體制升級與轉型的花費變高
-    'PR_EFFICIENCY_MULT': 3.0,      # 🚀 新增：公關操作效率倍率 (讓媒體操控、造勢、煽動變便宜/效果變好)
+    'UPGRADE_COST_MULT': 0.15,      # Higher cost for institutional upgrades and ideological shifts
+    'PR_EFFICIENCY_MULT': 3.0,      # High efficiency multiplier for PR (Media, Campaign, Incite)
     
     'PREDICT_ACCURACY_WEIGHT': 0.8,     
     'INVESTIGATE_ACCURACY_WEIGHT': 0.8, 
@@ -64,50 +64,50 @@ DEFAULT_CONFIG = {
 
 def get_config_translations():
     return {
-        'DECAY_MIN': "最小衰退率", 'DECAY_MAX': "最大衰退率",  
-        'CATCH_RATE_PER_DOLLAR': "貪污每元被查扣率",
-        'DECAY_WEIGHT_MULT': "衰退率GDP權重 (預設0.05)", 'BASE_DECAY_RATE': "最低衰退下限",
-        'CLAIMED_DECAY_WEIGHT': "預期落差影響權重", 'AMMO_MULTIPLIER': "政績轉支持量倍率",
-        'PREDICT_ACCURACY_WEIGHT': "智庫預測準確權重", 'INVESTIGATE_ACCURACY_WEIGHT': "情報觀測準確權重",
-        'UPGRADE_COST_MULT': "機構升級成本基數", 'PR_EFFICIENCY_MULT': "公關操作效率倍率"
+        'DECAY_MIN': "Min Decay Rate", 'DECAY_MAX': "Max Decay Rate",  
+        'CATCH_RATE_PER_DOLLAR': "Corruption Catch Rate per $",
+        'DECAY_WEIGHT_MULT': "Decay GDP Weight (Default 0.05)", 'BASE_DECAY_RATE': "Base Decay Floor",
+        'CLAIMED_DECAY_WEIGHT': "Expectation Gap Weight", 'AMMO_MULTIPLIER': "Perf to Support Multiplier",
+        'PREDICT_ACCURACY_WEIGHT': "Think Tank Acc. Weight", 'INVESTIGATE_ACCURACY_WEIGHT': "Intel Acc. Weight",
+        'UPGRADE_COST_MULT': "Upgrade Cost Base", 'PR_EFFICIENCY_MULT': "PR Efficiency Multiplier"
     }
 
 def get_intel_market_eval(unit_cost):
-    if unit_cost < 0.8: return "🌟 市場極度低估 (產能過剩，進入建設絕對紅利期)"
-    elif unit_cost < 1.2: return "🟢 市場報價平穩 (供需均衡，營建成本符合預期)"
-    elif unit_cost < 1.8: return "🟡 通膨溢價浮現 (原物料與勞動力緊繃，成本開始攀升)"
-    elif unit_cost < 2.5: return "🔴 市場過熱警報 (系統性阻力高，預算消耗劇烈)"
-    else: return "💀 經濟結構惡化 (成本呈現毀滅性通膨，建議暫緩非必要開發)"
+    if unit_cost < 0.8: return "🌟 Extremely Undervalued (Overcapacity, entering construction dividend period)"
+    elif unit_cost < 1.2: return "🟢 Stable Market (Supply-demand balance, costs meet expectations)"
+    elif unit_cost < 1.8: return "🟡 Inflation Premium (Labor & materials tightening, costs rising)"
+    elif unit_cost < 2.5: return "🔴 Overheating Alert (High systemic friction, severe budget burn)"
+    else: return "💀 Economic Deterioration (Destructive inflation, pause non-essential development)"
 
 def get_economic_forecast_text(drop_val):
-    if drop_val <= 10.0: return "🌟 景氣繁榮 (跌幅微小)：市場充滿活力，民間消費強勁！"
-    elif drop_val <= 30.0: return "📈 穩定成長 (跌幅可控)：經濟平穩過渡，投資市場信心尚可。"
-    elif drop_val <= 50.0: return "⚖️ 景氣放緩 (面臨衰退)：企業投資開始保守，需謹慎應對下行風險。"
-    elif drop_val <= 70.0: return "📉 衰退警報 (百業蕭條)：工廠開始裁員，民間消費急凍，必須擴大內需救市！"
-    else: return "⚠️ 經濟風暴 (系統性崩潰)：金融海嘯席捲全國，企業倒閉潮爆發，國家已在懸崖邊緣！"
+    if drop_val <= 10.0: return "🌟 Economic Boom (Minor drop): Vibrant market, strong consumption!"
+    elif drop_val <= 30.0: return "📈 Stable Growth (Controlled drop): Smooth transition, fair market confidence."
+    elif drop_val <= 50.0: return "⚖️ Economic Slowdown (Recession risk): Conservative investments, handle with care."
+    elif drop_val <= 70.0: return "📉 Recession Alert (Depression): Layoffs begin, frozen consumption, stimulate demand!"
+    else: return "⚠️ Economic Storm (Systemic collapse): Financial tsunami, mass bankruptcies, nation on the brink!"
 
 def get_civic_index_text(score):
-    if score < 15: return f"易受灌輸 ({score:.1f})"
-    elif score < 30: return f"較易受灌輸 ({score:.1f})"
-    elif score < 45: return f"略受灌輸 ({score:.1f})"
-    elif score < 60: return f"理性中等 ({score:.1f})"
-    elif score < 75: return f"略具思辨 ({score:.1f})"
-    elif score < 90: return f"思辨成熟 ({score:.1f})"
-    else: return f"高度獨立思考 ({score:.1f})"
+    if score < 15: return f"Easily Brainwashed ({score:.1f})"
+    elif score < 30: return f"Highly Susceptible ({score:.1f})"
+    elif score < 45: return f"Slightly Susceptible ({score:.1f})"
+    elif score < 60: return f"Moderate Rationality ({score:.1f})"
+    elif score < 75: return f"Slightly Critical ({score:.1f})"
+    elif score < 90: return f"Maturely Critical ({score:.1f})"
+    else: return f"Highly Independent ({score:.1f})"
 
 def get_emotion_text(emotion_val):
-    if emotion_val < 20: return f"平穩冷靜 ({emotion_val:.1f})"
-    elif emotion_val < 50: return f"些微躁動 ({emotion_val:.1f})"
-    elif emotion_val < 80: return f"群情激憤 ({emotion_val:.1f})"
-    else: return f"陷入狂熱 ({emotion_val:.1f})"
+    if emotion_val < 20: return f"Calm & Stable ({emotion_val:.1f})"
+    elif emotion_val < 50: return f"Slightly Restless ({emotion_val:.1f})"
+    elif emotion_val < 80: return f"Indignant ({emotion_val:.1f})"
+    else: return f"Fanatical ({emotion_val:.1f})"
 
 def get_election_icon(year, cycle):
     rem = year % cycle
-    if rem == 1: return "🗳️ 大選年"
-    elif rem == 2: return "🌱 施政元年"
-    elif rem == cycle - 1: return "⏳ 距選舉 2 年"
-    elif rem == 0: return "🚨 明年選舉"
-    else: return f"距大選 {cycle - rem + 1} 年"
+    if rem == 1: return "🗳️ Election Year"
+    elif rem == 2: return "🌱 Year 1 of Term"
+    elif rem == cycle - 1: return "⏳ 2 Yrs to Election"
+    elif rem == 0: return "🚨 Election Next Year"
+    else: return f"{cycle - rem + 1} Yrs to Election"
 
 def get_party_logo(name):
     if name == "Prosperity": return "🦅"
@@ -118,8 +118,8 @@ def get_thinktank_eval(ability, diff):
     abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
     acc_lvl = "high" if diff <= 5.0 else "med" if diff <= 15.0 else "low" 
     matrix = {
-        ('high', 'high'): "頂尖發揮，完美預判", ('high', 'med'): "微幅誤差，戰略可控", ('high', 'low'): "黑天鵝事件！未能看透劇變",
-        ('med', 'high'): "表現超常，精準命中", ('med', 'med'): "中規中矩，誤差預期內", ('med', 'low'): "嚴重誤判，建議升級",
-        ('low', 'high'): "瞎貓碰死耗子，幸運猜中", ('low', 'med'): "表現尚可，參考價值低", ('low', 'low'): "完全失能，嚴重誤導決策！"
+        ('high', 'high'): "Top-tier performance, perfect prediction", ('high', 'med'): "Minor error, strategically manageable", ('high', 'low'): "Black Swan event! Failed to foresee upheaval",
+        ('med', 'high'): "Overperformed, accurate hit", ('med', 'med'): "Standard performance, within expectations", ('med', 'low'): "Severe misjudgment, upgrade recommended",
+        ('low', 'high'): "Blind luck, luckily guessed right", ('low', 'med'): "Acceptable, low reference value", ('low', 'low'): "Completely dysfunctional, severely misleading!"
     }
-    return matrix.get((abi_lvl, acc_lvl), "運作異常")
+    return matrix.get((abi_lvl, acc_lvl), "System Malfunction")
