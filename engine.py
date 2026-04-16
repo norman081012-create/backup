@@ -94,3 +94,4 @@ def trigger_swap(game, penalty_amt, msg_prefix="Political Turmoil!"):
     st.session_state.news_flash = f"🗞️ **[BREAKING] {msg_prefix}** Both parties forced to pay {penalty_amt:.1f} to charities, triggering an immediate Cabinet Swap!"
     st.session_state.anim = 'snow'
     game.phase = 2
+
