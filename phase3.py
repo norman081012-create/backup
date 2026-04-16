@@ -26,22 +26,18 @@ def render(game, cfg):
         confiscated_to_budget = 0.0
         hp_wealth_penalty = 0.0
         
+        req_cost = float(d.get('req_cost', 0.0))
         proj_fund = float(d.get('proj_fund') or 0.0)
         bid_cost = float(d.get('bid_cost') or 1.0)
         claimed_decay = float(d.get('claimed_decay') or 0.0)
         r_pays = float(d.get('r_pays') or 0.0)
         
-        corr_amt = float(ha.get('corr_amt') or 0.0)
         crony_base = float(ha.get('crony_amt') or 0.0)
         c_net_h = float(ha.get('c_net', 0))
         
-        r_inv_anti_cor = float(ra.get('alloc_inv_anticor', 0))
-        h_ci_hide_cor = float(ha.get('alloc_ci_hidecor', 0))
-        
-        catch_mult = max(0.1, (r_inv_anti_cor - h_ci_hide_cor) * 0.1)
-        
-        catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * catch_mult
-        crony_catch_rate_dollar = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * catch_mult
+        # 移除反貪情報對抗，單純使用基礎機率
+        catch_rate_per_dollar = 0.0
+        crony_catch_rate_dollar = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)
         crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
         crony_income = crony_base * crony_profit_rate
 
@@ -51,9 +47,9 @@ def render(game, cfg):
 
         if 'pending_dice_roll' not in st.session_state:
              st.session_state.pending_dice_roll = {
-                 'corr_amt': corr_amt,
+                 'corr_amt': 0.0,
                  'crony_income': crony_income,
-                 'corr_catch_rate': catch_rate_per_dollar,
+                 'corr_catch_rate': 0.0,
                  'crony_catch_rate': crony_catch_rate_dollar,
                  'fine_mult': fine_mult,
                  'is_rolled': False
@@ -62,20 +58,20 @@ def render(game, cfg):
         dice_data = st.session_state.pending_dice_roll
 
         if dice_data['is_rolled']:
-            caught_corr, safe_corr, fine_corr = dice_data['corr_results']
             caught_crony, safe_crony, fine_crony = dice_data['crony_results']
             
-            returned_to_r += (caught_corr + caught_crony)
-            hp_wealth_penalty += (fine_corr + fine_crony)
-            confiscated_to_budget += (fine_corr + fine_crony)
-            corr_caught = (caught_corr > 0)
+            returned_to_r += caught_crony
+            hp_wealth_penalty += fine_crony
+            confiscated_to_budget += fine_crony
             crony_caught = (caught_crony > 0)
             
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
-        actual_h_wealth_available = max(0.0, hp.wealth - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
-        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), corr_amt=corr_amt, r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h)
+        # H-System 獲得 Req. Cost 注入資金
+        actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
+        
+        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h)
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_project_net = res_exec['h_project_profit']
@@ -85,7 +81,7 @@ def render(game, cfg):
         
         rp_project_net = base_r_surplus + unspent_proj - r_pays
         
-        hp_inc = hp_base + hp_project_net + safe_corr + safe_crony
+        hp_inc = hp_base + hp_project_net + safe_crony + req_cost
         rp_inc = rp_base + rp_project_net + returned_to_r
         
         r_censor_alloc = float(ra.get('alloc_inv_censor', 0))
@@ -130,8 +126,13 @@ def render(game, cfg):
         if hp.name == game.party_A.name: ammo_A += exec_correct + h_spun_exec; ammo_B += r_spun_exec
         else: ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
-        h_camp_pwr = float(ha.get('alloc_med_camp', 0.0)) * 0.5
-        r_camp_pwr = float(ra.get('alloc_med_camp', 0.0)) * 0.5
+        # 公關造勢 Campaign 公式矯正
+        def get_camp_pwr(alloc, san, emo, edu_stance):
+            rote_factor = max(0.0, -edu_stance / 100.0)
+            return alloc * max(0.0, (1.0 - (san/100.0) + (emo/100.0) + rote_factor))
+
+        h_camp_pwr = get_camp_pwr(float(ha.get('alloc_med_camp', 0.0)), game.sanity, game.emotion, hp.edu_stance)
+        r_camp_pwr = get_camp_pwr(float(ra.get('alloc_med_camp', 0.0)), game.sanity, game.emotion, rp.edu_stance)
 
         if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
         else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
@@ -170,11 +171,11 @@ def render(game, cfg):
             'h_base': hp_base, 'r_base': rp_base, 
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
-            'h_extra': safe_corr + safe_crony, 'r_extra': returned_to_r,
-            'caught_corr': caught_corr, 'caught_crony': caught_crony,
-            'fine_corr': fine_corr, 'fine_crony': fine_crony,
+            'h_extra': safe_crony, 'r_extra': returned_to_r,
+            'caught_crony': caught_crony,
+            'fine_crony': fine_crony,
             'hp_penalty': hp_wealth_penalty,
-            'corr_caught': corr_caught, 'crony_caught': crony_caught,
+            'crony_caught': crony_caught,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
@@ -206,11 +207,9 @@ def render(game, cfg):
     # Dice Rendering
     dice_data = st.session_state.get('pending_dice_roll')
     if dice_data and not dice_data['is_rolled']:
-        if dice_data['corr_amt'] > 0 or dice_data['crony_income'] > 0:
+        if dice_data['crony_income'] > 0:
             st.markdown("---")
             st.markdown(f"### 🎲 {t('btn_roll_dice')} (監管單位介入調查)")
-            if dice_data['corr_amt'] > 0:
-                st.warning(f"⚠️ **貪污調查**: 目標金額 ${dice_data['corr_amt']:.1f} | 單次查獲率: `{dice_data['corr_catch_rate']*100:.1f}%`")
             if dice_data['crony_income'] > 0:
                 st.warning(f"⚠️ **圖利調查**: 追查不當利得 ${dice_data['crony_income']:.1f} | 單次查獲率: `{dice_data['crony_catch_rate']*100:.1f}%`")
 
@@ -218,9 +217,7 @@ def render(game, cfg):
                 with st.spinner('監管單位正在進行全面搜查...'):
                     import time
                     time.sleep(1.5) 
-                    corr_res = formulas.calc_corruption_dice(dice_data['corr_amt'], dice_data['corr_catch_rate'], dice_data['fine_mult'])
                     crony_res = formulas.calc_corruption_dice(dice_data['crony_income'], dice_data['crony_catch_rate'], dice_data['fine_mult'])
-                    st.session_state.pending_dice_roll['corr_results'] = corr_res
                     st.session_state.pending_dice_roll['crony_results'] = crony_res
                     st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun() 
@@ -257,7 +254,6 @@ def render(game, cfg):
             net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_invest_wealth']
             st.write(f"**💰 Final Net Cash Flow: `${net_cash_r:.1f}`**")
 
-        if rep.get('corr_caught'): st.error(f"🚨 Corruption Scandal! Regulator seized `{rep['caught_corr']:.1f}`. Fines (`{rep['fine_corr']:.1f}`) applied to Treasury.")
         if rep.get('crony_caught'): st.error(f"🚨 Cronyism Controversy! Regulator seized `{rep['caught_crony']:.1f}`. Fines (`{rep['fine_crony']:.1f}`) applied to Treasury.")
 
     with c2:
@@ -313,3 +309,4 @@ def render(game, cfg):
                 if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
             if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
         st.rerun()
+
