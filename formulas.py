@@ -11,25 +11,25 @@ def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
 def calc_unit_cost(cfg, gdp, build_abi, decay):
-    # 0 級無折扣 (1.0)，10 級打 5 折 (0.5)
     discount_factor = 1.0 - (build_abi / 10.0) * 0.5 
     inflation = max(0.0, (gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
     base_cost = 0.85 * (2 ** (2 * decay - 1))
     return base_cost * discount_factor * (1 + inflation)
 
-def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float, chunk_size: float = 1.0, unit_cost: float = 1.0):
-    if total_fake_ev <= 0 or chunk_size <= 0:
+def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float, num_chunks: int = 1, unit_cost: float = 1.0):
+    """
+    修改後的假 EV 擲骰邏輯：
+    不再使用固定大小的 chunk_size，而是根據投入的調查能力，將總假 EV 劃分成 num_chunks 塊進行獨立判定。
+    """
+    if total_fake_ev <= 0 or num_chunks <= 0:
         return 0.0, total_fake_ev, 0.0, 0.0
         
-    num_full_chunks = int(total_fake_ev / chunk_size)
-    remainder = total_fake_ev - (num_full_chunks * chunk_size)
+    chunk_size = total_fake_ev / num_chunks
     
-    caught_chunks = float(np.random.binomial(n=num_full_chunks, p=catch_prob)) if num_full_chunks > 0 else 0.0
-    caught_int_amount = caught_chunks * chunk_size
+    # 進行二項式擲骰，判定有幾個 chunk 被抓到
+    caught_chunks_count = np.random.binomial(n=num_chunks, p=catch_prob)
     
-    caught_remainder = remainder if random.random() < catch_prob else 0.0
-    
-    caught_fake_ev = caught_int_amount + caught_remainder
+    caught_fake_ev = caught_chunks_count * chunk_size
     safe_fake_ev = total_fake_ev - caught_fake_ev
     
     caught_value = caught_fake_ev * unit_cost
@@ -175,7 +175,6 @@ def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
             
     return successful_incites
 
-# 🛡️ 新增：公關火力專屬裝甲 (包含 Sanity 理智度防禦)
 def get_spin_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
     x = (i - 100.5) / 99.5
     base_rigidity = 0.95 * (x**2) + 0.05
@@ -187,7 +186,6 @@ def get_spin_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=
             final_rigidity += buff_amt
     return min(1.0, final_rigidity)
 
-# ⚔️ 新增：雙軌戰鬥結算 (真實政績 vs 公關操弄)
 def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, buff_amt=0.0, buff_party=None, party_a_name=None):
     B = int(boundary_B)
     perf_used = 0.0; perf_conquered = 0
