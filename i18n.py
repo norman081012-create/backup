@@ -65,7 +65,6 @@ DYNAMIC_REPLACEMENTS = {
     "Claimed Decay": "宣告衰退率",
     "Claimed Unit Cost": "宣告單位成本",
     
-    "Secret Corruption ($)": "隱蔽貪污金額 ($)",
     "Cronyism ($)": "圖利特定廠商 ($)",
     "Media Censorship": "媒體審查與言論控制",
     "Education Policy (Left: Rote | Right: Critical)": "教育方針 (左: 填鴨愚民 | 右: 批判思考)",
