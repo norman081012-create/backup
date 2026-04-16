@@ -16,20 +16,18 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = 0.85 * (2 ** (2 * decay - 1))
     return base_cost * discount_factor * (1 + inflation)
 
-def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float, num_chunks: int = 1, unit_cost: float = 1.0):
-    """
-    修改後的假 EV 擲骰邏輯：
-    不再使用固定大小的 chunk_size，而是根據投入的調查能力，將總假 EV 劃分成 num_chunks 塊進行獨立判定。
-    """
-    if total_fake_ev <= 0 or num_chunks <= 0:
+# 📌 修正：切塊查核法，依據假 EV 總量切塊，讓大額貪汙無所遁形
+def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float, chunk_size: float = 5.0, unit_cost: float = 1.0):
+    if total_fake_ev <= 0 or catch_prob <= 0 or chunk_size == float('inf'):
         return 0.0, total_fake_ev, 0.0, 0.0
         
-    chunk_size = total_fake_ev / num_chunks
+    num_chunks = int(total_fake_ev / chunk_size)
+    remainder = total_fake_ev - (num_chunks * chunk_size)
     
-    # 進行二項式擲骰，判定有幾個 chunk 被抓到
-    caught_chunks_count = np.random.binomial(n=num_chunks, p=catch_prob)
+    caught_chunks = float(np.random.binomial(n=num_chunks, p=catch_prob)) if num_chunks > 0 else 0.0
+    caught_remainder = remainder if random.random() < catch_prob else 0.0
     
-    caught_fake_ev = caught_chunks_count * chunk_size
+    caught_fake_ev = (caught_chunks * chunk_size) + caught_remainder
     safe_fake_ev = total_fake_ev - caught_fake_ev
     
     caught_value = caught_fake_ev * unit_cost
