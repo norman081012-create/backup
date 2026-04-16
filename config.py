@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     'MAX_ABILITY': 10.0, 
     'ABILITY_DEFAULT': 3.0,          
     'BUILD_ABILITY_DEFAULT': 3.0, 
+    'EDU_ABILITY_DEFAULT': 3.0,
     'MAINTENANCE_RATE': 10.0,        
     'TRUST_BREAK_PENALTY_RATIO': 0.05,
     'ELECTION_CYCLE': 4,
@@ -52,8 +53,8 @@ DEFAULT_CONFIG = {
     
     # 🚀 Cost Scale Adjustments
     'MAX_UPGRADE_SPEED': 20.0,
-    'UPGRADE_COST_MULT': 0.15,      # Higher cost for institutional upgrades and ideological shifts
-    'PR_EFFICIENCY_MULT': 3.0,      # High efficiency multiplier for PR (Media, Campaign, Incite)
+    'UPGRADE_COST_MULT': 0.15,      
+    'PR_EFFICIENCY_MULT': 3.0,      
     
     'PREDICT_ACCURACY_WEIGHT': 0.8,     
     'INVESTIGATE_ACCURACY_WEIGHT': 0.8, 
@@ -73,18 +74,18 @@ def get_config_translations():
     }
 
 def get_intel_market_eval(unit_cost):
-    if unit_cost < 0.8: return "🌟 Extremely Undervalued (Overcapacity, entering construction dividend period)"
-    elif unit_cost < 1.2: return "🟢 Stable Market (Supply-demand balance, costs meet expectations)"
-    elif unit_cost < 1.8: return "🟡 Inflation Premium (Labor & materials tightening, costs rising)"
-    elif unit_cost < 2.5: return "🔴 Overheating Alert (High systemic friction, severe budget burn)"
-    else: return "💀 Economic Deterioration (Destructive inflation, pause non-essential development)"
+    if unit_cost < 0.8: return "🌟 Extremely Undervalued"
+    elif unit_cost < 1.2: return "🟢 Stable Market"
+    elif unit_cost < 1.8: return "🟡 Inflation Premium"
+    elif unit_cost < 2.5: return "🔴 Overheating Alert"
+    else: return "💀 Economic Deterioration"
 
 def get_economic_forecast_text(drop_val):
-    if drop_val <= 10.0: return "🌟 Economic Boom (Minor drop): Vibrant market, strong consumption!"
-    elif drop_val <= 30.0: return "📈 Stable Growth (Controlled drop): Smooth transition, fair market confidence."
-    elif drop_val <= 50.0: return "⚖️ Economic Slowdown (Recession risk): Conservative investments, handle with care."
-    elif drop_val <= 70.0: return "📉 Recession Alert (Depression): Layoffs begin, frozen consumption, stimulate demand!"
-    else: return "⚠️ Economic Storm (Systemic collapse): Financial tsunami, mass bankruptcies, nation on the brink!"
+    if drop_val <= 10.0: return "🌟 Economic Boom"
+    elif drop_val <= 30.0: return "📈 Stable Growth"
+    elif drop_val <= 50.0: return "⚖️ Economic Slowdown"
+    elif drop_val <= 70.0: return "📉 Recession Alert"
+    else: return "⚠️ Economic Storm"
 
 def get_civic_index_text(score):
     if score < 15: return f"Easily Brainwashed ({score:.1f})"
@@ -118,8 +119,8 @@ def get_thinktank_eval(ability, diff):
     abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
     acc_lvl = "high" if diff <= 5.0 else "med" if diff <= 15.0 else "low" 
     matrix = {
-        ('high', 'high'): "Top-tier performance, perfect prediction", ('high', 'med'): "Minor error, strategically manageable", ('high', 'low'): "Black Swan event! Failed to foresee upheaval",
-        ('med', 'high'): "Overperformed, accurate hit", ('med', 'med'): "Standard performance, within expectations", ('med', 'low'): "Severe misjudgment, upgrade recommended",
-        ('low', 'high'): "Blind luck, luckily guessed right", ('low', 'med'): "Acceptable, low reference value", ('low', 'low'): "Completely dysfunctional, severely misleading!"
+        ('high', 'high'): "Top-tier performance", ('high', 'med'): "Minor error", ('high', 'low'): "Black Swan event",
+        ('med', 'high'): "Overperformed", ('med', 'med'): "Standard performance", ('med', 'low'): "Severe misjudgment",
+        ('low', 'high'): "Blind luck", ('low', 'med'): "Acceptable", ('low', 'low'): "Completely dysfunctional"
     }
     return matrix.get((abi_lvl, acc_lvl), "System Malfunction")
