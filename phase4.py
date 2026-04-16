@@ -64,4 +64,3 @@ def render(game, cfg):
     if st.button(t("🔄 Restart a New Game"), use_container_width=True, type="primary"): 
         st.session_state.clear()
         st.rerun()
-
