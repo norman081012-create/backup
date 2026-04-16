@@ -105,3 +105,4 @@ def render_formula_panel(game, view_party, cfg):
         st.latex(r"Caught_{crony} = Profit \times \min(1.0, BaseCatch \times CatchMult)")
         st.latex(r"Net_{crony} = (Profit - Caught_{crony}) - Caught_{crony} \times FineMult")
         st.write(f"> **Base Crony Rate**: `{cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)*100:.1f}%`")
+        st.write(f"> **Chunk Mechanics**: Every `10 / Net_Fin_EV` dollars triggers one catch roll.")
