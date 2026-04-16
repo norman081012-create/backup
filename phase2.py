@@ -58,7 +58,7 @@ def render(game, view_party, opponent_party, cfg):
         st.write(f"**{t('Media Dept')} (Capacity: {med_cap:.1f} EV)**")
         col_m1, col_m2, col_m3 = st.columns(3)
         w_m_cam = col_m1.number_input(t("Campaign"), min_value=0, max_value=100, value=last_acts.get('w_m_cam', 0))
-        w_m_inc = col_m2.number_input(t("Incite Emotion"), min_value=0, max_value=100, value=last_last_acts=last_acts.get('w_m_inc', 0))
+        w_m_inc = col_m2.number_input(t("Incite Emotion"), min_value=0, max_value=100, value=last_acts.get('w_m_inc', 0)) # <--- 修正了這裡的語法錯誤
         w_m_con = col_m3.number_input(t("Media Control"), min_value=0, max_value=100, value=last_acts.get('w_m_con', 0))
         m_tot = max(1, w_m_cam + w_m_inc + w_m_con)
         alloc_med_camp = med_cap * (w_m_cam / m_tot)
