@@ -16,7 +16,6 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = 0.85 * (2 ** (2 * decay - 1))
     return base_cost * discount_factor * (1 + inflation)
 
-# 📌 修正：切塊查核法，依據假 EV 總量切塊，讓大額貪汙無所遁形
 def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float, chunk_size: float = 5.0, unit_cost: float = 1.0):
     if total_fake_ev <= 0 or catch_prob <= 0 or chunk_size == float('inf'):
         return 0.0, total_fake_ev, 0.0, 0.0
@@ -173,29 +172,43 @@ def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
             
     return successful_incites
 
-def get_spin_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
+# 🛡️ 基礎裝甲 (僅受極端光譜與被激怒的 Buff 影響) -> 政績火力面對這層
+def get_base_rigidity(i, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
     x = (i - 100.5) / 99.5
     base_rigidity = 0.95 * (x**2) + 0.05
-    sanity_defense = (sanity / 100.0) * 0.5 
-    final_rigidity = base_rigidity + sanity_defense
     if buff_amt > 0 and buff_party and party_a_name:
         belongs_to_A = (i <= h_boundary)
         if (buff_party == party_a_name and belongs_to_A) or (buff_party != party_a_name and not belongs_to_A):
-            final_rigidity += buff_amt
-    return min(1.0, final_rigidity)
+            base_rigidity += buff_amt
+    return min(1.0, base_rigidity)
+
+# 🛡️ 理智裝甲 (包含基礎裝甲，再疊加公民理智度防禦) -> 公關火力面對這層
+def get_spin_rigidity(i, sanity=50.0, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
+    base_rigidity = get_base_rigidity(i, buff_amt, buff_party, h_boundary, party_a_name)
+    sanity_defense = (sanity / 100.0) * 0.5 
+    return min(1.0, base_rigidity + sanity_defense)
 
 def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, buff_amt=0.0, buff_party=None, party_a_name=None):
     B = int(boundary_B)
+    
+    # 1. 政績火力 (Performance Ammo) - 面對基礎裝甲 (Base Rigidity)
     perf_used = 0.0; perf_conquered = 0
     if net_perf_A > 0:
         sup = net_perf_A
         while sup >= 1.0 and B < 200:
-            sup -= 1.0; perf_used += 1.0; B += 1; perf_conquered += 1
+            sup -= 1.0; perf_used += 1.0
+            rigidity = get_base_rigidity(B + 1, buff_amt, buff_party, boundary_B, party_a_name)
+            if random.random() < (1.0 - rigidity):
+                B += 1; perf_conquered += 1
     elif net_perf_A < 0:
         sup = abs(net_perf_A)
         while sup >= 1.0 and B > 0:
-            sup -= 1.0; perf_used += 1.0; B -= 1; perf_conquered += 1
+            sup -= 1.0; perf_used += 1.0
+            rigidity = get_base_rigidity(B, buff_amt, buff_party, boundary_B, party_a_name)
+            if random.random() < (1.0 - rigidity):
+                B -= 1; perf_conquered += 1
             
+    # 2. 公關火力 (Spin Ammo) - 面對理智裝甲 (Spin Rigidity = Base + Sanity Defense)
     spin_used = 0.0; spin_conquered = 0
     if net_spin_A > 0:
         sup = net_spin_A
