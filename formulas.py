@@ -1,6 +1,5 @@
 # ==========================================
 # formulas.py
-# 負責核心無狀態的純數學模型計算
 # ==========================================
 import math
 import random
@@ -11,13 +10,6 @@ t = i18n.t
 def calc_log_gain(invest_amount, base_cost=50.0):
     return math.log2(1 + (invest_amount / base_cost)) if invest_amount > 0 else 0.0
 
-def get_ability_maintenance(current_val, cfg, is_build=False, build_ability=0.0):
-    amount = (2**current_val - 1) * 20.0
-    max_decay = cfg.get('DECAY_AMOUNT_BUILD', 500.0) if is_build else cfg.get('DECAY_AMOUNT_DEFAULT', 1500.0)
-    decay_amt = min(amount, max_decay)
-    discount_factor = 1.0 / (1.0 + build_ability / 5.0)
-    return decay_amt * discount_factor * 0.1
-
 def calc_unit_cost(cfg, gdp, build_abi, decay):
     effective_build = build_abi * 2.0
     b_norm = max(0.01, effective_build / 10.0)
@@ -25,22 +17,14 @@ def calc_unit_cost(cfg, gdp, build_abi, decay):
     base_cost = (0.85 / b_norm) * (2 ** (2 * decay - 1))
     return base_cost * (1 + inflation)
 
-# --- 🚀 新增：逐元判定的骰子邏輯 ---
 def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: float):
-    """
-    對每一塊錢獨立進行被抓判定。
-    返回: (沒收金額, 安全過關金額, 衍生罰款)
-    """
     if total_amount <= 0:
         return 0.0, 0.0, 0.0
         
     int_amount = int(total_amount)
     remainder = total_amount - int_amount
     
-    # 處理整數部分 (使用二項式分佈優化效能)
     caught_int = float(np.random.binomial(n=int_amount, p=catch_prob))
-    
-    # 處理小數部分
     caught_remainder = remainder if random.random() < catch_prob else 0.0
     
     caught_total = caught_int + caught_remainder
@@ -48,31 +32,33 @@ def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: floa
     fine = caught_total * fine_mult
     
     return caught_total, safe_total, fine
-# -----------------------------------
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, crony_base=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0):
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0, c_net_override=None):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
     req_cost = bid_cost * unit_cost
     
-    # 這裡的可用資金不再預先扣除 corr_amt (因為可能沒被抓到)
     available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
-    if req_cost <= available_fund:
-        act_fund = req_cost
-        c_net = float(bid_cost)
-        h_idx = 1.0
-    else:
-        act_fund = available_fund
-        c_net = act_fund / max(0.01, unit_cost)
+    if c_net_override is not None:
+        c_net = min(float(bid_cost), c_net_override)
+        act_fund = c_net * unit_cost
         h_idx = c_net / max(1.0, float(bid_cost))
+    else:
+        if req_cost <= available_fund:
+            act_fund = req_cost
+            c_net = float(bid_cost)
+            h_idx = 1.0
+        else:
+            act_fund = available_fund
+            c_net = act_fund / max(0.01, unit_cost)
+            h_idx = c_net / max(1.0, float(bid_cost))
 
     payout_h = min(budget_t, proj_fund * h_idx)
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     est_gdp = max(0.0, gdp - l_gdp + (c_net * cfg.get('GDP_CONVERSION_RATE', 0.2)))
     
-    # 執行方 (Executive) 在這包專案上的原始利潤
     h_project_profit = payout_h + r_pays - act_fund
     
     return {
