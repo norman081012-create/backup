@@ -1,123 +1,146 @@
 # ==========================================
-# config.py
+# ai_bot.py (The Symbiocracy AI Engine)
 # ==========================================
-import i18n
-t = i18n.t
+import random
+import formulas
+import streamlit as st
 
-DEFAULT_CONFIG = {
-    'CALENDAR_NAME': "Star Era", 'PARTY_A_COLOR': "#2E8B57", 'PARTY_B_COLOR': "#4169E1",
-    'PARTY_A_NAME': "Prosperity", 'PARTY_B_NAME': "Equity", 
-    'CROWN_WINNER': "👑 Ruling", 'CROWN_LOSER': "🎯 Candidate",
-    'INITIAL_WEALTH': 500.0, 'END_YEAR': 12,  # 初始資金下修為 500
-    
-    'DECAY_MIN': 0.1, 'DECAY_MAX': 0.7,  
-    'DECAY_WEIGHT_MULT': 0.05,
-    'BASE_DECAY_RATE': 0.0,
-    
-    'DECAY_AMOUNT_DEFAULT': 1500.0,
-    'DECAY_AMOUNT_BUILD': 500.0,
-    
-    # Fake EV Audit Parameters
-    'FAKE_EV_CATCH_BASE_RATE': 0.20,      # 基礎抓包率調升至 20%
-    'FAKE_EV_COST_RATIO': 0.20,            
-    'CORRUPTION_FINE_MULT': 0.4,          
-    'CATCH_RATE_PER_PERCENT': 0.02,
-    
-    'RESISTANCE_MULT': 1.0, 
-    'BUILD_DIFF': 1.0, 'INVESTIGATE_DIFF': 1.0, 'PREDICT_DIFF': 1.0, 'MEDIA_DIFF': 1.0,
-    'CURRENT_GDP': 5000.0, 
-    'GDP_INFLATION_DIVISOR': 10000.0, 
-    'GDP_CONVERSION_RATE': 0.2,   
-    'HEALTH_MULTIPLIER': 0.2, 
-    'BASE_TOTAL_BUDGET': 0.0,  
-    
-    'BASE_INCOME_RATIO': 0.05,    
-    'RULING_BONUS_RATIO': 0.10,   
-    
-    'H_FUND_DEFAULT': 600.0, 
-    'H_MEDIA_BONUS': 1.2, 'R_INV_BONUS': 1.2,
-    'MAX_ABILITY': 10.0, 
-    'ABILITY_DEFAULT': 3.0,          
-    'BUILD_ABILITY_DEFAULT': 3.0, 
-    'EDU_ABILITY_DEFAULT': 3.0,
-    'MAINTENANCE_RATE': 10.0,        
-    'TRUST_BREAK_PENALTY_RATIO': 0.05,
-    'ELECTION_CYCLE': 4,
-    'SANITY_DEFAULT': 50.0,   
-    'EMOTION_DEFAULT': 30.0,
-    
-    'CLAIMED_DECAY_WEIGHT': 0.2,
-    'AMMO_MULTIPLIER': 50.0,
-    
-    'MAX_UPGRADE_SPEED': 20.0,
-    'UPGRADE_COST_MULT': 0.15,      
-    'PR_EFFICIENCY_MULT': 3.0,      
-    
-    'PREDICT_ACCURACY_WEIGHT': 0.8,     
-    'INVESTIGATE_ACCURACY_WEIGHT': 0.8, 
-    
-    'PERF_IMPACT_BASE': 1000.0,
-    'OBS_ERR_BASE': 0.7,      
-}
+def take_turn(game, cfg):
+    """
+    AI 自動運算核心。攔截遊戲狀態，並將結果直接寫入系統後推進。
+    """
+    ai_party = game.party_A if game.party_A.name == game.ai_party_name else game.party_B
+    is_h = (game.h_role_party.name == ai_party.name)
+    active_role = 'H' if is_h else 'R'
 
-def get_config_translations():
-    return {
-        'DECAY_MIN': "Min Decay Rate", 'DECAY_MAX': "Max Decay Rate",  
-        'FAKE_EV_CATCH_BASE_RATE': "Fake EV Catch Base Rate",
-        'DECAY_WEIGHT_MULT': "Decay GDP Weight (Default 0.05)", 'BASE_DECAY_RATE': "Base Decay Floor",
-        'CLAIMED_DECAY_WEIGHT': "Expectation Gap Weight", 'AMMO_MULTIPLIER': "Perf to Support Multiplier",
-        'PREDICT_ACCURACY_WEIGHT': "Think Tank Acc. Weight", 'INVESTIGATE_ACCURACY_WEIGHT': "Intel Acc. Weight",
-        'UPGRADE_COST_MULT': "Upgrade Cost Base", 'PR_EFFICIENCY_MULT': "PR Efficiency Multiplier"
-    }
+    # ==========================================
+    # PHASE 1: 預算與法案談判
+    # ==========================================
+    if game.phase == 1:
+        if game.p1_step in ['draft_r', 'draft_h', 'ultimatum_draft_r']:
+            # AI 分析當前經濟局勢
+            total_bonus = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
+            max_proj = max(10.0, float(game.total_budget) - total_bonus)
+            unit_cost = formulas.calc_unit_cost(cfg, game.gdp, ai_party.build_ability, ai_party.current_forecast)
 
-def get_intel_market_eval(unit_cost):
-    if unit_cost < 0.8: return "🌟 Extremely Undervalued"
-    elif unit_cost < 1.2: return "🟢 Stable Market"
-    elif unit_cost < 1.8: return "🟡 Inflation Premium"
-    elif unit_cost < 2.5: return "🔴 Overheating Alert"
-    else: return "💀 Economic Deterioration"
+            if is_h:
+                # 貪婪的 H 黨：要超高獎金，還要 R 黨幫忙出錢
+                proj_fund = max_proj * random.uniform(0.7, 0.9) 
+                bid_cost = proj_fund * random.uniform(0.8, 1.2) 
+                req_cost = bid_cost * unit_cost
+                r_pays = min(req_cost * random.uniform(0.2, 0.4), max_proj)
+                fine_mult = 0.3 
+            else:
+                # 刻薄的 R 黨：給極低獎金，要求超高建設量，且違約金極高
+                proj_fund = max_proj * random.uniform(0.2, 0.4) 
+                bid_cost = proj_fund * random.uniform(1.2, 1.5)
+                req_cost = bid_cost * unit_cost
+                r_pays = 0.0 
+                fine_mult = random.uniform(0.8, 1.5) 
 
-def get_economic_forecast_text(drop_val):
-    if drop_val <= 10.0: return "🌟 Economic Boom"
-    elif drop_val <= 30.0: return "📈 Stable Growth"
-    elif drop_val <= 50.0: return "⚖️ Economic Slowdown"
-    elif drop_val <= 70.0: return "📉 Recession Alert"
-    else: return "⚠️ Economic Storm"
+            plan = {
+                'proj_fund': proj_fund, 'bid_cost': bid_cost,
+                'r_pays': r_pays, 'h_pays': max(0.0, req_cost - r_pays),
+                'claimed_decay': ai_party.current_forecast, 'claimed_cost': unit_cost,
+                'author': active_role, 'author_party': ai_party.name,
+                'req_cost': req_cost, 'fine_mult': fine_mult
+            }
 
-def get_civic_index_text(score):
-    if score < 15: return f"Easily Brainwashed ({score:.1f})"
-    elif score < 30: return f"Highly Susceptible ({score:.1f})"
-    elif score < 45: return f"Slightly Susceptible ({score:.1f})"
-    elif score < 60: return f"Moderate Rationality ({score:.1f})"
-    elif score < 75: return f"Slightly Critical ({score:.1f})"
-    elif score < 90: return f"Maturely Critical ({score:.1f})"
-    else: return f"Highly Independent ({score:.1f})"
+            if game.p1_step == 'ultimatum_draft_r':
+                game.p1_selected_plan = plan
+                game.p1_step = 'ultimatum_resolve_h'
+                game.proposing_party = game.h_role_party
+            else:
+                game.p1_proposals[active_role] = plan
+                if game.p1_step == 'draft_r':
+                    game.p1_step = 'draft_h'
+                    game.proposing_party = game.h_role_party
+                else:
+                    game.p1_step = 'voting_pick'
+                    game.proposing_party = game.ruling_party
 
-def get_emotion_text(emotion_val):
-    if emotion_val < 20: return f"Calm & Stable ({emotion_val:.1f})"
-    elif emotion_val < 50: return f"Slightly Restless ({emotion_val:.1f})"
-    elif emotion_val < 80: return f"Indignant ({emotion_val:.1f})"
-    else: return f"Fanatical ({emotion_val:.1f})"
+        elif game.p1_step == 'voting_pick':
+            # AI 作為執政黨，必然選擇自己撰寫的草案
+            my_draft = game.p1_proposals.get(active_role)
+            if not my_draft: my_draft = game.p1_proposals.get('H' if active_role == 'R' else 'R')
+            game.p1_selected_plan = my_draft
+            game.p1_step = 'voting_confirm'
+            game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
 
-def get_election_icon(year, cycle):
-    rem = year % cycle
-    if rem == 1: return "🗳️ Election Year"
-    elif rem == 2: return "🌱 Year 1 of Term"
-    elif rem == cycle - 1: return "⏳ 2 Yrs to Election"
-    elif rem == 0: return "🚨 Election Next Year"
-    else: return f"{cycle - rem + 1} Yrs to Election"
+        elif game.p1_step in ['voting_confirm', 'ultimatum_resolve_h']:
+            # 談判心理戰：在前兩輪有 40% 的機率強硬退回法案逼迫玩家讓步
+            if game.p1_step == 'voting_confirm' and game.proposal_count < 3 and random.random() < 0.4:
+                game.proposal_count += 1
+                game.p1_step = 'draft_r'
+                game.proposing_party = game.r_role_party
+                st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} rejected the draft. Renegotiation started."
+            else:
+                # 妥協接受
+                st.session_state.turn_data.update(game.p1_selected_plan)
+                game.phase = 2
+                game.proposing_party = game.ruling_party
+                st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} accepted the draft. Bill passed!"
 
-def get_party_logo(name):
-    if name == "Prosperity": return "🦅"
-    elif name == "Equity": return "🤝"
-    return "🚩"
+    # ==========================================
+    # PHASE 2: 資源分配與部門操作
+    # ==========================================
+    elif game.phase == 2:
+        d = st.session_state.get('turn_data', {})
+        bid_cost = float(d.get('bid_cost', 1.0))
+        
+        inv_cap = ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0)
+        ci_cap = ai_party.stealth_ability * 10
+        med_cap = ai_party.media_ability * 10 * (1.2 if is_h else 1.0)
+        
+        # AI 的基礎分配面板 (它會保守地維持現狀，只付維護費不亂升級以免破產)
+        my_acts = {
+            'w_i_cen': 0, 'w_i_org': 0, 'w_i_fin': 0,
+            'alloc_inv_censor': 0, 'alloc_inv_audit': 0, 'alloc_inv_fin': 0,
+            'w_c_cen': 0, 'w_c_org': 0, 'w_c_fin': 0,
+            'alloc_ci_anticen': 0, 'alloc_ci_hideorg': 0, 'alloc_ci_hidefin': 0,
+            'w_m_cam': 50, 'w_m_inc': 0, 'w_m_con': 50,
+            'alloc_med_camp': med_cap * 0.5, 'alloc_med_incite': 0, 'alloc_med_control': med_cap * 0.5,
+            'edu_stance': ai_party.edu_stance, 'fake_ev': 0.0,
+            't_pre': ai_party.predict_ability, 't_inv': ai_party.investigate_ability,
+            't_med': ai_party.media_ability, 't_stl': ai_party.stealth_ability,
+            't_bld': ai_party.build_ability, 't_edu': ai_party.edu_ability,
+            'invest_wealth': 0.0, 'c_net': 0.0
+        }
 
-def get_thinktank_eval(ability, diff):
-    abi_lvl = "high" if ability >= 7 else "med" if ability >= 4 else "low"
-    acc_lvl = "high" if diff <= 5.0 else "med" if diff <= 15.0 else "low" 
-    matrix = {
-        ('high', 'high'): "Top-tier performance", ('high', 'med'): "Minor error", ('high', 'low'): "Black Swan event",
-        ('med', 'high'): "Overperformed", ('med', 'med'): "Standard performance", ('med', 'low'): "Severe misjudgment",
-        ('low', 'high'): "Blind luck", ('low', 'med'): "Acceptable", ('low', 'low'): "Completely dysfunctional"
-    }
-    return matrix.get((abi_lvl, acc_lvl), "System Malfunction")
+        unit_cost = formulas.calc_unit_cost(cfg, game.gdp, ai_party.build_ability, game.current_real_decay)
+        maint_ev = sum([ai_party.predict_ability, ai_party.investigate_ability, ai_party.media_ability, ai_party.stealth_ability, ai_party.build_ability, ai_party.edu_ability]) * 5.0
+        eng_base_ev = ai_party.build_ability * 10 * (1.2 if is_h else 1.0)
+
+        if is_h:
+            # AI 擔任執行方 (H)：戰略核心為隱藏金流，並機率性搞豆腐渣工程
+            my_acts['w_c_fin'] = 100
+            my_acts['alloc_ci_hidefin'] = ci_cap
+            
+            c_net = bid_cost
+            # 40% 機率貪婪大爆發，塞入 10%~30% 的假 EV
+            fake_ev = bid_cost * random.uniform(0.1, 0.3) if random.random() < 0.4 else 0.0
+            
+            my_acts['fake_ev'] = fake_ev
+            my_acts['c_net'] = c_net
+
+            total_ev_req = c_net + (fake_ev * cfg.get('FAKE_EV_COST_RATIO', 0.2)) + maint_ev
+            ev_to_buy = max(0.0, total_ev_req - eng_base_ev)
+            my_acts['invest_wealth'] = ev_to_buy * max(0.01, unit_cost)
+        else:
+            # AI 擔任監管方 (R)：瘋狗模式，所有 Ops 全部拿去查金流！
+            my_acts['w_i_fin'] = 100
+            my_acts['alloc_inv_fin'] = inv_cap
+            
+            total_ev_req = maint_ev
+            ev_to_buy = max(0.0, total_ev_req - eng_base_ev)
+            my_acts['invest_wealth'] = ev_to_buy * max(0.01, unit_cost)
+
+        st.session_state[f"{ai_party.name}_acts"] = my_acts
+
+        # 自動推進下一個階段
+        opp_name = game.human_party_name
+        if f"{opp_name}_acts" not in st.session_state:
+            game.proposing_party = game.party_A if game.party_A.name == opp_name else game.party_B
+        else:
+            game.phase = 3
+            game.proposing_party = game.r_role_party
