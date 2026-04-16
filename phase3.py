@@ -35,22 +35,28 @@ def render(game, cfg):
         crony_base = float(ha.get('crony_amt') or 0.0)
         c_net_h = float(ha.get('c_net', 0))
         
-        # 移除反貪情報對抗，單純使用基礎機率
-        catch_rate_per_dollar = 0.0
-        crony_catch_rate_dollar = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)
+        r_inv_fin = float(ra.get('alloc_inv_fin', 0))
+        h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
+        net_fin_ev = r_inv_fin - h_ci_fin
+        
+        if net_fin_ev > 0:
+            chunk_size = max(0.01, 10.0 / net_fin_ev)
+            catch_prob = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * max(1.0, net_fin_ev * 0.1))
+        else:
+            chunk_size = float('inf')
+            catch_prob = 0.0
+            
         crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
         crony_income = crony_base * crony_profit_rate
 
-        caught_corr = safe_corr = fine_corr = 0.0
         caught_crony = safe_crony = fine_crony = 0.0
-        corr_caught = crony_caught = False
+        crony_caught = False
 
         if 'pending_dice_roll' not in st.session_state:
              st.session_state.pending_dice_roll = {
-                 'corr_amt': 0.0,
                  'crony_income': crony_income,
-                 'corr_catch_rate': 0.0,
-                 'crony_catch_rate': crony_catch_rate_dollar,
+                 'crony_catch_rate': catch_prob,
+                 'chunk_size': chunk_size,
                  'fine_mult': fine_mult,
                  'is_rolled': False
              }
@@ -68,7 +74,6 @@ def render(game, cfg):
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
-        # H-System 獲得 Req. Cost 注入資金
         actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
         
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h)
@@ -126,7 +131,6 @@ def render(game, cfg):
         if hp.name == game.party_A.name: ammo_A += exec_correct + h_spun_exec; ammo_B += r_spun_exec
         else: ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
-        # 公關造勢 Campaign 公式矯正
         def get_camp_pwr(alloc, san, emo, edu_stance):
             rote_factor = max(0.0, -edu_stance / 100.0)
             return alloc * max(0.0, (1.0 - (san/100.0) + (emo/100.0) + rote_factor))
@@ -204,23 +208,29 @@ def render(game, cfg):
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
         game.record_history(is_election=is_election_end)
     
-    # Dice Rendering
     dice_data = st.session_state.get('pending_dice_roll')
     if dice_data and not dice_data['is_rolled']:
         if dice_data['crony_income'] > 0:
             st.markdown("---")
             st.markdown(f"### 🎲 {t('btn_roll_dice')} (監管單位介入調查)")
             if dice_data['crony_income'] > 0:
-                st.warning(f"⚠️ **圖利調查**: 追查不當利得 ${dice_data['crony_income']:.1f} | 單次查獲率: `{dice_data['crony_catch_rate']*100:.1f}%`")
+                if dice_data['chunk_size'] == float('inf'):
+                    st.success(f"🛡️ **金流隱蔽成功**: 調查單位無功而返，未發現不當利得 ${dice_data['crony_income']:.1f}。")
+                    if st.button("⏩ 確認並進入結算", type="primary", use_container_width=True):
+                        st.session_state.pending_dice_roll['crony_results'] = (0.0, dice_data['crony_income'], 0.0)
+                        st.session_state.pending_dice_roll['is_rolled'] = True
+                        st.rerun()
+                else:
+                    st.warning(f"⚠️ **圖利調查**: 追查不當利得 ${dice_data['crony_income']:.1f} | 單次查獲率: `{dice_data['crony_catch_rate']*100:.1f}%` (每 `{dice_data['chunk_size']:.2f}` 元判定一次)")
 
-            if st.button("🎲 擲骰進行年度監管判定！", type="primary", use_container_width=True):
-                with st.spinner('監管單位正在進行全面搜查...'):
-                    import time
-                    time.sleep(1.5) 
-                    crony_res = formulas.calc_corruption_dice(dice_data['crony_income'], dice_data['crony_catch_rate'], dice_data['fine_mult'])
-                    st.session_state.pending_dice_roll['crony_results'] = crony_res
-                    st.session_state.pending_dice_roll['is_rolled'] = True
-                st.rerun() 
+                    if st.button("🎲 擲骰進行年度監管判定！", type="primary", use_container_width=True):
+                        with st.spinner('監管單位正在進行全面搜查...'):
+                            import time
+                            time.sleep(1.5) 
+                            crony_res = formulas.calc_corruption_dice(dice_data['crony_income'], dice_data['crony_catch_rate'], dice_data['fine_mult'], dice_data['chunk_size'])
+                            st.session_state.pending_dice_roll['crony_results'] = crony_res
+                            st.session_state.pending_dice_roll['is_rolled'] = True
+                        st.rerun() 
             st.stop()
 
     rep = game.last_year_report
@@ -309,4 +319,3 @@ def render(game, cfg):
                 if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
             if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
         st.rerun()
-
