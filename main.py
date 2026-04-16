@@ -13,6 +13,7 @@ import phase2
 import phase3
 import phase4
 import i18n
+import ai_bot
 
 st.set_page_config(page_title="Symbiocracy Simulator v3.0.0", layout="wide")
 st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
