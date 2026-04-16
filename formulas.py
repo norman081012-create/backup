@@ -33,7 +33,7 @@ def calc_corruption_dice(total_amount: float, catch_prob: float, fine_mult: floa
     
     return caught_total, safe_total, fine
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, corr_amt=0.0, override_unit_cost=None, r_pays=0.0, h_wealth=0.0, c_net_override=None):
+def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, r_pays=0.0, h_wealth=0.0, c_net_override=None, override_unit_cost=None):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
     req_cost = bid_cost * unit_cost
