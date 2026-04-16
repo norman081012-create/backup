@@ -8,7 +8,7 @@ import i18n
 t = i18n.t
 
 def render(game, cfg):
-    st.header(t("⚖️ Phase 3: Annual Resolution Report"))
+    st.header("THE SYMBIOCRACY TIMES - Annual Report")
     
     if not game.last_year_report:
         rp, hp = game.r_role_party, game.h_role_party
@@ -32,7 +32,7 @@ def render(game, cfg):
         claimed_decay = float(d.get('claimed_decay') or 0.0)
         r_pays = float(d.get('r_pays') or 0.0)
         
-        crony_base = float(ha.get('crony_amt') or 0.0)
+        fake_ev = float(ha.get('fake_ev') or 0.0)
         c_net_h = float(ha.get('c_net', 0))
         
         r_inv_fin = float(ra.get('alloc_inv_fin', 0))
@@ -41,42 +41,44 @@ def render(game, cfg):
         
         if net_fin_ev > 0:
             chunk_size = max(0.01, 10.0 / net_fin_ev)
-            catch_prob = min(1.0, cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * max(1.0, net_fin_ev * 0.1))
+            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
         else:
             chunk_size = float('inf')
             catch_prob = 0.0
-            
-        crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
-        crony_income = crony_base * crony_profit_rate
 
-        caught_crony = safe_crony = fine_crony = 0.0
-        crony_caught = False
+        unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
+        
+        caught_fake_ev = safe_fake_ev = caught_value = fine_value = 0.0
+        fake_ev_caught = False
 
         if 'pending_dice_roll' not in st.session_state:
              st.session_state.pending_dice_roll = {
-                 'crony_income': crony_income,
-                 'crony_catch_rate': catch_prob,
+                 'fake_ev': fake_ev,
+                 'catch_prob': catch_prob,
                  'chunk_size': chunk_size,
                  'fine_mult': fine_mult,
+                 'unit_cost_real': unit_cost_real,
                  'is_rolled': False
              }
         
         dice_data = st.session_state.pending_dice_roll
 
         if dice_data['is_rolled']:
-            caught_crony, safe_crony, fine_crony = dice_data['crony_results']
+            caught_fake_ev, safe_fake_ev, caught_value, fine_value = dice_data['fake_ev_results']
             
-            returned_to_r += caught_crony
-            hp_wealth_penalty += fine_crony
-            confiscated_to_budget += fine_crony
-            crony_caught = (caught_crony > 0)
+            returned_to_r += caught_value
+            hp_wealth_penalty += (caught_value + fine_value)
+            confiscated_to_budget += fine_value
+            fake_ev_caught = (caught_fake_ev > 0)
             
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
         actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
         
-        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h)
+        eval_fake_ev = safe_fake_ev if dice_data['is_rolled'] else fake_ev
+        res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h, fake_ev=eval_fake_ev)
+        
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_project_net = res_exec['h_project_profit']
@@ -86,7 +88,7 @@ def render(game, cfg):
         
         rp_project_net = base_r_surplus + unspent_proj - r_pays
         
-        hp_inc = hp_base + hp_project_net + safe_crony + req_cost
+        hp_inc = hp_base + hp_project_net + req_cost
         rp_inc = rp_base + rp_project_net + returned_to_r
         
         r_censor_alloc = float(ra.get('alloc_inv_censor', 0))
@@ -98,7 +100,8 @@ def render(game, cfg):
         censor_successes = 0; censor_failures = 0
         
         for i in opp_indices:
-            rig = formulas.get_rigidity(i, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
+            # 修正呼叫：改為 get_spin_rigidity
+            rig = formulas.get_spin_rigidity(i, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
             if random.random() > rig: censor_successes += 1
             else: censor_failures += 1
         
@@ -111,7 +114,7 @@ def render(game, cfg):
         h_media_pwr = float(ha.get('alloc_med_control', 0.0))
         r_media_pwr = float(ra.get('alloc_med_control', 0.0))
         
-        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
+        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net_total'])
         
         plan_correct, plan_wrong, correct_prob = formulas.apply_sanity_filter(raw_p_plan, game.sanity, game.emotion, is_preview=False)
         exec_correct, exec_wrong, _ = formulas.apply_sanity_filter(raw_p_exec, game.sanity, game.emotion, is_preview=False)
@@ -123,13 +126,23 @@ def render(game, cfg):
         ruling_spun_plan, opp_spun_plan = formulas.apply_media_spin(plan_wrong, ruling_media_pwr, opp_media_pwr)
         h_spun_exec, r_spun_exec = formulas.apply_media_spin(exec_wrong, h_media_pwr, r_media_pwr)
 
-        ammo_A = 0.0; ammo_B = 0.0
+        # ---------------- 分離真實政績與公關火力 ----------------
+        perf_A = 0.0; perf_B = 0.0
+        spin_A = 0.0; spin_B = 0.0
 
-        if ruling_name == game.party_A.name: ammo_A += plan_correct + ruling_spun_plan; ammo_B += opp_spun_plan
-        else: ammo_B += plan_correct + ruling_spun_plan; ammo_A += opp_spun_plan
+        if ruling_name == game.party_A.name: 
+            perf_A += plan_correct; spin_A += ruling_spun_plan
+            spin_B += opp_spun_plan
+        else: 
+            perf_B += plan_correct; spin_B += ruling_spun_plan
+            spin_A += opp_spun_plan
 
-        if hp.name == game.party_A.name: ammo_A += exec_correct + h_spun_exec; ammo_B += r_spun_exec
-        else: ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
+        if hp.name == game.party_A.name: 
+            perf_A += exec_correct; spin_A += h_spun_exec
+            spin_B += r_spun_exec
+        else: 
+            perf_B += exec_correct; spin_B += h_spun_exec
+            spin_A += r_spun_exec
             
         def get_camp_pwr(alloc, san, emo, edu_stance):
             rote_factor = max(0.0, -edu_stance / 100.0)
@@ -138,13 +151,18 @@ def render(game, cfg):
         h_camp_pwr = get_camp_pwr(float(ha.get('alloc_med_camp', 0.0)), game.sanity, game.emotion, hp.edu_stance)
         r_camp_pwr = get_camp_pwr(float(ra.get('alloc_med_camp', 0.0)), game.sanity, game.emotion, rp.edu_stance)
 
-        if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
-        else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
+        if hp.name == game.party_A.name: spin_A += h_camp_pwr; spin_B += r_camp_pwr
+        else: spin_B += h_camp_pwr; spin_A += r_camp_pwr
 
-        net_ammo_A = ammo_A - ammo_B
+        net_perf_A = perf_A - perf_B
+        net_spin_A = spin_A - spin_B
         old_boundary = game.boundary_B
         
-        new_boundary, used_ammo, conquered = formulas.run_conquest(game.boundary_B, net_ammo_A, game.sanity, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name)
+        # 🛡️ 雙軌戰鬥結算：傳入分離的火力值
+        new_boundary, perf_used, perf_conquered, spin_used, spin_conquered = formulas.run_conquest_split(
+            game.boundary_B, net_perf_A, net_spin_A, game.sanity, 
+            getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name
+        )
         
         game.boundary_B = new_boundary
         game.party_A.support = new_boundary * 0.5
@@ -166,8 +184,11 @@ def render(game, cfg):
             'new_san': new_sanity, 'new_emo': new_emotion,
             'h_party_name': hp.name, 'r_party_name': rp.name,
             'raw_p_plan': raw_p_plan, 'raw_p_exec': raw_p_exec,
-            'ammo_A': ammo_A, 'ammo_B': ammo_B, 'net_ammo_A': net_ammo_A,
-            'old_boundary': old_boundary, 'new_boundary': new_boundary, 'used_ammo': used_ammo, 'conquered': conquered,
+            'perf_A': perf_A, 'perf_B': perf_B, 'net_perf_A': net_perf_A,
+            'spin_A': spin_A, 'spin_B': spin_B, 'net_spin_A': net_spin_A,
+            'perf_used': perf_used, 'perf_conquered': perf_conquered,
+            'spin_used': spin_used, 'spin_conquered': spin_conquered,
+            'old_boundary': old_boundary, 'new_boundary': new_boundary,
             'correct_prob': correct_prob,
             'h_spun_exec': h_spun_exec, 'r_spun_exec': r_spun_exec, 
             'censor_successes': censor_successes, 'censor_failures': censor_failures, 'censor_emotion_add': censor_emotion_add, 'censor_buff': censor_rigidity_buff,
@@ -175,11 +196,14 @@ def render(game, cfg):
             'h_base': hp_base, 'r_base': rp_base, 
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
-            'h_extra': safe_crony, 'r_extra': returned_to_r,
-            'caught_crony': caught_crony,
-            'fine_crony': fine_crony,
+            'r_extra': returned_to_r,
+            'caught_fake_ev': caught_fake_ev,
+            'caught_value': caught_value,
+            'fine_value': fine_value,
             'hp_penalty': hp_wealth_penalty,
-            'crony_caught': crony_caught,
+            'fake_ev_caught': fake_ev_caught,
+            'fake_ev_attempted': fake_ev,
+            'chunk_size': chunk_size,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
@@ -210,94 +234,114 @@ def render(game, cfg):
     
     dice_data = st.session_state.get('pending_dice_roll')
     if dice_data and not dice_data['is_rolled']:
-        if dice_data['crony_income'] > 0:
-            st.markdown("---")
-            st.markdown(f"### 🎲 {t('btn_roll_dice')} (監管單位介入調查)")
-            if dice_data['crony_income'] > 0:
-                if dice_data['chunk_size'] == float('inf'):
-                    st.success(f"🛡️ **金流隱蔽成功**: 調查單位無功而返，未發現不當利得 ${dice_data['crony_income']:.1f}。")
-                    if st.button("⏩ 確認並進入結算", type="primary", use_container_width=True):
-                        st.session_state.pending_dice_roll['crony_results'] = (0.0, dice_data['crony_income'], 0.0)
-                        st.session_state.pending_dice_roll['is_rolled'] = True
-                        st.rerun()
-                else:
-                    st.warning(f"⚠️ **圖利調查**: 追查不當利得 ${dice_data['crony_income']:.1f} | 單次查獲率: `{dice_data['crony_catch_rate']*100:.1f}%` (每 `{dice_data['chunk_size']:.2f}` 元判定一次)")
+        st.markdown("---")
+        st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
+        if dice_data['chunk_size'] == float('inf'):
+            st.info("The Regulator lacks sufficient ops capacity to initiate an audit. Financial flows obscured successfully.")
+            if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
+                st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
+                st.session_state.pending_dice_roll['is_rolled'] = True
+                st.rerun()
+        else:
+            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']:.2f}` units.")
 
-                    if st.button("🎲 擲骰進行年度監管判定！", type="primary", use_container_width=True):
-                        with st.spinner('監管單位正在進行全面搜查...'):
-                            import time
-                            time.sleep(1.5) 
-                            crony_res = formulas.calc_corruption_dice(dice_data['crony_income'], dice_data['crony_catch_rate'], dice_data['fine_mult'], dice_data['chunk_size'])
-                            st.session_state.pending_dice_roll['crony_results'] = crony_res
-                            st.session_state.pending_dice_roll['is_rolled'] = True
-                        st.rerun() 
-            st.stop()
+            if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
+                with st.spinner('Investigators are tracking the financial flows...'):
+                    import time
+                    time.sleep(1.5) 
+                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
+                    st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
+                    st.session_state.pending_dice_roll['is_rolled'] = True
+                st.rerun() 
+        st.stop()
 
     rep = game.last_year_report
+    
+    st.markdown("---")
+    st.markdown("### 🗞️ **[FRONT PAGE HEADLINE]**")
+    if rep.get('caught_fake_ev', 0) > 0:
+        st.error(f"**[CORRUPTION SCANDAL] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
+    else:
+        if rep.get('chunk_size', float('inf')) == float('inf'):
+            st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
+        elif rep.get('fake_ev_attempted', 0) > 0:
+            st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
+        else:
+            st.success(f"**[CLEAN GOV] ZERO FAKE ENGINEERING DETECTED!**\n\nInvestigators turned the ledgers upside down and confirmed all projects are 100% genuine.")
+            
+    st.markdown("---")
+
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"### 💰 {t('Economy & Finance')}")
-        st.write(f"**GDP:** `{rep['old_gdp']:.1f}` ➔ `{game.gdp:.1f}`")
+        st.markdown(f"### 📊 ECONOMIC METRICS")
+        st.write(f"- **GDP:** `{rep['old_gdp']:.1f}` ➔ **`{game.gdp:.1f}`**")
+        st.write(f"- **Civic Literacy:** `{rep['old_san']:.1f}` ➔ **`{game.sanity:.1f}`** ({game.sanity - rep['old_san']:+.1f})")
+        st.write(f"- **Voter Emotion:** `{rep['old_emo']:.1f}` ➔ **`{game.emotion:.1f}`** ({game.emotion - rep['old_emo']:+.1f})")
         
-        with st.expander(f"📊 {rep['h_party_name']} ({t('role_exec')}) Project & Profit Breakdown"):
-            st.write(f"- 📥 Received Project Reward: `${rep['payout_h']:.1f}`")
-            st.write(f"- 📥 Received R-Subsidy: `${rep['r_pays']:.1f}`")
-            st.write(f"- 📤 Actual Engineering Cost: `-${rep['act_fund']:.1f}`")
-            st.write(f"**= Net Project Profit: `${rep['h_project_net']:.1f}`**")
-            st.markdown("---")
-            st.write(f"- Base Income (inc. Ruling Bonus): `${rep['h_base']:.1f}`")
-            if rep['h_extra'] > 0: st.write(f"- {t('safe_amount')} (Evaded Detection): `${rep['h_extra']:.1f}`")
-            if rep.get('hp_penalty', 0) > 0: st.write(f"- 🚨 {t('fine_paid')} ({rep['fine_mult']}x Multiplier): `-${rep['hp_penalty']:.1f}`")
-            st.write(f"- Eng. Invested Wealth: `-${rep['h_invest_wealth']:.1f}`")
+        st.markdown(f"### 🏛️ FISCAL SUMMARY")
+        if rep['fine_value'] > 0:
+            st.success(f"Treasury Revenue: +`${rep['fine_value']:.1f}` (Punitive Fines)")
             
-            net_cash = rep['h_project_net'] + rep['h_base'] + rep['h_extra'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
-            st.write(f"**💰 Final Net Cash Flow: `${net_cash:.1f}`**")
+        with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
+            st.write(f"**Net Project Profit:** `${rep['h_project_net']:.1f}`")
+            st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
+            if rep['caught_fake_ev'] > 0:
+                st.write(f"- Fraud Forfeiture: `-${rep['caught_value']:.1f}`")
+                st.write(f"- Punitive Fines: `-${rep['fine_value']:.1f}`")
+            st.write(f"- Eng. Costs: `-${rep['h_invest_wealth']:.1f}`")
+            net_cash = rep['h_project_net'] + rep['h_base'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
+            st.write(f"**Final Cash Flow:** `${net_cash:.1f}`")
 
-        with st.expander(f"📊 {rep['r_party_name']} ({t('role_reg')}) Surplus & Profit Breakdown"):
-            st.write(f"- Base Income (inc. Ruling Bonus): `${rep['r_base']:.1f}`")
-            st.write(f"- 📤 Paid R-Subsidy: `-${rep['r_pays']:.1f}`")
-            st.write(f"- 📥 Unspent Project Funds Recovered: `${rep['unspent_proj']:.1f}`")
-            st.write(f"- 📥 Regulatory Budget Surplus: `${rep['base_r_surplus']:.1f}`")
-            if rep['r_extra'] > 0: st.write(f"- 🏆 {t('caught_amount')} (From Opponent): `${rep['r_extra']:.1f}`")
-            st.write(f"- Eng. Invested Wealth: `-${rep['r_invest_wealth']:.1f}`")
-            
+        with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
+            st.write(f"**Base Income:** `${rep['r_base']:.1f}`")
+            st.write(f"- Paid R-Subsidy: `-${rep['r_pays']:.1f}`")
+            st.write(f"+ Recovered Funds: `${rep['unspent_proj']:.1f}`")
+            st.write(f"+ Budget Surplus: `${rep['base_r_surplus']:.1f}`")
+            if rep['r_extra'] > 0: 
+                st.write(f"+ Fraud Bounty: `${rep['r_extra']:.1f}`")
+            st.write(f"- Eng. Costs: `-${rep['r_invest_wealth']:.1f}`")
             net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_invest_wealth']
-            st.write(f"**💰 Final Net Cash Flow: `${net_cash_r:.1f}`**")
-
-        if rep.get('crony_caught'): st.error(f"🚨 Cronyism Controversy! Regulator seized `{rep['caught_crony']:.1f}`. Fines (`{rep['fine_crony']:.1f}`) applied to Treasury.")
+            st.write(f"**Final Cash Flow:** `${net_cash_r:.1f}`")
 
     with c2:
-        st.markdown(f"### 🧠 {t('Society & Opinion')}")
-        s_move = game.sanity - rep['old_san']
-        e_move = game.emotion - rep['old_emo']
+        st.markdown(f"### 🗳️ ELECTORAL SHIFT (Support Force)")
         
-        st.write(f"**{t('Civic Literacy')}:** `{rep['old_san']:.1f}` ➔ `{game.sanity:.1f}` ({s_move:+.1f})")
-        st.write(f"**{t('Voter Emotion')}:** `{rep['old_emo']:.1f}` ➔ `{game.emotion:.1f}` ({e_move:+.1f})")
-        
-        st.markdown("---")
-        st.markdown(f"### ⚔️ Support Shift Resolution")
-        st.caption(f"*(📡 This Year's Rational Attribution Rate: `{rep['correct_prob']*100:.1f}%`)*")
-        
-        if rep['h_spun_exec'] != 0 or rep['r_spun_exec'] != 0:
-            st.info(f"📺 **Media Spin Output:** Executive media altered `{rep['h_spun_exec']:+.1f}` support points; Regulator media altered `{rep['r_spun_exec']:+.1f}` points!")
-            
-        if rep.get('censor_buff', 0) > 0:
-            st.warning(f"⚖️ **Censorship Backlash:** Regulator's forced media suppression enraged `{rep['censor_successes']}` opponent units! Executive's voter rigidity drastically increased by `+{rep['censor_buff']:.3f}` for the next 2 years!")
-
-        st.write(f"**{game.party_A.name} Total Support Force:** `{rep['ammo_A']:.1f}` | **{game.party_B.name} Total Support Force:** `{rep['ammo_B']:.1f}`")
-        
-        net_ammo = rep['net_ammo_A']
+        net_ammo = rep['net_perf_A'] + rep['net_spin_A']
         atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
         def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
         
-        if abs(net_ammo) < 1.0: st.info("🤝 Support forces are deadlocked. No change in the political landscape.")
+        if abs(net_ammo) < 1.0: 
+            st.info("🤝 Support forces are deadlocked. No significant momentum generated.")
         else:
-            st.success(f"**Net Support Advantage:** `{abs(net_ammo):.1f}` points! **{atk_party}** launched an influence wave against **{def_party}**!")
-            old_sup = rep['old_boundary'] * 0.5; new_sup = rep['new_boundary'] * 0.5
-            st.write(f"📊 👁️ **{game.party_A.name} New Support:** `{old_sup:.1f}%` ➔ `{new_sup:.1f}%`")
+            st.success(f"🔥 **Net Advantage:** `{abs(net_ammo):.1f}`! **{atk_party}** launched an influence wave against **{def_party}**!")
+
+        if st.session_state.get('god_mode'):
+            with st.expander("👁️ God Mode: Electoral Mechanics & True Support", expanded=True):
+                st.write(f"*(Attribution Rate: `{rep['correct_prob']*100:.1f}%`)*")
+                
+                st.markdown(f"**Performance (True Damage)**: {game.party_A.name} `{rep['perf_A']:.1f}` | {game.party_B.name} `{rep['perf_B']:.1f}`")
+                if abs(rep['net_perf_A']) >= 1.0:
+                    atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
+                    st.success(f"⚡ {atk_p} dealt `{rep['perf_used']:.1f}` unblockable impact, conquering **{rep['perf_conquered']}** blocs!")
+                    
+                st.markdown(f"**Media & Spin (Blockable)**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
+                if abs(rep['net_spin_A']) >= 1.0:
+                    atk_s = game.party_A.name if rep['net_spin_A'] > 0 else game.party_B.name
+                    blocked = rep['spin_used'] - rep['spin_conquered']
+                    st.warning(f"🛡️ Voter Sanity Armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocs.")
+
+                old_sup_A = rep['old_boundary'] * 0.5
+                new_sup_A = rep['new_boundary'] * 0.5
+                old_sup_B = 100.0 - old_sup_A
+                new_sup_B = 100.0 - new_sup_A
+                
+                st.markdown(f"#### 📊 **{game.party_A.name} True Support:** `{old_sup_A:.1f}%` ➔ **`{new_sup_A:.1f}%`** ({new_sup_A - old_sup_A:+.1f}%)")
+                st.markdown(f"#### 📊 **{game.party_B.name} True Support:** `{old_sup_B:.1f}%` ➔ **`{new_sup_B:.1f}%`** ({new_sup_B - old_sup_B:+.1f}%)")
+        else:
+            st.caption("*(True support percentages are hidden. Conduct Polls to reveal current standing.)*")
 
     st.markdown("---")
-    if st.button(t("⏩ Confirm Report & Next Year"), type="primary", use_container_width=True):
+    if st.button("⏩ Next Year", type="primary", use_container_width=True):
         if 'pending_dice_roll' in st.session_state: del st.session_state.pending_dice_roll
         
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
