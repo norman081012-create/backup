@@ -99,24 +99,9 @@ def render_formula_panel(game, view_party, cfg):
         st.write(f"> **Calc**: (0.85 / `{build_val/10:.2f}{TAG_CFM}`) × 2^(2 × `{decay_val:.3f}{TAG_EST}` - 1) × (1 + `{inflation:.2f} Inf{TAG_CON}`) = **{unit_cost_v:.2f}**")
 
         st.markdown("---")
-        st.markdown("### ⚖️ Linear Confiscation Model (Corruption/Cronyism)")
+        st.markdown("### ⚖️ Linear Confiscation Model (Cronyism)")
         
-        rp = game.r_role_party
-        hp = game.h_role_party
-        
-        rp_inv_pct = rp.investigate_ability / 10.0
-        hp_stl_pct = hp.stealth_ability / 10.0
-        catch_mult = max(0.1, (rp_inv_pct * cfg.get('R_INV_BONUS', 1.2)) - hp_stl_pct + 1.0)
-        
-        corr_base_rate = cfg.get('CATCH_RATE_PER_DOLLAR', 0.10)
-        crony_base_rate = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)
-        
-        corr_catch_ratio = min(1.0, corr_base_rate * catch_mult)
-        crony_catch_ratio = min(1.0, crony_base_rate * catch_mult)
-        
-        st.write(f"**🛡️ Catch Multiplier**: `max(0.1, (R-Intel {rp_inv_pct:.2f} × 1.2) - H-Stealth {hp_stl_pct:.2f} + 1.0) = {catch_mult:.2f}x`")
-        
-        st.markdown("**💸 Expected Corruption Profit**")
-        st.latex(r"Caught_{corr} = Amount_{corr} \times \min(1.0, 10\% \times CatchMult)")
-        st.latex(r"Net_{corr} = Amount_{corr} - Caught_{corr} - (Caught_{corr} \times 0.4_{fine})")
-        st.write(f"> **Current Base Corr. Rate**: `{corr_base_rate*100:.1f}% × {catch_mult:.2f} = {corr_catch_ratio*100:.1f}%` (Pre-inflation correction)")
+        st.markdown("**🏢 Expected Cronyism Profit**")
+        st.latex(r"Caught_{crony} = Profit \times \min(1.0, BaseCatch \times CatchMult)")
+        st.latex(r"Net_{crony} = (Profit - Caught_{crony}) - Caught_{crony} \times FineMult")
+        st.write(f"> **Base Crony Rate**: `{cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05)*100:.1f}%`")
