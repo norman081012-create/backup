@@ -39,7 +39,6 @@ def render(game, cfg):
         h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
         net_fin_ev = r_inv_fin - h_ci_fin
         
-        # 📌 修正：無論總額多少，每 5 單位為一塊；機率隨調查強度遞增
         if net_fin_ev > 0:
             chunk_size = 5.0
             catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.20) + (net_fin_ev * 0.01))
@@ -224,7 +223,7 @@ def render(game, cfg):
                 game.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
 
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
-        game.record_history(is_election=False) # 暫存紀錄，這筆會在下方被正確取代
+        game.record_history(is_election=False) 
     
     dice_data = st.session_state.get('pending_dice_roll')
     if dice_data and not dice_data['is_rolled']:
@@ -237,7 +236,8 @@ def render(game, cfg):
                 st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun()
         else:
-            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']}` units.")
+            num_chunks_display = int(dice_data['fake_ev'] / dice_data['chunk_size'])
+            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']}` units (Divided into `{num_chunks_display}` audit chunks).")
 
             if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
                 with st.spinner('Investigators are tracking the financial flows...'):
@@ -256,8 +256,10 @@ def render(game, cfg):
     if rep.get('caught_fake_ev', 0) > 0:
         st.error(f"**[FINANCIAL PENALTY] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
     else:
-        if rep.get('fake_ev_attempted', 0) > 0:
-            st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite an investigation, the ruling party's 'special accounts' remained watertight. All funds cleared.")
+        if rep.get('chunk_size', float('inf')) == float('inf'):
+            st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
+        elif rep.get('fake_ev_attempted', 0) > 0:
+            st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
         else:
             st.success(f"**[CLEAN GOV] ZERO FAKE ENGINEERING DETECTED!**\n\nInvestigators turned the ledgers upside down and confirmed all projects are 100% genuine.")
             
@@ -279,7 +281,6 @@ def render(game, cfg):
             st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
             st.write(f"- Eng. Costs: `-${rep['h_invest_wealth']:.1f}`")
             
-            # 📌 修正：明確註記雙方因為豆腐工程被抓到的得失
             if rep['fake_ev_attempted'] > 0:
                 st.markdown("---")
                 st.write(f"⚠️ **Tofu Project (Fake EV) Audit:**")
@@ -324,16 +325,17 @@ def render(game, cfg):
             with st.expander("👁️ God Mode: Electoral Mechanics & True Support", expanded=True):
                 st.write(f"*(Attribution Rate: `{rep['correct_prob']*100:.1f}%`)*")
                 
-                st.markdown(f"**Performance (True Damage)**: {game.party_A.name} `{rep['perf_A']:.1f}` | {game.party_B.name} `{rep['perf_B']:.1f}`")
+                st.markdown(f"**Performance (Base Armor)**: {game.party_A.name} `{rep['perf_A']:.1f}` | {game.party_B.name} `{rep['perf_B']:.1f}`")
                 if abs(rep['net_perf_A']) >= 1.0:
                     atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
-                    st.success(f"⚡ {atk_p} dealt `{rep['perf_used']:.1f}` unblockable impact, conquering **{rep['perf_conquered']}** blocs!")
+                    blocked_p = rep['perf_used'] - rep['perf_conquered']
+                    st.success(f"⚡ {atk_p} applied `{rep['perf_used']:.1f}` impact. Base Armor absorbed `{blocked_p:.1f}`. Conquered **{rep['perf_conquered']}** blocs!")
                     
-                st.markdown(f"**Media & Spin (Blockable)**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
+                st.markdown(f"**Media & Spin (Sanity Armor)**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
                 if abs(rep['net_spin_A']) >= 1.0:
                     atk_s = game.party_A.name if rep['net_spin_A'] > 0 else game.party_B.name
-                    blocked = rep['spin_used'] - rep['spin_conquered']
-                    st.warning(f"🛡️ Voter Sanity Armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocs.")
+                    blocked_s = rep['spin_used'] - rep['spin_conquered']
+                    st.warning(f"🛡️ {atk_s} applied `{rep['spin_used']:.1f}` impact. Sanity Armor absorbed `{blocked_s:.1f}`. Conquered **{rep['spin_conquered']}** blocs.")
 
                 old_sup_A = rep['old_boundary'] * 0.5
                 new_sup_A = rep['new_boundary'] * 0.5
@@ -351,7 +353,6 @@ def render(game, cfg):
         
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
         
-        # 📌 修正：更新歷史紀錄中的選舉標記
         game.history[-1]['Is_Election'] = is_election_end 
         
         game.year += 1
@@ -361,7 +362,6 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            # 📌 修正：年度跨年強制重置， Ruling 永遠是 R
             if is_election_end:
                 winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
                 game.ruling_party = winner
