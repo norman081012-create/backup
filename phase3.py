@@ -54,29 +54,39 @@ def render(game, cfg):
         rp_inv_pct = rp.investigate_ability / 10.0
         hp_stl_pct = hp.stealth_ability / 10.0
         actual_catch_mult = max(0.1, (rp_inv_pct * cfg.get('R_INV_BONUS', 1.2)) - hp_stl_pct + 1.0)
-        
         inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
         
-        # 🚀 1. 貪污結算 (套用新骰子邏輯)
+        # --- 保留骰子判定數值，延後到 UI 渲染時再計算 ---
         catch_rate_per_dollar = cfg.get('CATCH_RATE_PER_DOLLAR', 0.10) * actual_catch_mult
-        caught_corr, safe_corr, fine_corr = formulas.calc_corruption_dice(corr_amt, catch_rate_per_dollar, fine_mult)
-        
-        returned_to_r += caught_corr
-        hp_wealth_penalty += fine_corr
-        confiscated_to_budget += fine_corr
-        corr_caught = (caught_corr > 0)
-
-        # 🚀 2. 圖利結算 (套用新骰子邏輯)
+        crony_catch_rate_dollar = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * actual_catch_mult
         crony_profit_rate = cfg.get('CRONY_PROFIT_RATE', 0.20)
         crony_income = crony_base * crony_profit_rate
-        crony_catch_rate_dollar = cfg.get('CRONY_CATCH_RATE_DOLLAR', 0.05) * actual_catch_mult
+
+        caught_corr = safe_corr = fine_corr = 0.0
+        caught_crony = safe_crony = fine_crony = 0.0
+        corr_caught = crony_caught = False
+
+        if 'pending_dice_roll' not in st.session_state:
+             st.session_state.pending_dice_roll = {
+                 'corr_amt': corr_amt,
+                 'crony_income': crony_income,
+                 'corr_catch_rate': catch_rate_per_dollar,
+                 'crony_catch_rate': crony_catch_rate_dollar,
+                 'fine_mult': fine_mult,
+                 'is_rolled': False
+             }
         
-        caught_crony, safe_crony, fine_crony = formulas.calc_corruption_dice(crony_income, crony_catch_rate_dollar, fine_mult)
-        
-        returned_to_r += caught_crony
-        hp_wealth_penalty += fine_crony
-        confiscated_to_budget += fine_crony
-        crony_caught = (caught_crony > 0)
+        dice_data = st.session_state.pending_dice_roll
+
+        if dice_data['is_rolled']:
+            caught_corr, safe_corr, fine_corr = dice_data['corr_results']
+            caught_crony, safe_crony, fine_crony = dice_data['crony_results']
+            
+            returned_to_r += (caught_corr + caught_crony)
+            hp_wealth_penalty += (fine_corr + fine_crony)
+            confiscated_to_budget += (fine_corr + fine_crony)
+            corr_caught = (caught_corr > 0)
+            crony_caught = (caught_crony > 0)
             
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
@@ -86,14 +96,12 @@ def render(game, cfg):
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
         
         hp_project_net = res_exec['h_project_profit']
-        
         total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
         base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
         unspent_proj = proj_fund * (1.0 - res_exec['h_idx'])
         
         rp_project_net = base_r_surplus + unspent_proj - r_pays
         
-        # 🚀 執行方最終獲得的額外收入是「安全過關」的錢
         hp_inc = hp_base + hp_project_net + safe_corr + safe_crony
         rp_inc = rp_base + rp_project_net + returned_to_r
         
@@ -130,8 +138,8 @@ def render(game, cfg):
         h_censor_penalty = max(0.1, 1.0 - censor_weight) 
         
         pr_mult = cfg.get('PR_EFFICIENCY_MULT', 3.0)
-        h_media_pwr = float(ha.get('media', 0.0)) * pr_mult * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-        r_media_pwr = float(ra.get('media', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier
+        h_media_pwr = float(ha.get('media_infra', 0.0)) * pr_mult * (hp.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+        r_media_pwr = float(ra.get('media_infra', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier
         
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net'])
         
@@ -159,8 +167,8 @@ def render(game, cfg):
         else:
             ammo_B += exec_correct + h_spun_exec; ammo_A += r_spun_exec
             
-        h_camp_pwr = float(ha.get('camp', 0.0)) * pr_mult * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty * 0.5
-        r_camp_pwr = float(ra.get('camp', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier * 0.5
+        h_camp_pwr = float(ha.get('camp_net', 0.0)) * pr_mult * (hp.media_ability / 10.0) * media_multiplier * h_censor_penalty * 0.5
+        r_camp_pwr = float(ra.get('camp_net', 0.0)) * pr_mult * (rp.media_ability / 10.0) * media_multiplier * 0.5
 
         if hp.name == game.party_A.name: ammo_A += h_camp_pwr; ammo_B += r_camp_pwr
         else: ammo_B += h_camp_pwr; ammo_A += r_camp_pwr
@@ -178,8 +186,8 @@ def render(game, cfg):
         
         gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
         
-        h_incite_rolls = float(ha.get('incite', 0.0)) * pr_mult * media_multiplier * h_censor_penalty
-        r_incite_rolls = float(ra.get('incite', 0.0)) * pr_mult * media_multiplier
+        h_incite_rolls = float(ha.get('incite_mac', 0.0)) * pr_mult * media_multiplier * h_censor_penalty
+        r_incite_rolls = float(ra.get('incite_mac', 0.0)) * pr_mult * media_multiplier
         total_incite_rolls = h_incite_rolls + r_incite_rolls
         
         incite_points = formulas.calc_incite_success(total_incite_rolls, game.emotion)
@@ -206,7 +214,6 @@ def render(game, cfg):
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
             
-            # 🚀 記錄圖利結算結果
             'h_extra': safe_corr + safe_crony, 'r_extra': returned_to_r,
             'caught_corr': caught_corr, 'caught_crony': caught_crony,
             'fine_corr': fine_corr, 'fine_crony': fine_crony,
@@ -243,8 +250,40 @@ def render(game, cfg):
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
         game.record_history(is_election=is_election_end)
     
-    rep = game.last_year_report
+    # ==========================================
+    # 🎲 互動擲骰區塊 (在財報上方顯示)
+    # ==========================================
+    dice_data = st.session_state.get('pending_dice_roll')
     
+    if dice_data and not dice_data['is_rolled']:
+        if dice_data['corr_amt'] > 0 or dice_data['crony_income'] > 0:
+            st.markdown("---")
+            st.markdown(f"### 🎲 {t('btn_roll_dice')} (監管單位介入調查)")
+            
+            if dice_data['corr_amt'] > 0:
+                st.warning(f"⚠️ **貪污調查**: 目標金額 ${dice_data['corr_amt']:.1f} | 單次查獲率: `{dice_data['corr_catch_rate']*100:.1f}%`")
+            if dice_data['crony_income'] > 0:
+                st.warning(f"⚠️ **圖利調查**: 追查不當利得 ${dice_data['crony_income']:.1f} | 單次查獲率: `{dice_data['crony_catch_rate']*100:.1f}%`")
+
+            if st.button("🎲 擲骰進行年度監管判定！", type="primary", use_container_width=True):
+                with st.spinner('監管單位正在進行全面搜查...'):
+                    import time
+                    time.sleep(1.5) 
+                    
+                    corr_res = formulas.calc_corruption_dice(dice_data['corr_amt'], dice_data['corr_catch_rate'], dice_data['fine_mult'])
+                    crony_res = formulas.calc_corruption_dice(dice_data['crony_income'], dice_data['crony_catch_rate'], dice_data['fine_mult'])
+                    
+                    st.session_state.pending_dice_roll['corr_results'] = corr_res
+                    st.session_state.pending_dice_roll['crony_results'] = crony_res
+                    st.session_state.pending_dice_roll['is_rolled'] = True
+                    
+                st.rerun() 
+            st.stop()
+
+    # ==========================================
+    # 財報渲染區
+    # ==========================================
+    rep = game.last_year_report
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"### 💰 {t('Economy & Finance')}")
@@ -261,10 +300,11 @@ def render(game, cfg):
                 st.write(f"- {t('safe_amount')} (Evaded Detection): `${rep['h_extra']:.1f}`")
             if rep.get('hp_penalty', 0) > 0:
                 st.write(f"- 🚨 {t('fine_paid')} ({rep['fine_mult']}x Multiplier): `-${rep['hp_penalty']:.1f}`")
-            st.write(f"- PR, Operations & Shift Costs: `-${rep['h_pol_cost']:.1f}`")
-            st.write(f"- Dept & Policy Maintenance: `-${rep['h_maint']:.1f}`")
+            st.write(f"- Upgrade Costs (Dept. & PR Infra): `-${rep['h_pol_cost']:.1f}`")
+            st.write(f"- Maintenance (Dept. & PR Infra): `-${rep['h_maint']:.1f}`")
             if rep['h_refund'] > 0: st.write(f"- Downgrade Refunds: `+${rep['h_refund']:.1f}`")
-            net_cash = rep['h_inc'] - rep['h_pol_cost'] - rep['h_maint'] + rep['h_refund'] - rep.get('hp_penalty', 0)
+            
+            net_cash = rep['h_project_net'] + rep['h_base'] + rep['h_extra'] - rep['h_pol_cost'] - rep['h_maint'] + rep['h_refund'] - rep.get('hp_penalty', 0)
             st.write(f"**💰 Final Net Cash Flow: `${net_cash:.1f}`**")
 
         with st.expander(f"📊 {rep['r_party_name']} ({t('role_reg')}) Surplus & Profit Breakdown"):
@@ -274,10 +314,11 @@ def render(game, cfg):
             st.write(f"- 📥 Regulatory Budget Surplus: `${rep['base_r_surplus']:.1f}`")
             if rep['r_extra'] > 0:
                 st.write(f"- 🏆 {t('caught_amount')} (From Opponent): `${rep['r_extra']:.1f}`")
-            st.write(f"- PR, Operations & Shift Costs: `-${rep['r_pol_cost']:.1f}`")
-            st.write(f"- Dept & Policy Maintenance: `-${rep['r_maint']:.1f}`")
+            st.write(f"- Upgrade Costs (Dept. & PR Infra): `-${rep['r_pol_cost']:.1f}`")
+            st.write(f"- Maintenance (Dept. & PR Infra): `-${rep['r_maint']:.1f}`")
             if rep['r_refund'] > 0: st.write(f"- Downgrade Refunds: `+${rep['r_refund']:.1f}`")
-            net_cash_r = rep['r_inc'] - rep['r_pol_cost'] - rep['r_maint'] + rep['r_refund']
+            
+            net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_pol_cost'] - rep['r_maint'] + rep['r_refund']
             st.write(f"**💰 Final Net Cash Flow: `${net_cash_r:.1f}`**")
 
         if rep.get('corr_caught'): st.error(f"🚨 Corruption Scandal! Regulator seized `{rep['caught_corr']:.1f}`. Fines (`{rep['fine_corr']:.1f}`) applied to Treasury.")
@@ -323,6 +364,8 @@ def render(game, cfg):
 
     st.markdown("---")
     if st.button(t("⏩ Confirm Report & Next Year"), type="primary", use_container_width=True):
+        if 'pending_dice_roll' in st.session_state: del st.session_state.pending_dice_roll
+        
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
         game.year += 1
         
