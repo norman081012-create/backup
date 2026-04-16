@@ -21,21 +21,19 @@ def render(game, view_party, opponent_party, cfg):
     req_pay = float(d.get('h_pays') or 0.0) if is_h else float(d.get('r_pays') or 0.0)
     cw = max(0.0, float(view_party.wealth))
     proj_fund = float(d.get('proj_fund') or 0.0)
-    inflation = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0))
     
     h_corr_amt = 0.0
     h_crony_amt = 0.0
     
     old_jud = float(view_party.last_acts.get('judicial_lvl', 0.0)) if not is_h else 0.0
     old_edu = float(view_party.edu_stance)
+    old_media_infra = float(view_party.last_acts.get('media_infra', 0.0))
+    old_camp_net = float(view_party.last_acts.get('camp_net', 0.0))
+    old_incite_mac = float(view_party.last_acts.get('incite_mac', 0.0))
     
-    judicial_lvl = old_jud
     new_edu = old_edu
+    judicial_cost = 0.0
 
-    last_media = min(float(view_party.last_acts.get('media', 0.0)), cw)
-    last_camp = min(float(view_party.last_acts.get('camp', 0.0)), cw)
-    last_incite = min(float(view_party.last_acts.get('incite', 0.0)), cw)
-    
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(t("#### 📣 Policy & Media"))
@@ -76,23 +74,20 @@ def render(game, view_party, opponent_party, cfg):
 
         else:
             st.markdown("##### 🎓 Ideology & Media Censorship")
-            # 🚀 便宜的二次方維護費邏輯 (Max = 20)
-            judicial_lvl = st.slider(t("⚖️ Media Censorship (0~100)"), 0.0, 100.0, float(old_jud), 1.0)
-            judicial_cost = (judicial_lvl / 10.0) ** 2 * 2.0 
+            judicial_lvl, judicial_cost = ui_core.ability_slider(t("⚖️ Media Censorship (0~100)"), f"up_jud_{view_party.name}", old_jud, cw, cfg, is_jud=True)
             
-            # 🚀 每年限制更動 10 級
             min_edu = max(-100.0, old_edu - 10.0)
             max_edu = min(100.0, old_edu + 10.0)
             new_edu = st.slider(t("🎓 Education Policy (Left: Rote | Right: Critical)"), float(min_edu), float(max_edu), float(old_edu), 1.0)
             edu_maint_cost = (abs(new_edu) / 10.0) ** 2 * 2.0
-            
-            st.caption(f"💰 Maint. Costs: Judicial `${judicial_cost:.1f}` | Education `${edu_maint_cost:.1f}`")
+            st.caption(f"💰 Maint. Costs: Education `${edu_maint_cost:.1f}`")
             
         st.markdown("##### 📺 Campaigns & Public Relations")
-        st.caption(f"*(Benefits from **{cfg.get('PR_EFFICIENCY_MULT', 3.0)}x** PR conversion efficiency)*")
-        media_amt = st.slider(t("📺 Media Control ($)"), 0.0, cw, last_media)
-        camp_amt = st.slider(t("🎉 Campaign ($)"), 0.0, cw, last_camp)
-        incite_amt = st.slider(t("🔥 Incite Emotion ($)"), 0.0, cw, last_incite)
+        st.caption(f"*(Low-cost infrastructure providing **{cfg.get('PR_EFFICIENCY_MULT', 3.0)}x** PR conversion)*")
+        
+        media_lvl, media_cost = ui_core.ability_slider(t("📺 Media Control ($)"), f"up_med_inf_{view_party.name}", old_media_infra, cw, cfg, is_jud=True)
+        camp_lvl, camp_cost = ui_core.ability_slider(t("🎉 Campaign ($)"), f"up_camp_net_{view_party.name}", old_camp_net, cw, cfg, is_jud=True)
+        incite_lvl, incite_cost = ui_core.ability_slider(t("🔥 Incite Emotion ($)"), f"up_incite_mac_{view_party.name}", old_incite_mac, cw, cfg, is_jud=True)
         
     with c2:
         c_dept1, c_dept2 = st.columns([0.65, 0.35])
@@ -104,6 +99,10 @@ def render(game, view_party, opponent_party, cfg):
             st.session_state[f'up_med_{view_party.name}_{game.year}'] = view_party.media_ability * 10.0
             st.session_state[f'up_stl_{view_party.name}_{game.year}'] = view_party.stealth_ability * 10.0
             st.session_state[f'up_bld_{view_party.name}_{game.year}'] = view_party.build_ability * 10.0
+            st.session_state[f'up_jud_{view_party.name}'] = old_jud
+            st.session_state[f'up_med_inf_{view_party.name}'] = old_media_infra
+            st.session_state[f'up_camp_net_{view_party.name}'] = old_camp_net
+            st.session_state[f'up_incite_mac_{view_party.name}'] = old_incite_mac
             st.rerun()
 
         t_pre, c_pre = ui_core.ability_slider(t("Think Tank"), f"up_pre_{view_party.name}_{game.year}", view_party.predict_ability, cw, cfg, view_party.build_ability, is_build=False)
@@ -112,34 +111,47 @@ def render(game, view_party, opponent_party, cfg):
         t_stl, c_stl = ui_core.ability_slider(t("Counter-Intel"), f"up_stl_{view_party.name}_{game.year}", view_party.stealth_ability, cw, cfg, view_party.build_ability, is_build=False)
         t_bld, c_bld = ui_core.ability_slider(t("Engineering"), f"up_bld_{view_party.name}_{game.year}", view_party.build_ability, cw, cfg, view_party.build_ability, is_build=True)
 
-    tot_action = media_amt + camp_amt + incite_amt
-    refund_action = abs(min(0.0, c_inv)) + abs(min(0.0, c_pre)) + abs(min(0.0, c_med)) + abs(min(0.0, c_stl)) + abs(min(0.0, c_bld))
+    # 1. 計算「單次升級費」 (只加正的 cost)
+    tot_action = max(0.0, c_inv) + max(0.0, c_pre) + max(0.0, c_med) + max(0.0, c_stl) + max(0.0, c_bld) + max(0.0, judicial_cost) + max(0.0, media_cost) + max(0.0, camp_cost) + max(0.0, incite_cost)
     
-    edu_maint_cost = (abs(new_edu) / 10.0) ** 2 * 2.0 if not is_h else 0.0
-    judicial_cost = (judicial_lvl / 10.0) ** 2 * 2.0 if not is_h else 0.0
+    # 2. 計算「降級退款」 (只加負的 cost 取絕對值)
+    refund_action = abs(min(0.0, c_inv)) + abs(min(0.0, c_pre)) + abs(min(0.0, c_med)) + abs(min(0.0, c_stl)) + abs(min(0.0, c_bld)) + abs(min(0.0, judicial_cost)) + abs(min(0.0, media_cost)) + abs(min(0.0, camp_cost)) + abs(min(0.0, incite_cost))
     
-    tot_maint = float(max(0.0, c_inv)) + float(max(0.0, c_pre)) + float(max(0.0, c_med)) + float(max(0.0, c_stl)) + float(max(0.0, c_bld)) + edu_maint_cost + judicial_cost
+    # 3. 計算「真實維護費」
+    pre_maint = formulas.get_ability_maintenance(t_pre, cfg, False, t_bld)
+    inv_maint = formulas.get_ability_maintenance(t_inv, cfg, False, t_bld)
+    med_maint = formulas.get_ability_maintenance(t_med, cfg, False, t_bld)
+    stl_maint = formulas.get_ability_maintenance(t_stl, cfg, False, t_bld)
+    bld_maint = formulas.get_ability_maintenance(t_bld, cfg, True, t_bld)
+    
+    judicial_maint = (judicial_lvl / 10.0) ** 2 * 2.0 if not is_h else 0.0
+    edu_maint = (abs(new_edu) / 10.0) ** 2 * 2.0 if not is_h else 0.0
+    media_maint = (media_lvl / 10.0) ** 2 * 2.0
+    camp_maint = (camp_lvl / 10.0) ** 2 * 2.0
+    incite_maint = (incite_lvl / 10.0) ** 2 * 2.0
+    
+    tot_maint = pre_maint + inv_maint + med_maint + stl_maint + bld_maint + judicial_maint + edu_maint + media_maint + camp_maint + incite_maint
     
     tot_spending_now = tot_action + tot_maint - refund_action
     
-    st.write(f"**PR Costs:** `{tot_action:.1f}` / **Dept. Maint:** `{tot_maint:.1f}` / **Downgrade Refunds:** `+{refund_action:.1f}` / **Avail. Cash:** `{cw - tot_spending_now:.1f}`")
+    st.write(f"**Upgrade Costs:** `{tot_action:.1f}` / **Dept. Maint:** `{tot_maint:.1f}` / **Downgrade Refunds:** `+{refund_action:.1f}` / **Avail. Cash:** `{cw - tot_spending_now:.1f}`")
     st.info(f"📌 **Legal Promises (`{req_pay:.1f}`) will be deducted from Next Year's Base Income, not current cash.**")
     
     if tot_spending_now > cw:
         st.error(f"🚨 Insufficient Funds! Over budget by {tot_spending_now - cw:.1f}. Lower investments.")
     
     my_acts_temp = {
-        'media': media_amt, 'camp': camp_amt, 'incite': incite_amt,
-        'edu_stance': new_edu, 'judicial_lvl': judicial_lvl, 
+        'media_infra': media_lvl, 'camp_net': camp_lvl, 'incite_mac': incite_lvl,
+        'edu_stance': new_edu, 'judicial_lvl': judicial_lvl if not is_h else 0.0, 
         'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt
     }
     
     if is_h:
         act_ha = my_acts_temp
-        act_ra = st.session_state.get(f"{opponent_party.name}_acts", {'media': 0, 'camp': 0, 'incite': 0, 'edu_stance': opponent_party.edu_stance, 'judicial_lvl': 0})
+        act_ra = st.session_state.get(f"{opponent_party.name}_acts", {'media_infra': 0, 'camp_net': 0, 'incite_mac': 0, 'edu_stance': opponent_party.edu_stance, 'judicial_lvl': 0})
     else:
         act_ra = my_acts_temp
-        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'media': 0, 'camp': 0, 'incite': 0, 'corr_amt': 0, 'crony_amt': 0})
+        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'media_infra': 0, 'camp_net': 0, 'incite_mac': 0, 'corr_amt': 0, 'crony_amt': 0})
 
     bid_cost = float(d.get('bid_cost') or 1.0)
     claimed_decay = float(d.get('claimed_decay') or 0.0)
@@ -173,8 +185,8 @@ def render(game, view_party, opponent_party, cfg):
     h_censor_penalty = max(0.1, 1.0 - (sim_judicial_lvl / 100.0)) 
     
     pr_mult = cfg.get('PR_EFFICIENCY_MULT', 3.0)
-    h_media_pwr = float(act_ha.get('media', 0.0)) * pr_mult * (game.h_role_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
-    r_media_pwr = float(act_ra.get('media', 0.0)) * pr_mult * (game.r_role_party.media_ability / 10.0) * media_multiplier
+    h_media_pwr = float(act_ha.get('media_infra', 0.0)) * pr_mult * (game.h_role_party.media_ability / 10.0) * cfg.get('H_MEDIA_BONUS', 1.2) * media_multiplier * h_censor_penalty
+    r_media_pwr = float(act_ra.get('media_infra', 0.0)) * pr_mult * (game.r_role_party.media_ability / 10.0) * media_multiplier
 
     shift_preview = formulas.calc_performance_preview(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
@@ -199,8 +211,8 @@ def render(game, view_party, opponent_party, cfg):
     
     if tot_spending_now <= cw and st.button(t("Confirm Action & Execute"), use_container_width=True, type="primary"):
         my_acts = {
-            'media': media_amt, 'camp': camp_amt, 'incite': incite_amt,
-            'edu_stance': new_edu, 'judicial_lvl': judicial_lvl, 
+            'media_infra': media_lvl, 'camp_net': camp_lvl, 'incite_mac': incite_lvl,
+            'edu_stance': new_edu, 'judicial_lvl': judicial_lvl if not is_h else 0.0, 
             'corr_amt': h_corr_amt, 'crony_amt': h_crony_amt, 
             't_inv': t_inv, 't_pre': t_pre, 't_med': t_med, 't_stl': t_stl, 't_bld': t_bld,
             'legal': req_pay, 'tot_action': tot_action, 'tot_maint': tot_maint, 'refund_action': refund_action
