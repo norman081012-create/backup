@@ -39,12 +39,11 @@ def render(game, cfg):
         h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
         net_fin_ev = r_inv_fin - h_ci_fin
         
-        # 修正：根據調查能力決定切成幾塊進行調查
         if net_fin_ev > 0:
-            num_chunks = max(1, int(net_fin_ev / 2.0)) # 每 2 點淨能力多一塊調查次數
-            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.20) * max(1.0, net_fin_ev * 0.1))
+            chunk_size = max(0.01, 10.0 / net_fin_ev)
+            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
         else:
-            num_chunks = 0
+            chunk_size = float('inf')
             catch_prob = 0.0
 
         unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
@@ -56,7 +55,7 @@ def render(game, cfg):
              st.session_state.pending_dice_roll = {
                  'fake_ev': fake_ev,
                  'catch_prob': catch_prob,
-                 'num_chunks': num_chunks, # 更新傳入變數
+                 'chunk_size': chunk_size,
                  'fine_mult': fine_mult,
                  'unit_cost_real': unit_cost_real,
                  'is_rolled': False
@@ -87,10 +86,12 @@ def render(game, cfg):
         base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
         unspent_proj = proj_fund * (1.0 - res_exec['h_idx'])
         
-        rp_project_net = base_r_surplus + unspent_proj - r_pays
+        # 📌 修正：精確計算最終淨利變化
+        h_invest_wealth = float(ha.get('invest_wealth', 0))
+        r_invest_wealth = float(ra.get('invest_wealth', 0))
         
-        hp_inc = hp_base + hp_project_net + req_cost
-        rp_inc = rp_base + rp_project_net + returned_to_r
+        hp_net_cash = hp_base + res_exec['payout_h'] + r_pays - h_invest_wealth - hp_wealth_penalty
+        rp_net_cash = rp_base + base_r_surplus + unspent_proj + returned_to_r - r_pays - r_invest_wealth
         
         r_censor_alloc = float(ra.get('alloc_inv_censor', 0))
         h_anti_censor_alloc = float(ha.get('alloc_ci_anticen', 0))
@@ -106,6 +107,7 @@ def render(game, cfg):
             else: censor_failures += 1
         
         censor_weight = max(0.0, censor_diff / 100.0) 
+        # 拔除了政治醜聞情緒連動
         censor_emotion_add = censor_weight * censor_successes
         censor_rigidity_buff = censor_weight * (censor_successes / (censor_successes + censor_failures)) if (censor_successes + censor_failures) > 0 else 0.0
             
@@ -142,7 +144,7 @@ def render(game, cfg):
         else: 
             perf_B += exec_correct; spin_B += h_spun_exec
             spin_A += r_spun_exec
-            
+
         def get_camp_pwr(alloc, san, emo, edu_stance):
             rote_factor = max(0.0, -edu_stance / 100.0)
             return alloc * max(0.0, (1.0 - (san/100.0) + (emo/100.0) + rote_factor))
@@ -190,7 +192,7 @@ def render(game, cfg):
             'correct_prob': correct_prob,
             'h_spun_exec': h_spun_exec, 'r_spun_exec': r_spun_exec, 
             'censor_successes': censor_successes, 'censor_failures': censor_failures, 'censor_emotion_add': censor_emotion_add, 'censor_buff': censor_rigidity_buff,
-            'h_inc': hp_inc, 'r_inc': rp_inc, 
+            'h_inc': hp_net_cash, 'r_inc': rp_net_cash, 
             'h_base': hp_base, 'r_base': rp_base, 
             'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
             'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
@@ -201,11 +203,11 @@ def render(game, cfg):
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
             'fake_ev_attempted': fake_ev,
-            'num_chunks': num_chunks, # 顯示更新
+            'chunk_size': chunk_size,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
-            'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0))
+            'h_invest_wealth': h_invest_wealth, 'r_invest_wealth': r_invest_wealth
         }
         
         game.gdp = res_exec['est_gdp']
@@ -214,8 +216,8 @@ def render(game, cfg):
         game.h_fund = res_exec['payout_h']
         game.total_budget = budg + confiscated_to_budget
         
-        hp.wealth += hp_inc - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty
-        rp.wealth += rp_inc - float(ra.get('invest_wealth', 0))
+        hp.wealth += hp_net_cash
+        rp.wealth += rp_net_cash
 
         if hasattr(game, 'h_rigidity_buff') and game.h_rigidity_buff['duration'] > 0:
             game.h_rigidity_buff['duration'] -= 1
@@ -234,14 +236,13 @@ def render(game, cfg):
     if dice_data and not dice_data['is_rolled']:
         st.markdown("---")
         st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
-        if dice_data['num_chunks'] == 0:
+        if dice_data['chunk_size'] == float('inf'):
             st.info("The Regulator lacks sufficient ops capacity to initiate an audit. Financial flows obscured successfully.")
             if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
                 st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
                 st.session_state.pending_dice_roll['is_rolled'] = True
                 st.rerun()
         else:
-            # 顯示修正：顯示將進行多少次查核判定
             st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per chunk (Divided into `{dice_data['num_chunks']}` audit chunks).")
 
             if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
@@ -259,9 +260,10 @@ def render(game, cfg):
     st.markdown("---")
     st.markdown("### 🗞️ **[FRONT PAGE HEADLINE]**")
     if rep.get('caught_fake_ev', 0) > 0:
-        st.error(f"**[CORRUPTION SCANDAL] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
+        # 移除政治醜聞相關的文字，純粹財務懲罰
+        st.error(f"**[FINANCIAL PENALTY] TOFU-DREG PROJECT EXPOSED!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fabricated engineering (Fake EV).\n- **{rep['h_party_name']}** forfeits illicit gains of `${rep['caught_value']:.1f}` and is fined `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** receives a full whistleblower bounty of `${rep['caught_value']:.1f}`.\n- Treasury collects `${rep['fine_value']:.1f}` in punitive damages.")
     else:
-        if rep.get('num_chunks', 0) == 0:
+        if rep.get('chunk_size', float('inf')) == float('inf'):
             st.success(f"**[WHITEWASH] NO IRREGULARITIES FOUND?**\n\nThe Regulator failed to investigate financial flows. All accounts passed 'legally'.")
         elif rep.get('fake_ev_attempted', 0) > 0:
             st.success(f"**[CLEAN GETAWAY] AUDIT PASSED!**\n\nDespite a rigorous investigation, the ruling party's 'special accounts' remained watertight.")
@@ -288,8 +290,7 @@ def render(game, cfg):
                 st.write(f"- Fraud Forfeiture: `-${rep['caught_value']:.1f}`")
                 st.write(f"- Punitive Fines: `-${rep['fine_value']:.1f}`")
             st.write(f"- Eng. Costs: `-${rep['h_invest_wealth']:.1f}`")
-            net_cash = rep['h_project_net'] + rep['h_base'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
-            st.write(f"**Final Cash Flow:** `${net_cash:.1f}`")
+            st.write(f"**Final Cash Flow:** `{rep['h_inc']:+.1f}`")
 
         with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
             st.write(f"**Base Income:** `${rep['r_base']:.1f}`")
@@ -299,8 +300,7 @@ def render(game, cfg):
             if rep['r_extra'] > 0: 
                 st.write(f"+ Fraud Bounty: `${rep['r_extra']:.1f}`")
             st.write(f"- Eng. Costs: `-${rep['r_invest_wealth']:.1f}`")
-            net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_invest_wealth']
-            st.write(f"**Final Cash Flow:** `${net_cash_r:.1f}`")
+            st.write(f"**Final Cash Flow:** `{rep['r_inc']:+.1f}`")
 
     with c2:
         st.markdown(f"### 🗳️ ELECTORAL SHIFT (Support Force)")
