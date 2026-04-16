@@ -1,4 +1,3 @@
-
 # ==========================================
 # formulas.py
 # ==========================================
@@ -35,6 +34,7 @@ def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float,
     
     return caught_fake_ev, safe_fake_ev, caught_value, fine
 
+# 📌 修正：分離 fake_ev_spent (花費) 與 fake_ev_safe (達標)，被抓的假 EV 不計入達標率
 def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, r_pays=0.0, h_wealth=0.0, c_net_override=None, override_unit_cost=None, fake_ev_spent=0.0, fake_ev_safe=0.0):
     l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
@@ -254,4 +254,3 @@ def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, 
         'p_plan': p_plan, 'p_exec': p_exec,
         'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
     }
-
