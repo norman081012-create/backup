@@ -275,7 +275,8 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"**Current Inflation Index:** `{inflation_rate:.1f}%`")
     total_maint = (view_party.predict_ability + view_party.investigate_ability + view_party.media_ability + view_party.stealth_ability + view_party.build_ability + view_party.edu_ability) * 1.5
     
-    st.write(f"{t('Think Tank')}: {view_party.predict_ability*10:.1f}% | {t('Intelligence')}: {view_party.investigate_ability*10:.1f}%")
-    st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.1f}% | {t('Counter-Intel')}: {view_party.stealth_ability*10:.1f}%")
-    st.write(f"{t('Engineering')}: {view_party.build_ability*10:.1f}% | {t('Edu Dept')}: {view_party.edu_ability*10:.1f}%")
+    st.write(f"{t('Think Tank')}: {view_party.predict_ability*10:.0f} | {t('Intelligence')}: {view_party.investigate_ability*10:.0f}")
+    st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.0f} | {t('Counter-Intel')}: {view_party.stealth_ability*10:.0f}")
+    st.write(f"{t('Engineering')}: {view_party.build_ability*10:.0f} | {t('Edu Dept')}: {view_party.edu_ability*10:.0f}")
     st.write(f"**(Next Year's Maint. Est. EV: -{total_maint:.1f} EV)**")
+
