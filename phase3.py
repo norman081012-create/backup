@@ -22,10 +22,6 @@ def render(game, cfg):
             if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ra[k]))
             if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ha[k]))
         
-        returned_to_r = 0.0
-        confiscated_to_budget = 0.0
-        hp_wealth_penalty = 0.0
-        
         req_cost = float(d.get('req_cost', 0.0))
         proj_fund = float(d.get('proj_fund') or 0.0)
         bid_cost = float(d.get('bid_cost') or 1.0)
@@ -48,9 +44,6 @@ def render(game, cfg):
 
         unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
         
-        caught_fake_ev = safe_fake_ev = caught_value = fine_value = 0.0
-        fake_ev_caught = False
-
         if 'pending_dice_roll' not in st.session_state:
              st.session_state.pending_dice_roll = {
                  'fake_ev': fake_ev,
@@ -63,20 +56,44 @@ def render(game, cfg):
         
         dice_data = st.session_state.pending_dice_roll
 
-        if dice_data['is_rolled']:
-            caught_fake_ev, safe_fake_ev, caught_value, fine_value = dice_data['fake_ev_results']
-            
-            returned_to_r += caught_value
-            hp_wealth_penalty += (caught_value + fine_value)
-            confiscated_to_budget += fine_value
-            fake_ev_caught = (caught_fake_ev > 0)
+        # 🛑 關鍵修正：如果在進入這個階段時還沒擲骰子，必須立刻暫停系統，不准生成財報！
+        if not dice_data['is_rolled']:
+            st.markdown("---")
+            st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
+            if dice_data['chunk_size'] == float('inf') or dice_data['fake_ev'] <= 0:
+                st.info("No significant audit triggers detected. Financial flows obscured successfully.")
+                if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
+                    st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
+                    st.session_state.pending_dice_roll['is_rolled'] = True
+                    st.rerun()
+            else:
+                num_chunks_display = int(dice_data['fake_ev'] / dice_data['chunk_size'])
+                st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']}` units (Divided into `{num_chunks_display}` audit chunks).")
+
+                if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
+                    with st.spinner('Investigators are tracking the financial flows...'):
+                        import time
+                        time.sleep(1.5) 
+                        fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
+                        st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
+                        st.session_state.pending_dice_roll['is_rolled'] = True
+                    st.rerun() 
+            st.stop() # 阻擋後續代碼，確保玩家先按按鈕
+
+        # 🎲 骰子已經落地，開始提取真實的貪污結算結果
+        caught_fake_ev, safe_fake_ev, caught_value, fine_value = dice_data['fake_ev_results']
+        
+        returned_to_r = caught_value
+        hp_wealth_penalty = caught_value + fine_value
+        confiscated_to_budget = fine_value
+        fake_ev_caught = (caught_fake_ev > 0)
             
         hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
         rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
         
         actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
         
-        eval_fake_ev = safe_fake_ev if dice_data['is_rolled'] else fake_ev
+        eval_fake_ev = safe_fake_ev
         res_exec = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(hp.build_ability), float(game.current_real_decay), r_pays=r_pays, h_wealth=actual_h_wealth_available, c_net_override=c_net_h, fake_ev=eval_fake_ev)
         
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -177,6 +194,7 @@ def render(game, cfg):
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
         
+        # 📝 寫入報表
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
             'new_san': new_sanity, 'new_emo': new_emotion,
@@ -225,30 +243,6 @@ def render(game, cfg):
         hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
         game.record_history(is_election=False) 
     
-    dice_data = st.session_state.get('pending_dice_roll')
-    if dice_data and not dice_data['is_rolled']:
-        st.markdown("---")
-        st.markdown(f"### 🎲 INITIATE FINANCIAL AUDIT")
-        if dice_data['chunk_size'] == float('inf') or dice_data['fake_ev'] <= 0:
-            st.info("No significant audit triggers detected. Financial flows obscured successfully.")
-            if st.button("⏩ Proceed to Final Resolution", type="primary", use_container_width=True):
-                st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
-                st.session_state.pending_dice_roll['is_rolled'] = True
-                st.rerun()
-        else:
-            num_chunks_display = int(dice_data['fake_ev'] / dice_data['chunk_size'])
-            st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Probability:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']}` units (Divided into `{num_chunks_display}` audit chunks).")
-
-            if st.button("🎲 EXECUTE AUDIT!", type="primary", use_container_width=True):
-                with st.spinner('Investigators are tracking the financial flows...'):
-                    import time
-                    time.sleep(1.5) 
-                    fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
-                    st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
-                    st.session_state.pending_dice_roll['is_rolled'] = True
-                st.rerun() 
-        st.stop()
-
     rep = game.last_year_report
     
     st.markdown("---")
