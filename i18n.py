@@ -47,6 +47,10 @@ ZH_DICT = {
     "Executive": "執行方 (Executive)",
     "Regulator": "監管方 (Regulator)",
     "Perf.": "政績",
+    "Macro Perf.": "監管政績",
+    "Proj Perf.": "執行政績",
+    "Regulator Perf.": "監管政績",
+    "Executive Perf.": "執行政績",
     "Spin": "公關",
     
     "Party Overview": "政黨狀態總覽",
