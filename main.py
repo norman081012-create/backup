@@ -18,13 +18,6 @@ import ai_bot
 st.set_page_config(page_title="Symbiocracy Simulator v4.0.0", layout="wide")
 st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
 
-st.markdown("""
-<style>
-/* 強制將一般文本加亮，確保在黑底模式下清晰可見 */
-p, li, .stMarkdown { color: #FAFAFA !important; }
-</style>
-""", unsafe_allow_html=True)
-
 if 'lang' not in st.session_state: st.session_state.lang = 'EN'
 t = i18n.t
 
