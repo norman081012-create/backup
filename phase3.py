@@ -11,8 +11,11 @@ t = i18n.t
 def render(game, cfg):
     st.header(t("Symbiocracy Times - Annual Report"))
     
+    # ⚠️ 提早抓取政黨，避免後續 UnboundLocalError
+    rp = game.r_role_party
+    hp = game.h_role_party
+    
     if not game.last_year_report:
-        rp, hp = game.r_role_party, game.h_role_party
         ra = st.session_state.get(f"{rp.name}_acts", {})
         ha = st.session_state.get(f"{hp.name}_acts", {})
         d = st.session_state.get('turn_data', {})
@@ -28,7 +31,7 @@ def render(game, cfg):
         
         if net_fin_ev > 0:
             chunk_size = max(0.01, 10.0 / net_fin_ev)
-            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
+            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.05) * max(1.0, net_fin_ev * 0.1))
         else:
             chunk_size = float('inf')
             catch_prob = 0.0
@@ -206,14 +209,15 @@ def render(game, cfg):
             'fine_value': fine_value,
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
-            'fake_ev_attempted': fake_ev,
+            'fake_ev_attempted': res_exec['total_fake_spent'],
             'chunk_size': chunk_size,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
             'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0)),
             'completed_projects': res_exec['completed_projects'], 'failed_projects': res_exec['failed_projects'],
-            'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt 
+            'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt,
+            'cost_real_ev': res_exec['cost_real_ev'], 'cost_fake_ev': res_exec['cost_fake_ev']
         }
         
         game.gdp = res_exec['est_gdp']
@@ -272,6 +276,7 @@ def render(game, cfg):
         
         with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
             st.write(f"**Project Net Profit:** `${rep['h_project_net']:.1f}`")
+            st.caption(f"*(Reward `${rep['payout_h']:.1f}` - Real Cost `${rep['cost_real_ev']:.1f}` - Fake Cost `${rep['cost_fake_ev']:.1f}`)*")
             st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
             if rep['caught_fake_ev'] > 0:
                 st.write(f"- Confiscated: `-${rep['caught_value']:.1f}`")
