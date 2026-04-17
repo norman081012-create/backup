@@ -44,7 +44,7 @@ def render(game, view_party, cfg):
             all_available_projects = view_party.projects + opp.projects
             
             def format_proj(p):
-                return f"[{p['author']}] {p['name']} ({t('Tier')}: {t(p['tier'][0])} | EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
+                return f"[{p['author'][:1]}] {p['name']} ({t('Tier')}: {t(p['tier'][0])} | EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
                 
             selected_proj_ids = st.multiselect(t("Available Projects"), options=[p['id'] for p in all_available_projects], format_func=lambda x: format_proj(next(p for p in all_available_projects if p['id'] == x)))
             selected_projects = [p for p in all_available_projects if p['id'] in selected_proj_ids]
@@ -78,7 +78,11 @@ def render(game, view_party, cfg):
                 opp_txt1 = f"Opp. Claimed: {opp_claimed_decay:.3f}" if opp_claimed_decay is not None else "Awaiting Opp."
                 
                 current_val = st.session_state.get(widget_decay_key, tt_decay)
+                conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
+                equiv_infra_loss = (game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
+                
                 st.markdown(t(f"**Claimed Decay (Current: {current_val:.3f})**") + f" | {t(opp_txt1)}")
+                st.caption(f"*({t('Requires')} {equiv_infra_loss:.1f} EV)*")
                 claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
@@ -151,6 +155,12 @@ def render(game, view_party, cfg):
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
                 if c_btn3.button(t(f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
                     st.session_state.turn_data.update(plan_dict)
+                    
+                    # ⚠️ 將專案併入 active_projects 陣列
+                    for np_proj in plan_dict['selected_projects']:
+                        if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                            game.active_projects.append(np_proj)
+                            
                     engine.trigger_swap(game, swap_cost, t("Regulator Forced Takeover!"))
                     game.proposing_party = game.ruling_party; st.rerun()
 
@@ -189,6 +199,12 @@ def render(game, view_party, cfg):
             c1, c2, c3, c4 = st.columns(4)
             if c1.button(t("✅ Agree to Bill"), use_container_width=True, type="primary"):
                 st.session_state.turn_data.update(game.p1_selected_plan)
+                
+                # ⚠️ 將專案併入 active_projects 陣列
+                for np_proj in game.p1_selected_plan.get('selected_projects', []):
+                    if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                        game.active_projects.append(np_proj)
+                        
                 st.session_state.news_flash = t(f"🗞️ **[BREAKING] Bill Passed!** After {game.proposal_count} rounds, bill is signed.")
                 st.session_state.anim = 'balloons'
                 game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
@@ -198,6 +214,12 @@ def render(game, view_party, cfg):
             
             if c3.button(t(f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
+                
+                # ⚠️ 將專案併入 active_projects 陣列
+                for np_proj in game.p1_selected_plan.get('selected_projects', []):
+                    if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                        game.active_projects.append(np_proj)
+                        
                 engine.trigger_swap(game, penalty_amt, t("Power Shift!"))
                 game.proposing_party = game.ruling_party; st.rerun()
             
@@ -216,11 +238,23 @@ def render(game, view_party, cfg):
             c1, c2 = st.columns(2)
             if c1.button(t("✅ Accept Ultimatum"), use_container_width=True, type="primary"):
                 st.session_state.turn_data.update(game.p1_selected_plan)
+                
+                # ⚠️ 將專案併入 active_projects 陣列
+                for np_proj in game.p1_selected_plan.get('selected_projects', []):
+                    if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                        game.active_projects.append(np_proj)
+                        
                 st.session_state.news_flash = t(f"🗞️ **[BREAKING] Ultimatum Accepted!** Executive compromises.")
                 st.session_state.anim = 'balloons'
                 game.phase = 2; game.proposing_party = game.ruling_party; st.rerun()
                 
             if c2.button(t(f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
+                
+                # ⚠️ 將專案併入 active_projects 陣列
+                for np_proj in game.p1_selected_plan.get('selected_projects', []):
+                    if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                        game.active_projects.append(np_proj)
+                        
                 engine.trigger_swap(game, penalty_amt, t("Cabinet Fall!"))
                 game.proposing_party = game.r_role_party; st.rerun()
