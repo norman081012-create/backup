@@ -81,12 +81,16 @@ def take_turn(game, cfg):
     elif game.phase == 2:
         d = st.session_state.get('turn_data', {})
         bid_cost = float(d.get('bid_cost', 1.0))
+        selected_projects = d.get('selected_projects', [])
         
         inv_cap = ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0)
         ci_cap = ai_party.stealth_ability * 10
         med_cap = ai_party.media_ability * 10 * (1.2 if not is_h else 1.0)
+        tt_cap = ai_party.predict_ability * 10.0
         
         my_acts = {
+            'w_t_dec': 33, 'w_t_obs': 33, 'w_t_opt': 34,
+            'alloc_tt_dec': tt_cap * 0.33, 'alloc_tt_obs': tt_cap * 0.33, 'alloc_tt_opt': tt_cap * 0.34,
             'w_i_cen': 0, 'w_i_org': 0, 'w_i_fin': 0,
             'alloc_inv_censor': 0, 'alloc_inv_audit': 0, 'alloc_inv_fin': 0,
             'w_c_cen': 0, 'w_c_org': 0, 'w_c_fin': 0,
