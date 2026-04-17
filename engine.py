@@ -8,9 +8,10 @@ t = i18n.t
 
 PROJECT_NAMES = ["Phoenix", "Citadel", "Aegis", "Titan", "Neon", "Echo", "Apex", "Nova", "Vanguard", "Zenith", "Helios", "Omega", "Genesis", "Valkyrie", "Atlas", "Apollo", "Orion", "Hyperion"]
 
-def generate_projects(tt_ep, author_name):
+def generate_projects(tt_opt_ep, author_name):
     projects = []
-    ep_buff = (tt_ep / 10.0) * 0.2  
+    # Optimize Proj EP boosts multipliers directly
+    ep_buff = (tt_opt_ep / 100.0) * 0.5  
     
     tiers = [
         ('Low', 5, (50, 150), 0.8, (0.3, 1.3)),
@@ -22,22 +23,17 @@ def generate_projects(tt_ep, author_name):
         for _ in range(count):
             ev = random.randint(*ev_range)
             m_mult = random.uniform(*m_range) + ep_buff
-            
-            error_margin = max(0.0, (10.0 - tt_ep) * 0.05) 
-            obs_m_min = max(0.0, m_mult - random.uniform(0, error_margin))
-            obs_m_max = m_mult + random.uniform(0, error_margin)
+            e_mult_final = e_mult + (ep_buff * 0.5)
 
             projects.append({
                 'id': f"{author_name[:1]}-{tier[0]}-{random.randint(1000,9999)}",
-                'name': f"Project {random.choice(PROJECT_NAMES)}",
+                'name': f"{t('Project')} {random.choice(PROJECT_NAMES)}",
                 'tier': tier,
                 'ev': float(ev),
-                'exec_mult': e_mult,
+                'exec_mult': e_mult_final,
                 'macro_mult': m_mult,
-                'obs_min': obs_m_min,
-                'obs_max': obs_m_max,
                 'author': author_name,
-                'investments': [] # Tracks dicts like {'year': 1, 'amount': 50}
+                'investments': [] 
             })
     return projects
 
@@ -95,7 +91,7 @@ class GameEngine:
         self.boundary_B = 100 
         self.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
         
-        self.active_projects = [] # 國家正在進行中的建案池
+        self.active_projects = [] 
 
     def record_history(self, is_election):
         self.history.append({
