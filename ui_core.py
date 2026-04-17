@@ -98,11 +98,12 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 
             if rep:
                 my_is_h = view_party.name == rep['h_party_name']
-                base = rep['h_base'] if my_is_h else rep['r_base']
-                proj = rep['h_project_net'] if my_is_h else rep['r_project_net']
-                extra = rep['h_extra'] if my_is_h else rep['r_extra']
+                # 🛡️ 這裡加入了安全的 .get() 讀取，避免報錯
+                base = rep.get('h_base', 0.0) if my_is_h else rep.get('r_base', 0.0)
+                proj = rep.get('h_project_net', 0.0) if my_is_h else rep.get('r_project_net', 0.0)
+                extra = rep.get('h_extra', 0.0) if my_is_h else rep.get('r_extra', 0.0)
                 penalty = rep.get('hp_penalty', 0.0) if my_is_h else 0.0
-                inv_w = rep['h_invest_wealth'] if my_is_h else rep['r_invest_wealth']
+                inv_w = rep.get('h_invest_wealth', 0.0) if my_is_h else rep.get('r_invest_wealth', 0.0)
                 
                 real_inc_gross = base + proj + extra
                 expenses = inv_w + penalty
