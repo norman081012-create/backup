@@ -84,18 +84,20 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = f"Opp. Claimed: {opp_claimed_decay:.3f}" if opp_claimed_decay is not None else "Awaiting Opp."
                 
-                claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, value=float(st.session_state.get(widget_decay_key, tt_decay)), key=widget_decay_key)
+                current_val = st.session_state.get(widget_decay_key, tt_decay)
                 conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-                equiv_infra_loss = (game.gdp * (claimed_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
+                equiv_infra_loss = (game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
                 
-                st.markdown(t(f"**Claimed Decay (Current: {claimed_decay:.3f})**") + f" | {t(opp_txt1)} *({t('Requires')} {equiv_infra_loss:.1f} EV)*")
+                # Combine the string so Requires sits perfectly after the claimed decay part
+                st.markdown(t(f"**Claimed Decay (Current: {current_val:.3f})**") + f" *({t('Requires')} {equiv_infra_loss:.1f} EV)* | {t(opp_txt1)}")
+                claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
                 opp_claimed_cost = opp_plan.get('claimed_cost') if opp_plan else None
                 opp_txt2 = f"Opp. Claimed: {opp_claimed_cost:.2f}" if opp_claimed_cost is not None else "Awaiting Opp."
-                claimed_cost = st.number_input("Claimed Unit Cost", step=0.01, value=float(st.session_state.get(widget_cost_key, tt_cost)), key=widget_cost_key)
-                st.markdown(t(f"**Claimed Unit Cost (Current: {claimed_cost:.2f})**") + f" | {t(opp_txt2)}")
+                st.markdown(t(f"**Claimed Unit Cost (Current: {st.session_state.get(widget_cost_key, tt_cost):.2f})**") + f" | {t(opp_txt2)}")
+                claimed_cost = st.number_input("Claimed Unit Cost", step=0.01, key=widget_cost_key, label_visibility="collapsed")
                 st.session_state[input_cost_key] = claimed_cost
             
             total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
