@@ -390,9 +390,9 @@ def render(game, cfg):
             game.phase = 1; game.p1_step = 'draft_r'
             game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
             
-            if is_election_end:
-                game.r_role_party = game.ruling_party
-                game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
+            # 🔴 修正：每年年初，角色自動校正回歸。當權派一定優先擔任 R (Regulator)
+            game.r_role_party = game.ruling_party
+            game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
             game.proposing_party = game.r_role_party
             
