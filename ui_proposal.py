@@ -77,22 +77,24 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     h_media_pwr = float(ha.get('alloc_med_control', 0.0)) * pr_mult * media_multiplier * h_censor_penalty
     r_media_pwr = float(ra.get('alloc_med_control', 0.0)) * pr_mult * media_multiplier
     
+    avg_edu_stance = (sim_h_party.edu_stance + sim_r_party.edu_stance) / 2.0
+
+    # 使用新的統一預覽函式
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
         cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net_total'],
-        h_media_pwr, r_media_pwr
+        h_media_pwr, r_media_pwr, avg_edu_stance
     )
     
     opp_party_name = sim_r_party.name if my_is_h_in_sim else sim_h_party.name
     
-    my_gdp_perf = shift_preview[view_party.name]['perf_gdp']
-    my_proj_perf = shift_preview[view_party.name]['perf_proj']
-    my_total_perf = my_gdp_perf + my_proj_perf
+    # --- Fix: 修改這裡以符合新的 unified structure (perf, spin) ---
+    my_total_perf = shift_preview[view_party.name]['perf']
+    my_total_spin = shift_preview[view_party.name]['spin']
     
-    opp_gdp_perf = shift_preview[opp_party_name]['perf_gdp']
-    opp_proj_perf = shift_preview[opp_party_name]['perf_proj']
-    opp_total_perf = opp_gdp_perf + opp_proj_perf
+    opp_total_perf = shift_preview[opp_party_name]['perf']
+    opp_total_spin = shift_preview[opp_party_name]['spin']
 
     o_gdp_pct = ((res['est_gdp'] - game.gdp) / max(1.0, game.gdp)) * 100.0
     def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
@@ -101,8 +103,8 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     st.markdown(f"2. {t('Opp. Est. Net Profit')}: **{opp_net:.1f}** (ROI: {fmt_roi(opp_roi)})")
     
     st.markdown(f"3. {t('Total Expected Support')}:")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **Our Total: `{my_total_perf:+.1f}`** *(Base: {my_gdp_perf:+.1f} | Proj: {my_proj_perf:+.1f})*")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **Opp. Total: `{opp_total_perf:+.1f}`** *(Base: {opp_gdp_perf:+.1f} | Proj: {opp_proj_perf:+.1f})*")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{t('Our Total:')}** Perf. `{my_total_perf:+.1f}` | Spin `{my_total_spin:+.1f}`")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **{t('Opp. Total:')}** Perf. `{opp_total_perf:+.1f}` | Spin `{opp_total_spin:+.1f}`")
     
     st.markdown(f"4. {t('Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
@@ -132,12 +134,12 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
     equiv_infra_loss = (game.gdp * (cl_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05))) / conv_rate
     
-    equiv_str = t(f"Equivalent to {equiv_infra_loss:.1f} EV Loss")
+    equiv_str = f"Eqv. to {equiv_infra_loss:.1f} EV Loss"
     st.write(f"**{t('Claimed Decay')}:** {cl_decay:.3f} **({equiv_str})**")
     
     st.write(f"**{t('Total Plan Reward (Max=Budget-Salaries)')}:** {plan['proj_fund']:.1f} | **{t('Plan Total Benefit (Construction Volume)')}:** {plan['bid_cost']:.1f}")
     
     if simulate_swap:
-        st.info(f"🔧 **{t('Simulated H-System Pays')}:** {t('Total')} {eval_req_cost:.1f} ({t('R-Pays')}: {eval_r_pays:.1f} | {t('H-Pays')}: {eval_h_pays:.1f})")
+        st.info(f"🔧 **Simulated H-System Pays:** {t('Total Req. Cost')} {eval_req_cost:.1f} ({t('R-Pays')}: {eval_r_pays:.1f} | {t('H-Pays')}: {eval_h_pays:.1f})")
     else:
         st.write(f"**{t('Total Req. Cost')}:** {eval_req_cost:.1f} ({t('R-Pays')}: {eval_r_pays:.1f} | {t('H-Pays')}: {eval_h_pays:.1f})")
