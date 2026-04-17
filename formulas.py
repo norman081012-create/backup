@@ -159,16 +159,37 @@ def get_depreciated_perf(party, perf_type, current_year):
     return total
 
 def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects, real_decay, current_year):
+    # 1. 建設帶來的 GDP 正向成長 (delta_A)
     target_gdp_growth_val = sum(p.get('ev', 0.0) * p.get('macro_mult', 1.0) * cfg.get('GDP_CONVERSION_RATE', 0.2) for p in completed_projects)
     delta_A = (target_gdp_growth_val / max(1.0, curr_gdp)) * 100.0
     
+    # 2. 結算實際衰退 (實際 GDP 減損) 與 宣告預期衰退
+    real_loss_pct = (real_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0)) * 100.0
     expected_loss_pct = (claimed_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0)) * 100.0
-    delta_E = -expected_loss_pct
-    gap = delta_A - delta_E
     
-    p_ruling_raw = (delta_A * 0.05) + (gap * 0.15)
-    p_ruling = p_ruling_raw * cfg.get('AMMO_MULTIPLIER', 50.0)
+    # 實際淨成長率 (可能為負)
+    actual_net_growth = delta_A - real_loss_pct
+    # 預期淨成長率
+    expected_net_growth = -expected_loss_pct
     
+    # 表現落差 (超越預期的幅度)
+    gap = actual_net_growth - expected_net_growth
+    
+    # 3. 分配政績 (GDP 成長給執政，衰退給在野)
+    p_ruling = 0.0
+    p_opp = 0.0
+    
+    if actual_net_growth >= 0:
+        # GDP 成長：歸功於 Ruling
+        p_ruling_raw = (actual_net_growth * 0.05) + (gap * 0.15)
+        p_ruling = max(0.0, p_ruling_raw * cfg.get('AMMO_MULTIPLIER', 50.0))
+    else:
+        # GDP 衰退：化為在野黨 (非 Ruling) 的政治子彈
+        # 衰退的絕對值 + 不如預期的落差 (如果 gap < 0)
+        p_opp_raw = abs(actual_net_growth * 0.05) + (abs(gap) * 0.15 if gap < 0 else 0.0)
+        p_opp = max(0.0, p_opp_raw * cfg.get('AMMO_MULTIPLIER', 50.0))
+        
+    # 4. 計算 Exec 與 Prop 政績 (邏輯不變)
     exec_perf = 0.0
     proposal_perf = {}
     inflation_corr = 5000.0 / max(1.0, curr_gdp)
@@ -186,7 +207,8 @@ def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects, real_
         author = p.get('author', 'System')
         proposal_perf[author] = proposal_perf.get(author, 0.0) + base_perf
         
-    return p_ruling, exec_perf, proposal_perf, delta_A, delta_E
+    # 回傳值增加 p_opp
+    return p_ruling, p_opp, exec_perf, proposal_perf, actual_net_growth, expected_net_growth
 
 def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
     if is_preview:
@@ -273,20 +295,26 @@ def calc_performance_preview(cfg, hp, rp, ruling_party_name, curr_gdp, claimed_d
     hp_name = getattr(hp, 'name', str(hp))
     rp_name = getattr(rp, 'name', str(rp))
     
-    p_ruling, p_exec, p_prop, d_a, d_e = generate_raw_support(cfg, curr_gdp, claimed_decay, projects, real_decay, current_year)
+    # 接收新增的 p_opp
+    p_ruling, p_opp, p_exec, p_prop, d_a, d_e = generate_raw_support(cfg, curr_gdp, claimed_decay, projects, real_decay, current_year)
 
     h_perf = p_exec + p_prop.get(hp_name, 0.0)
     r_perf = p_prop.get(rp_name, 0.0)
     
-    if ruling_party_name == hp_name: h_perf += p_ruling
-    if ruling_party_name == rp_name: r_perf += p_ruling
+    # 依照 Ruling 身分，派發正面或反向政績
+    if ruling_party_name == hp_name: 
+        h_perf += p_ruling
+        r_perf += p_opp
+    if ruling_party_name == rp_name: 
+        r_perf += p_ruling
+        h_perf += p_opp
 
     perf_ap_center = 1.0 - get_perf_rigidity(100, sanity, emotion)
     spin_ap_center = 1.0 - get_spin_rigidity(100, sanity, emotion, 0.0)
 
     return {
-        hp_name: {'perf': h_perf, 'spin': h_spin_pwr, 'ruling': p_ruling if ruling_party_name==hp_name else 0, 'exec': p_exec, 'prop': p_prop.get(hp_name, 0)},
-        rp_name: {'perf': r_perf, 'spin': r_spin_pwr, 'ruling': p_ruling if ruling_party_name==rp_name else 0, 'exec': 0, 'prop': p_prop.get(rp_name, 0)},
+        hp_name: {'perf': h_perf, 'spin': h_spin_pwr, 'ruling': p_ruling if ruling_party_name==hp_name else p_opp, 'exec': p_exec, 'prop': p_prop.get(hp_name, 0)},
+        rp_name: {'perf': r_perf, 'spin': r_spin_pwr, 'ruling': p_ruling if ruling_party_name==rp_name else p_opp, 'exec': 0, 'prop': p_prop.get(rp_name, 0)},
         'perf_ap_center': perf_ap_center,
         'spin_ap_center': spin_ap_center,
         'delta_A': d_a, 'delta_E': d_e
