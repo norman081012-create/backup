@@ -102,10 +102,13 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     
     my_role = "Executive" if my_is_h_in_sim else "Regulator"
     opp_role = "Regulator" if my_role == "Executive" else "Executive"
+    
+    my_perf_type = "Proj Perf." if my_role == "Executive" else "Macro Perf."
+    opp_perf_type = "Macro Perf." if my_role == "Executive" else "Proj Perf."
 
     st.markdown(f"3. {t('Total Expected Support')}:")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{t('Our Side')} ({t(my_role)}):** {t('Perf.')} `{my_total_perf:+.1f}` | {t('Spin')} `{my_total_spin:+.1f}`")
-    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **{t('Opp. Side')} ({t(opp_role)}):** {t('Perf.')} `{opp_total_perf:+.1f}` | {t('Spin')} `{opp_total_spin:+.1f}`")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 **{t('Our Side')} ({t(my_role)}):** {t(my_perf_type)} `{my_total_perf:+.1f}` | {t('Spin')} `{my_total_spin:+.1f}`")
+    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;🔸 **{t('Opp. Side')} ({t(opp_role)}):** {t(opp_perf_type)} `{opp_total_perf:+.1f}` | {t('Spin')} `{opp_total_spin:+.1f}`")
     
     st.markdown(f"4. {t('Expected GDP Shift')}: {game.gdp:.1f} ➔ **{res['est_gdp']:.1f}** ({o_gdp_pct:+.2f}%)")
     
