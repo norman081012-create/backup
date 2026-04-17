@@ -8,7 +8,7 @@ import i18n
 t = i18n.t
 
 def render(game, cfg):
-    st.header("Symbiocracy Times - Annual Report [共生體制時報 - 年度結算]")
+    st.header(t("Symbiocracy Times - Annual Report"))
     
     if not game.last_year_report:
         rp, hp = game.r_role_party, game.h_role_party
@@ -48,17 +48,17 @@ def render(game, cfg):
 
         if not dice_data['is_rolled']:
             st.markdown("---")
-            st.markdown(f"### 🎲 Initiate Financial Audit [啟動財務查核]")
+            st.markdown(t("### 🎲 Initiate Financial Audit"))
             if dice_data['chunk_size'] == float('inf'):
-                st.info("R-System lacks operational capacity to audit. Cash flow hidden. [監管系統缺乏足夠的操作量能來啟動查核。金流成功隱蔽。]")
-                if st.button("⏩ Proceed to Final Resolution [進入最終結算]", type="primary", use_container_width=True):
+                st.info(t("Regulator lacks operational capacity to audit. Cash flow hidden."))
+                if st.button(t("⏩ Confirm Report & Next Year"), type="primary", use_container_width=True):
                     st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
                     st.session_state.pending_dice_roll['is_rolled'] = True
                     st.rerun()
             else:
                 st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Prob:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']:.2f}` block.")
 
-                if st.button("🎲 Execute Audit! [執行財務查核！]", type="primary", use_container_width=True):
+                if st.button(t("Execute Audit!"), type="primary", use_container_width=True):
                     with st.spinner('Investigators tracing funds...'):
                         import time
                         time.sleep(1.5) 
@@ -132,11 +132,12 @@ def render(game, cfg):
         raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net_total'])
         
         perf_A = 0.0; perf_B = 0.0
-        ruling_name = game.ruling_party.name
         
-        if ruling_name == game.party_A.name: perf_A += raw_p_plan
+        # Regulator 全拿 raw_p_plan
+        if rp.name == game.party_A.name: perf_A += raw_p_plan
         else: perf_B += raw_p_plan
         
+        # Executive 全拿 raw_p_exec
         if hp.name == game.party_A.name: perf_A += raw_p_exec
         else: perf_B += raw_p_exec
 
@@ -230,31 +231,31 @@ def render(game, cfg):
     rep = game.last_year_report
     
     st.markdown("---")
-    st.markdown("### 🗞️ **[Front Page / 頭版頭條]**")
+    st.markdown(t("### 🗞️ **[Front Page]**"))
     if rep.get('caught_fake_ev', 0) > 0:
-        st.error(f"**[Corruption Scandal] Shoddy Projects Exposed! [貪腐醜聞：豆腐渣工程曝光！]**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fake EV.\n- **{rep['h_party_name']}** was fined `${rep['caught_value']:.1f}` and penalized `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** received `${rep['caught_value']:.1f}` as whistleblower reward.\n- National treasury collected `${rep['fine_value']:.1f}`.")
+        st.error(t(f"**[Corruption Scandal] Shoddy Projects Exposed!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fake EV.\n- **{rep['h_party_name']}** was fined `${rep['caught_value']:.1f}` and penalized `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** received `${rep['caught_value']:.1f}` as whistleblower reward.\n- National treasury collected `${rep['fine_value']:.1f}`.\n- 📉 **Project completion rate dropped due to removed fake EV!**"))
     else:
         if rep.get('chunk_size', float('inf')) == float('inf'):
-            st.success(f"**[Whitewashed] Nothing to See Here? [粉飾太平：查無不法？]**\n\nAudit failed. All books appear perfectly legal on paper.")
+            st.success(t(f"**[Whitewashed] Nothing to See Here?**\n\nAudit failed. All books appear perfectly legal on paper."))
         elif rep.get('fake_ev_attempted', 0) > 0:
-            st.success(f"**[Clean Getaway] Passed the Audit! [全身而退：查核過關！]**\n\nDespite strict investigation, special funds remain hidden.")
+            st.success(t(f"**[Clean Getaway] Passed the Audit!**\n\nDespite strict investigation, special funds remain hidden."))
         else:
-            st.success(f"**[Clean Gov] Zero Fake EV! [廉能政府：零造假工程！]**\n\nInvestigators confirm all projects are 100% genuine.")
+            st.success(t(f"**[Clean Gov] Zero Fake EV!**\n\nInvestigators confirm all projects are 100% genuine."))
             
     st.markdown("---")
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(f"### 📊 Economic Indicators [經濟指標]")
+        st.markdown(t(f"### 📊 Economic Indicators"))
         st.write(f"- **GDP:** `{rep['old_gdp']:.1f}` ➔ **`{game.gdp:.1f}`**")
-        st.write(f"- **Sanity [公民素養]:** `{rep['old_san']:.1f}` ➔ **`{game.sanity:.1f}`** ({game.sanity - rep['old_san']:+.1f})")
-        st.write(f"- **Emotion [選民情緒]:** `{rep['old_emo']:.1f}` ➔ **`{game.emotion:.1f}`** ({game.emotion - rep['old_emo']:+.1f})")
+        st.write(f"- **{t('Civic Literacy')}:** `{rep['old_san']:.1f}` ➔ **`{game.sanity:.1f}`** ({game.sanity - rep['old_san']:+.1f})")
+        st.write(f"- **{t('Voter Emotion')}:** `{rep['old_emo']:.1f}` ➔ **`{game.emotion:.1f}`** ({game.emotion - rep['old_emo']:+.1f})")
         
-        st.markdown(f"### 🏛️ Financial Summary [財政總結]")
+        st.markdown(t(f"### 🏛️ Financial Summary"))
         if rep['fine_value'] > 0:
-            st.success(f"Treasury Income [國庫收入]: +`${rep['fine_value']:.1f}`")
+            st.success(t(f"Treasury Income: +`${rep['fine_value']:.1f}`"))
         
-        with st.expander(f"💼 {rep['h_party_name']} (H-System) Financials"):
+        with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
             st.write(f"**Project Net Profit:** `${rep['h_project_net']:.1f}`")
             st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
             if rep['caught_fake_ev'] > 0:
@@ -264,9 +265,9 @@ def render(game, cfg):
             net_cash = rep['h_project_net'] + rep['h_base'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
             st.write(f"**Final Cash Flow:** `${net_cash:.1f}`")
 
-        with st.expander(f"⚖️ {rep['r_party_name']} (R-System) Financials"):
+        with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
             st.write(f"**Base Income:** `${rep['r_base']:.1f}`")
-            st.write(f"- Paid H-System: `-${rep['r_pays']:.1f}`")
+            st.write(f"- Paid Executive: `-${rep['r_pays']:.1f}`")
             st.write(f"+ Unspent Recovery: `${rep['unspent_proj']:.1f}`")
             st.write(f"+ Budget Surplus: `${rep['base_r_surplus']:.1f}`")
             if rep['r_extra'] > 0: 
@@ -276,32 +277,33 @@ def render(game, cfg):
             st.write(f"**Final Cash Flow:** `${net_cash_r:.1f}`")
 
     with c2:
-        st.markdown(f"### 🗳️ Electoral Shift [選舉板塊位移]")
+        st.markdown(t(f"### 🗳️ Electoral Shift"))
         
         net_ammo = rep['net_perf_A'] + rep['net_spin_A']
         atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
         def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
         
         if abs(net_ammo) < 1.0: 
-            st.info("🤝 Stalemate. No significant shifts. [雙方支持度僵持不下，未產生顯著位移]")
+            st.info(t("🤝 Stalemate. No significant shifts."))
         else:
-            st.success(f"🔥 **Net Advantage [淨優勢]:** `{abs(net_ammo):.1f}`！**{atk_party}** launched an offensive against **{def_party}**!")
+            st.success(t(f"🔥 **Net Advantage:** `{abs(net_ammo):.1f}`！**{atk_party}** launched an offensive against **{def_party}**!"))
 
         if st.session_state.get('god_mode'):
-            with st.expander("👁️ God Mode: Electoral Mechanics [上帝模式：選舉機制]", expanded=True):
+            with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=True):
                 st.write(f"*(Global Modifiers: Sanity `{rep['old_san']:.0f}`, Emotion `{rep['old_emo']:.0f}`)*")
                 
-                st.markdown(f"**Performance Offense [政績攻勢]**: {game.party_A.name} `{rep['perf_A']:.1f}` | {game.party_B.name} `{rep['perf_B']:.1f}`")
+                st.markdown(f"**{t('Regulator Perf.')} ({rep['r_party_name']})**: `{rep['raw_p_plan']:+.1f}` | **{t('Executive Perf.')} ({rep['h_party_name']})**: `{rep['raw_p_exec']:+.1f}`")
+                
                 if abs(rep['net_perf_A']) >= 1.0:
                     atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
                     perf_blocked = rep['perf_used'] - rep['perf_conquered']
-                    st.success(f"⚡ **Fact Penetration [事實穿甲]**: {atk_p} exerted `{rep['perf_used']:.1f}` impact. Ignorant/Emotional armor blocked `{perf_blocked:.1f}`, conquering **{rep['perf_conquered']}** blocks!")
+                    st.success(f"⚡ **Fact Penetration**: {atk_p} exerted `{rep['perf_used']:.1f}` impact. Ignorant/Emotional armor blocked `{perf_blocked:.1f}`, conquering **{rep['perf_conquered']}** blocks!")
                     
-                st.markdown(f"**Media & Spin Offense [公關攻勢]**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
+                st.markdown(f"**Media & Spin Offense**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
                 if abs(rep['net_spin_A']) >= 1.0:
                     atk_s = game.party_A.name if rep['net_spin_A'] > 0 else game.party_B.name
                     blocked = rep['spin_used'] - rep['spin_conquered']
-                    st.warning(f"🛡️ **Brainwash Defense [洗腦防禦]**: Rational sanity armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocks.")
+                    st.warning(f"🛡️ **Brainwash Defense**: Rational sanity armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocks.")
 
                 old_sup_A = rep['old_boundary'] * 0.5
                 new_sup_A = rep['new_boundary'] * 0.5
@@ -311,10 +313,10 @@ def render(game, cfg):
                 st.markdown(f"#### 📊 **{game.party_A.name} True Support:** `{old_sup_A:.1f}%` ➔ **`{new_sup_A:.1f}%`** ({new_sup_A - old_sup_A:+.1f}%)")
                 st.markdown(f"#### 📊 **{game.party_B.name} True Support:** `{old_sup_B:.1f}%` ➔ **`{new_sup_B:.1f}%`** ({new_sup_B - old_sup_B:+.1f}%)")
         else:
-            st.caption("*(True support hidden. Conduct polls to reveal. [真實支持度百分比已隱藏。請進行民調以揭露當前局勢。])*")
+            st.caption(t("*(True support hidden. Conduct polls to reveal.)*"))
 
     st.markdown("---")
-    if st.button("⏩ Next Year [進入下一年]", type="primary", use_container_width=True):
+    if st.button(t("Next Year"), type="primary", use_container_width=True):
         if 'pending_dice_roll' in st.session_state: del st.session_state.pending_dice_roll
         
         is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
