@@ -245,4 +245,39 @@ def get_observed_abilities(viewer, target, game, cfg):
     }
 
 def render_sidebar_intel_audit(game, view_party, cfg):
-    pass # (已省略過長的不變動代碼，維持原樣即可)
+    opp = game.party_B if view_party.name == game.party_A.name else game.party_A
+    st.markdown("---")
+    st.title("🕵️ Intel on Opponent [對手數值情報]")
+    
+    opp_stl = opp.stealth_ability / 10.0
+    i_acc_weight = cfg.get('INVESTIGATE_ACCURACY_WEIGHT', 0.8)
+    my_inv = (view_party.investigate_ability / 10.0) * i_acc_weight
+    
+    err_margin = max(0.0, 1.0 + opp_stl - my_inv) * cfg.get('OBS_ERR_BASE', 0.7)
+    acc = max(0, min(100, int((1.0 - err_margin) * 100)))
+    
+    st.progress(acc / 100.0, text=f"Observation Accuracy: {acc}%")
+    
+    obs_abis = get_observed_abilities(view_party, opp, game, cfg)
+    
+    st.write(f"{t('Think Tank')}: {obs_abis['predict']*10:.1f}% | {t('Intelligence')}: {obs_abis['investigate']*10:.1f}%")
+    st.write(f"{t('Media Dept')}: {obs_abis['media']*10:.1f}% | {t('Counter-Intel')}: {obs_abis['stealth']*10:.1f}%")
+    st.write(f"{t('Engineering')}: {obs_abis['build']*10:.1f}% | {t('Edu Dept')}: {obs_abis['edu']*10:.1f}%")
+    
+    est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
+    eval_txt = config.get_intel_market_eval(est_unit_cost)
+    
+    inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
+    
+    st.write(f"**Engineering Valuation**: {eval_txt}")
+    st.write(f"*(Est. Unit Cost: `{est_unit_cost:.2f}` )*")
+
+    st.markdown("---")
+    st.title("🧾 Internal Audit [內部部門審計]")
+    st.write(f"**Current Inflation:** `{inflation_rate:.1f}%\`")
+    total_maint = (view_party.predict_ability + view_party.investigate_ability + view_party.media_ability + view_party.stealth_ability + view_party.build_ability + view_party.edu_ability) * 1.5
+    
+    st.write(f"{t('Think Tank')}: {view_party.predict_ability*10:.0f} | {t('Intelligence')}: {view_party.investigate_ability*10:.0f}")
+    st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.0f} | {t('Counter-Intel')}: {view_party.stealth_ability*10:.0f}")
+    st.write(f"{t('Engineering')}: {view_party.build_ability*10:.0f} | {t('Edu Dept')}: {view_party.edu_ability*10:.0f}")
+    st.write(f"**(Next Year Est. Maint. Cost: -{total_maint:.1f} EV)**")
