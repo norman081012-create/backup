@@ -9,6 +9,26 @@ import i18n
 t = i18n.t
 
 def render_proposal_component(title, plan, game, view_party, cfg):
+    
+    # 渲染合約書 UI
+    st.markdown(f"""
+    <div style="border: 2px solid #555; padding: 20px; border-radius: 5px; background-color: #1E1E1E; margin-bottom: 20px;">
+        <h3 style="text-align: center; color: #E0E0E0;">📜 {t('Reconstruction Contract')}</h3>
+        <hr style="border-color: #555;">
+        <p><b>{t('Client (Regulator)')}:</b> {game.r_role_party.name}</p>
+        <p><b>{t('Contractor (Executive)')}:</b> {game.h_role_party.name}</p>
+        <p><b>Project:</b> {plan.get('proj_name', 'Custom Project')} ({t(plan.get('proj_tier', 'N/A'))} {t('Tier')})</p>
+        <p><b>{t('Required EV Scale')}:</b> {plan.get('bid_cost', 0):.1f} EV</p>
+        <hr style="border-color: #555;">
+        <h4 style="color: #E0E0E0;">Financial Terms</h4>
+        <p><b>{t('Regulator Provision')}:</b> ${plan.get('r_pays', 0):.1f}</p>
+        <p><b>{t('Executive Provision')}:</b> ${plan.get('h_pays', 0):.1f}</p>
+        <p><b>{t('Total Reward Pool')}:</b> ${plan.get('proj_fund', 0):.1f}</p>
+        <hr style="border-color: #555;">
+        <p><b>Judicial Fine Multiplier:</b> {plan.get('fine_mult', 0.3)}x</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown(t("#### 📝 Think Tank Analysis Report"))
     
     c_tog1, c_tog2 = st.columns(2)
@@ -42,10 +62,10 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     eval_decay = cl_decay if use_claimed else tt_decay
     eval_cost = cl_cost if use_claimed else tt_unit_cost
 
-    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan['proj_fund'], plan['bid_cost'], sim_h_party.build_ability, eval_decay, override_unit_cost=eval_cost, r_pays=plan['r_pays'], h_wealth=sim_h_party.wealth)
+    res = formulas.calc_economy(cfg, game.gdp, game.total_budget, plan.get('proj_fund', 0), plan.get('bid_cost', 1), sim_h_party.build_ability, eval_decay, override_unit_cost=eval_cost, r_pays=plan.get('r_pays',0), h_wealth=sim_h_party.wealth)
     
     eval_req_cost = res['req_cost']          
-    eval_r_pays = plan['r_pays']             
+    eval_r_pays = plan.get('r_pays', 0)             
     eval_h_pays = eval_req_cost - eval_r_pays 
 
     h_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if sim_ruling_name == sim_h_party.name else 0))
@@ -78,12 +98,15 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     r_media_pwr = float(ra.get('alloc_med_control', 0.0)) * pr_mult * media_multiplier
     
     avg_edu_stance = (sim_h_party.edu_stance + sim_r_party.edu_stance) / 2.0
+    
+    macro_mult = float(plan.get('proj_macro_mult', 1.0))
+    exec_mult = float(plan.get('proj_exec_mult', 1.0))
 
     shift_preview = formulas.calc_performance_preview(
         cfg, sim_h_party, sim_r_party, sim_ruling_name,
         res['est_gdp'], game.gdp, 
-        cl_decay, game.sanity, game.emotion, plan['bid_cost'], res['c_net_total'],
-        h_media_pwr, r_media_pwr, avg_edu_stance
+        cl_decay, game.sanity, game.emotion, plan.get('bid_cost', 1), res['c_net_total'],
+        h_media_pwr, r_media_pwr, avg_edu_stance, macro_mult, exec_mult
     )
     
     opp_party_name = sim_r_party.name if my_is_h_in_sim else sim_h_party.name
@@ -132,18 +155,3 @@ def render_proposal_component(title, plan, game, view_party, cfg):
     else: light_c, risk_txt_c = "🟢", "Fair Market Value"
 
     st.markdown(f"6. {t('Unit Cost Analysis')}: {light_c} {t(risk_txt_c)} (Claimed: {cl_cost:.2f} / TT Base: {tt_unit_cost:.2f})")
-
-    st.markdown("---")
-    st.markdown(f"#### {title}")
-    conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-    equiv_infra_loss = (game.gdp * (cl_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05))) / conv_rate
-    
-    equiv_str = f"Eqv. to {equiv_infra_loss:.1f} EV Loss"
-    st.write(f"**{t('Claimed Decay')}:** {cl_decay:.3f} **({t(equiv_str)})**")
-    
-    st.write(f"**{t('Total Plan Reward (Max=Budget-Salaries)')}:** {plan['proj_fund']:.1f} | **{t('Plan Total Benefit (Construction Volume)')}:** {plan['bid_cost']:.1f}")
-    
-    if simulate_swap:
-        st.info(f"🔧 **Simulated Executive Pays:** {t('Total Req. Cost')} {eval_req_cost:.1f} ({t('Reg-Pays')}: {eval_r_pays:.1f} | {t('Exec-Pays')}: {eval_h_pays:.1f})")
-    else:
-        st.write(f"**{t('Total Req. Cost')}:** {eval_req_cost:.1f} ({t('Reg-Pays')}: {eval_r_pays:.1f} | {t('Exec-Pays')}: {eval_h_pays:.1f})")
