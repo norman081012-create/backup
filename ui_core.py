@@ -132,10 +132,13 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
 
                 my_role = "Executive" if view_party.name == game.h_role_party.name else "Regulator"
                 opp_role = "Regulator" if my_role == "Executive" else "Executive"
+                
+                my_perf_type = "Proj Perf." if my_role == "Executive" else "Macro Perf."
+                opp_perf_type = "Macro Perf." if my_role == "Executive" else "Proj Perf."
 
                 st.markdown(f"**{t('Total Expected Support')}:**")
-                st.markdown(f"&nbsp;&nbsp;🔹 **{t('Our Side')} ({t(my_role)}):** {t('Perf.')} `{my_perf:+.1f}` | {t('Spin')} `{my_spin:+.1f}`")
-                st.markdown(f"&nbsp;&nbsp;🔸 **{t('Opp. Side')} ({t(opp_role)}):** {t('Perf.')} `{opp_perf:+.1f}` | {t('Spin')} `{opp_spin:+.1f}`")
+                st.markdown(f"&nbsp;&nbsp;🔹 **{t('Our Side')} ({t(my_role)}):** {t(my_perf_type)} `{my_perf:+.1f}` | {t('Spin')} `{my_spin:+.1f}`")
+                st.markdown(f"&nbsp;&nbsp;🔸 **{t('Opp. Side')} ({t(opp_role)}):** {t(opp_perf_type)} `{opp_perf:+.1f}` | {t('Spin')} `{opp_spin:+.1f}`")
                 
                 st.caption(f"🎯 **Center Swing Voter AP:**")
                 st.caption(f"Perf. Piercing: `{perf_ap:.1f}%` | Spin Piercing: `{spin_ap:.1f}%`")
@@ -247,7 +250,7 @@ def get_observed_abilities(viewer, target, game, cfg):
 def render_sidebar_intel_audit(game, view_party, cfg):
     opp = game.party_B if view_party.name == game.party_A.name else game.party_A
     st.markdown("---")
-    st.title("🕵️ Intel on Opponent [對手數值情報]")
+    st.title(f"🕵️ {t('Intel on Opponent')}")
     
     opp_stl = opp.stealth_ability / 10.0
     i_acc_weight = cfg.get('INVESTIGATE_ACCURACY_WEIGHT', 0.8)
@@ -260,24 +263,24 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     obs_abis = get_observed_abilities(view_party, opp, game, cfg)
     
-    st.write(f"{t('Think Tank')}: {obs_abis['predict']*10:.1f}% | {t('Intelligence')}: {obs_abis['investigate']*10:.1f}%")
-    st.write(f"{t('Media Dept')}: {obs_abis['media']*10:.1f}% | {t('Counter-Intel')}: {obs_abis['stealth']*10:.1f}%")
-    st.write(f"{t('Engineering')}: {obs_abis['build']*10:.1f}% | {t('Edu Dept')}: {obs_abis['edu']*10:.1f}%")
+    st.write(f"Think Tank: {obs_abis['predict']*10:.1f}% | Intel: {obs_abis['investigate']*10:.1f}%")
+    st.write(f"Media PR: {obs_abis['media']*10:.1f}% | Stealth: {obs_abis['stealth']*10:.1f}%")
+    st.write(f"Engineering: {obs_abis['build']*10:.1f}% | Education: {obs_abis['edu']*10:.1f}%")
     
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
     
     inflation_rate = max(0.0, (game.gdp - cfg.get('CURRENT_GDP', 5000.0)) / cfg.get('GDP_INFLATION_DIVISOR', 10000.0)) * 100.0
     
-    st.write(f"**Engineering Valuation**: {eval_txt}")
+    st.write(f"**Engineering Valuation**: {t(eval_txt)}")
     st.write(f"*(Est. Unit Cost: `{est_unit_cost:.2f}` )*")
 
     st.markdown("---")
-    st.title("🧾 Internal Audit [內部部門審計]")
+    st.title(f"🧾 {t('Internal Audit')}")
     st.write(f"**Current Inflation:** `{inflation_rate:.1f}%\`")
     total_maint = (view_party.predict_ability + view_party.investigate_ability + view_party.media_ability + view_party.stealth_ability + view_party.build_ability + view_party.edu_ability) * 1.5
     
-    st.write(f"{t('Think Tank')}: {view_party.predict_ability*10:.0f} | {t('Intelligence')}: {view_party.investigate_ability*10:.0f}")
-    st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.0f} | {t('Counter-Intel')}: {view_party.stealth_ability*10:.0f}")
-    st.write(f"{t('Engineering')}: {view_party.build_ability*10:.0f} | {t('Edu Dept')}: {view_party.edu_ability*10:.0f}")
+    st.write(f"Think Tank: {view_party.predict_ability*10:.0f} | Intel: {view_party.investigate_ability*10:.0f}")
+    st.write(f"Media PR: {view_party.media_ability*10:.0f} | Stealth: {view_party.stealth_ability*10:.0f}")
+    st.write(f"Engineering: {view_party.build_ability*10:.0f} | Education: {view_party.edu_ability*10:.0f}")
     st.write(f"**(Next Year Est. Maint. Cost: -{total_maint:.1f} EV)**")
