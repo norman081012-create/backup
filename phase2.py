@@ -17,7 +17,6 @@ def render(game, view_party, opponent_party, cfg):
     d = st.session_state.get('turn_data', {})
     req_cost = float(d.get('req_cost', 0.0))
     bid_cost = float(d.get('bid_cost', 1.0))
-    selected_projects = d.get('selected_projects', [])
     
     if is_h: cw = float(view_party.wealth) + float(d.get('r_pays', 0.0))
     else: cw = float(view_party.wealth) - float(d.get('r_pays', 0.0))
@@ -25,7 +24,6 @@ def render(game, view_party, opponent_party, cfg):
     h_bonus = 1.2 if is_h else 1.0
     r_bonus = 1.2 if not is_h else 1.0
     
-    # 權力重組：Regulator 享有 1.2x Media 與 1.2x Intel。Executive 享有 1.2x Build。
     med_cap = view_party.media_ability * 10.0 * r_bonus
     inv_cap = view_party.investigate_ability * 10.0 * r_bonus
     ci_cap = view_party.stealth_ability * 10.0
@@ -107,7 +105,6 @@ def render(game, view_party, opponent_party, cfg):
         allocations = {}
         
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
-        # 執行方的實際造價享受 1.2x 折扣 (公式內有對應處理，這裡顯示原始 unit_cost 供參考)
         
         if is_h:
             st.markdown(t(f"**{t('Total Real EV Generated')}**"))
@@ -119,9 +116,18 @@ def render(game, view_party, opponent_party, cfg):
             project_ev_cost = c_net + (fake_ev * fake_ev_cost_ratio)
             total_avail_ev = c_net + fake_ev
             
-            st.markdown(f"**{t('Allocate EV to specific projects:')}** (Available: `{total_avail_ev:.1f}` EV)")
-            for p in selected_projects:
-                allocations[p['id']] = st.number_input(f"Alloc -> {p['name']} (Req: {p['ev']:.0f})", min_value=0.0, max_value=float(total_avail_ev), value=float(min(total_avail_ev, p['ev'])), key=f"alloc_{p['id']}")
+            st.markdown(f"**{t('Allocate EV to active projects:')}** (Available: `{total_avail_ev:.1f}` EV)")
+            if not game.active_projects:
+                st.info("No active projects.")
+            else:
+                for p in game.active_projects:
+                    invested = sum(inv['amount'] for inv in p.get('investments', []))
+                    remaining = max(0.0, p['ev'] - invested)
+                    min_req = remaining * 0.2
+                    
+                    label = f"[{p['author'][:1]}] {p['name']} (Rem: {remaining:.1f} | Min Req: {min_req:.1f})"
+                    alloc = st.number_input(label, min_value=0.0, max_value=float(total_avail_ev), value=float(min_req), key=f"alloc_{p['id']}")
+                    allocations[p['id']] = alloc
         else:
             project_ev_cost = 0.0
 
@@ -212,14 +218,22 @@ def render(game, view_party, opponent_party, cfg):
         act_ra = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'alloc_inv_censor': 0, 'alloc_inv_fin': 0, 'invest_wealth': 0})
     else:
         act_ra = my_acts
-        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'fake_ev': 0, 'c_net': float(d.get('bid_cost') or 1.0), 'alloc_ci_hidefin': 0, 'invest_wealth': 0, 'allocations': {p['id']: p['ev'] for p in selected_projects}})
+        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'fake_ev': 0, 'c_net': float(d.get('bid_cost') or 1.0), 'alloc_ci_hidefin': 0, 'invest_wealth': 0, 'allocations': {p['id']: p['ev'] for p in game.active_projects}})
 
     eval_c_net = float(act_ha.get('c_net', 0))
     eval_fake_ev = float(act_ha.get('fake_ev', 0))
     r_pays = float(d.get('r_pays', 0.0))
     proj_fund = float(d.get('proj_fund', 0.0))
     
-    res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(game.current_real_decay), r_pays, cw, eval_c_net, eval_fake_ev, eval_fake_ev, selected_projects, act_ha.get('allocations', {}), 0.0)
+    res_prev = formulas.calc_economy(
+        cfg=cfg, gdp=float(game.gdp), budget_t=float(game.total_budget), 
+        proj_fund=proj_fund, total_bid_cost=bid_cost, 
+        build_abi=float(game.h_role_party.build_ability), real_decay=float(game.current_real_decay), 
+        override_unit_cost=None, r_pays=r_pays, h_wealth=cw, 
+        c_net_override=eval_c_net, fake_ev_spent=eval_fake_ev, fake_ev_safe=eval_fake_ev, 
+        active_projects=game.active_projects, allocations=act_ha.get('allocations', {}), 
+        fake_ev_caught=0.0, current_year=game.year
+    )
     
     h_media_pwr = float(act_ha.get('alloc_med_control', 0.0)) + float(act_ha.get('alloc_med_camp', 0.0))
     r_media_pwr = float(act_ra.get('alloc_med_control', 0.0)) + float(act_ra.get('alloc_med_camp', 0.0))
@@ -227,9 +241,10 @@ def render(game, view_party, opponent_party, cfg):
     avg_edu_stance = (act_ha.get('edu_stance', 0.0) + act_ra.get('edu_stance', 0.0)) / 2.0
 
     shift_preview = formulas.calc_performance_preview(
-        cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
-        game.gdp, float(d.get('claimed_decay', 0.0)), game.sanity, game.emotion, res_prev['completed_projects'],
-        h_media_pwr, r_media_pwr, avg_edu_stance
+        cfg=cfg, hp=game.h_role_party, rp=game.r_role_party, ruling_party_name=game.ruling_party.name,
+        curr_gdp=game.gdp, claimed_decay=float(d.get('claimed_decay', 0.0)), sanity=game.sanity, emotion=game.emotion, 
+        projects=res_prev['completed_projects'], h_spin_pwr=h_media_pwr, r_spin_pwr=r_media_pwr, 
+        avg_edu=avg_edu_stance, real_decay=float(game.current_real_decay), current_year=game.year
     )
     
     h_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
