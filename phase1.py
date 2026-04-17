@@ -37,6 +37,18 @@ def render(game, view_party, cfg):
                 else:
                     fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
                     st.info(f"⚖️ Judicial Fine: **{fine_mult}x**")
+
+            # --- PROJECT SELECTION ---
+            st.markdown(t("### 🗂️ Select Reconstruction Project"))
+            my_projects = view_party.projects
+            def format_proj(p):
+                return f"[{t(p['tier'])}] {p['name']} (EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
+                
+            selected_proj_id = st.selectbox(t("Available Projects"), options=[p['id'] for p in my_projects], format_func=lambda x: format_proj(next(p for p in my_projects if p['id'] == x)))
+            selected_proj = next(p for p in my_projects if p['id'] == selected_proj_id)
+            
+            bid_cost = selected_proj['ev']
+            st.info(f"**{t('Selected:')}** {selected_proj['name']} | **{t('Cost:')}** {bid_cost} EV | **{t('Est. Macro Effect (GDP):')}** {selected_proj['obs_min']:.2f}x ~ {selected_proj['obs_max']:.2f}x")
             
             input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
@@ -83,11 +95,10 @@ def render(game, view_party, cfg):
             max_proj_fund = max(0.0, float(game.total_budget) - total_bonus_deduction)
             
             def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
-            def_bid = float(opp_plan.get('bid_cost', 0.0)) if opp_plan else 0.0
             def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
             
+            st.markdown(f"**{t('Plan Total Benefit (Construction Volume)')}:** {bid_cost} EV")
             proj_fund = st.slider(t("Total Plan Reward (Max=Budget-Salaries)"), 0.0, max_proj_fund, min(def_proj, max_proj_fund), 10.0)
-            bid_cost = st.slider(t("Plan Total Benefit (Construction Volume)"), 0.0, max_proj_fund * 1.5, def_bid, 10.0)
             r_pays = st.slider(t("💰 Reg-Pays"), 0.0, max_proj_fund, def_rpays, 10.0)
             
             req_cost = bid_cost * claimed_cost
@@ -108,7 +119,7 @@ def render(game, view_party, cfg):
             if is_invalid:
                 st.error(warning_msg)
             else:
-                st.markdown(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>{t('Reg-Pays')}: {r_pays:.1f} ({r_pct:.1f}%)</span> / Req. Cost: {req_cost:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>{t('Exec-Pays')}: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", unsafe_allow_html=True)
+                st.markdown(f"<h4><span style='font-size: 1.2em; color: {cfg['PARTY_B_COLOR']}'>{t('Reg-Pays')}: {r_pays:.1f} ({r_pct:.1f}%)</span> / {t('Total Req. Cost')}: {req_cost:.1f} / <span style='font-size: 1.2em; color: {cfg['PARTY_A_COLOR']}'>{t('Exec-Pays')}: {h_pays:.1f} ({h_pct:.1f}%)</span></h4>", unsafe_allow_html=True)
             
             plan_dict = {
                 'proj_fund': proj_fund, 'bid_cost': bid_cost, 
@@ -117,7 +128,13 @@ def render(game, view_party, cfg):
                 'author': active_role, 
                 'author_party': view_party.name, 
                 'req_cost': req_cost,
-                'fine_mult': fine_mult 
+                'fine_mult': fine_mult,
+                'proj_name': selected_proj['name'],
+                'proj_tier': selected_proj['tier'],
+                'proj_exec_mult': selected_proj['exec_mult'],
+                'proj_macro_mult': selected_proj['macro_mult'],
+                'proj_obs_min': selected_proj['obs_min'],
+                'proj_obs_max': selected_proj['obs_max']
             }
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -147,31 +164,30 @@ def render(game, view_party, cfg):
 
             if not is_invalid or opp_plan:
                 st.markdown("---")
-                c_prop1, c_prop2 = st.columns(2)
-                if not is_invalid:
-                    with c_prop1:
-                        ui_proposal.render_proposal_component(t('📜 Current Draft Preview'), plan_dict, game, view_party, cfg)
                 if opp_plan:
-                    with c_prop2:
-                        ui_proposal.render_proposal_component(t('📜 Opponent Draft Ref.'), opp_plan, game, view_party, cfg)
+                    view_toggle = st.radio(t("Toggle Contract View"), [t("My Proposal"), t("Opponent Proposal")], horizontal=True)
+                    plan_to_view = plan_dict if view_toggle == t("My Proposal") else opp_plan
+                    ui_proposal.render_proposal_component(view_toggle, plan_to_view, game, view_party, cfg)
+                elif not is_invalid:
+                    ui_proposal.render_proposal_component(t('My Proposal'), plan_dict, game, view_party, cfg)
 
     elif game.p1_step == 'voting_pick':
         st.markdown(t(f"### 🗳️ Ruling Party Decision ({game.ruling_party.name})"))
         if view_party.name != game.ruling_party.name:
             st.warning(t("⏳ Waiting for ruling party..."))
         else:
-            c_prop1, c_prop2 = st.columns(2)
-            for idx, key in enumerate(['R', 'H']):
-                plan = game.p1_proposals.get(key)
-                col = c_prop1 if key == 'R' else c_prop2
-                with col:
-                    if plan is None:
-                        st.info(t("Waiting for opponent draft..."))
-                        continue
-                    ui_proposal.render_proposal_component(t('⚖️ Regulator Draft') if key=='R' else t('🛡️ Executive Draft'), plan, game, view_party, cfg)
-                    if st.button(t(f"✅ Select this draft"), key=f"pick_{key}", use_container_width=True):
-                        game.p1_selected_plan = plan; game.p1_step = 'voting_confirm'
-                        game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
+            if not game.p1_proposals['H']:
+                st.info(t("Waiting for opponent draft..."))
+            else:
+                view_toggle = st.radio(t("Toggle Contract View"), [t("Regulator Draft"), t("Executive Draft")], horizontal=True)
+                plan_to_view = game.p1_proposals['R'] if view_toggle == t("Regulator Draft") else game.p1_proposals['H']
+                
+                ui_proposal.render_proposal_component(view_toggle, plan_to_view, game, view_party, cfg)
+                
+                st.markdown("---")
+                if st.button(t(f"✅ Select this draft"), use_container_width=True, type="primary"):
+                    game.p1_selected_plan = plan_to_view; game.p1_step = 'voting_confirm'
+                    game.proposing_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A; st.rerun()
 
     elif game.p1_step == 'voting_confirm':
         if view_party.name != game.proposing_party.name: st.warning(t("⏳ Waiting for opponent confirmation..."))
