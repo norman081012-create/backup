@@ -10,8 +10,8 @@ t = i18n.t
 
 def render(game, view_party, opponent_party, cfg):
     is_h = (view_party.name == game.h_role_party.name)
-    h_label = '🛡️ H-System [執行系統]'
-    r_label = '⚖️ R-System [監管系統]'
+    h_label = t('🛡️ Executive')
+    r_label = t('⚖️ Regulator')
     st.subheader(f"🛠️ Phase 2: Execution & Ops - Turn: {view_party.name} ({h_label if is_h else r_label})")
     
     d = st.session_state.get('turn_data', {})
@@ -35,16 +35,16 @@ def render(game, view_party, opponent_party, cfg):
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### 📣 Operations Allocation [資源分配]")
+        st.markdown(t("#### 📣 Operations Allocation"))
         
-        st.write(f"**Intel Div. [情報調查] (Capacity: {inv_cap:.1f} Ops)**")
+        st.write(f"**Intel Div.** (Capacity: {inv_cap:.1f} Ops)")
         col_i1, col_i2, col_i3 = st.columns(3)
         if not is_h:
             w_i_cen = col_i1.number_input("Censorship", min_value=0, max_value=100, value=last_acts.get('w_i_cen', 0), key=f"w_i_cen_{view_party.name}")
         else:
             w_i_cen = 0
             col_i1.write(f"**Censorship**")
-            col_i1.caption("(R-System Only)")
+            col_i1.caption("(Regulator Only)")
             
         w_i_org = col_i2.number_input("Audit Org", min_value=0, max_value=100, value=last_acts.get('w_i_org', 0), key=f"w_i_org_{view_party.name}")
         w_i_fin = col_i3.number_input("Trace Fin", min_value=0, max_value=100, value=last_acts.get('w_i_fin', 0), key=f"w_i_fin_{view_party.name}")
@@ -53,14 +53,14 @@ def render(game, view_party, opponent_party, cfg):
         alloc_inv_audit = inv_cap * (w_i_org / i_tot) if w_i_org else 0
         alloc_inv_fin = inv_cap * (w_i_fin / i_tot) if w_i_fin else 0
         
-        st.write(f"**Stealth & Counter-Intel Div. [反情報與隱蔽] (Capacity: {ci_cap:.1f} Ops)**")
+        st.write(f"**Stealth & Counter-Intel Div.** (Capacity: {ci_cap:.1f} Ops)")
         col_c1, col_c2, col_c3 = st.columns(3)
         if is_h:
             w_c_cen = col_c1.number_input("Anti-Censor", min_value=0, max_value=100, value=last_acts.get('w_c_cen', 0), key=f"w_c_cen_{view_party.name}")
         else:
             w_c_cen = 0
             col_c1.write(f"**Anti-Censor**")
-            col_c1.caption("(H-System Only)")
+            col_c1.caption("(Executive Only)")
             
         w_c_org = col_c2.number_input("Hide Org", min_value=0, max_value=100, value=last_acts.get('w_c_org', 0), key=f"w_c_org_{view_party.name}")
         w_c_fin = col_c3.number_input("Hide Fin", min_value=0, max_value=100, value=last_acts.get('w_c_fin', 0), key=f"w_c_fin_{view_party.name}")
@@ -69,7 +69,7 @@ def render(game, view_party, opponent_party, cfg):
         alloc_ci_hideorg = ci_cap * (w_c_org / c_tot) if w_c_org else 0
         alloc_ci_hidefin = ci_cap * (w_c_fin / c_tot) if w_c_fin else 0
         
-        st.write(f"**PR & Media Div. [黨媒公關] (Capacity: {med_cap:.1f} Power)**")
+        st.write(f"**PR & Media Div.** (Capacity: {med_cap:.1f} Power)")
         col_m1, col_m2, col_m3 = st.columns(3)
         w_m_cam = col_m1.number_input("Campaign", min_value=0, max_value=100, value=last_acts.get('w_m_cam', 0), key=f"w_m_cam_{view_party.name}")
         w_m_inc = col_m2.number_input("Incite", min_value=0, max_value=100, value=last_acts.get('w_m_inc', 0), key=f"w_m_inc_{view_party.name}")
@@ -79,9 +79,9 @@ def render(game, view_party, opponent_party, cfg):
         alloc_med_incite = med_cap * (w_m_inc / m_tot) if w_m_inc else 0
         alloc_med_control = med_cap * (w_m_con / m_tot) if w_m_con else 0
         
-        st.write(f"**Edu. Div. [教育處] (Capacity: {edu_cap:.1f} Power)**")
+        st.write(f"**Edu. Div.** (Capacity: {edu_cap:.1f} Power)")
         old_edu_stance = view_party.edu_stance
-        e_dir = st.radio("Education Shift [教育方針]", ["Maintain", "Shift Left (Rote/Obedience) [填鴨愚民]", "Shift Right (Critical Thinking) [批判思考]"], horizontal=True, key=f"e_dir_{view_party.name}")
+        e_dir = st.radio("Education Shift", ["Maintain", "Shift Left (Rote/Obedience)", "Shift Right (Critical Thinking)"], horizontal=True, key=f"e_dir_{view_party.name}")
         if "Shift Left" in e_dir: edu_shift = -edu_cap * 0.5
         elif "Shift Right" in e_dir: edu_shift = edu_cap * 0.5
         else: edu_shift = 0.0
@@ -89,7 +89,7 @@ def render(game, view_party, opponent_party, cfg):
         st.info(f"Stance: `{old_edu_stance:.1f}` ➔ `{new_edu_stance:.1f}`")
 
     with c2:
-        st.markdown("#### 🔒 Finance & Construction [財政與工程建設 (EV)]")
+        st.markdown(t("#### 🔒 Finance & Construction (EV)"))
         
         fake_ev = 0.0
         c_net = 0.0
@@ -97,16 +97,16 @@ def render(game, view_party, opponent_party, cfg):
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
         
         if is_h:
-            c_net = st.number_input(f"Allocate Real EV to Project (Target: {bid_cost}) [真實 EV 分配]", min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
+            c_net = st.number_input(f"Allocate Real EV to Project (Target: {bid_cost})", min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
             fake_ev_cost_ratio = cfg.get('FAKE_EV_COST_RATIO', 0.2)
-            fake_label = f"Inject Fake EV (Cost Ratio: {fake_ev_cost_ratio}) [注入假 EV]"
+            fake_label = f"Inject Fake EV (Cost Ratio: {fake_ev_cost_ratio})"
             fake_ev = st.number_input(fake_label, min_value=0.0, value=float(last_acts.get('fake_ev', 0.0)), key=f"fake_ev_{view_party.name}")
             
             project_ev_cost = c_net + (fake_ev * fake_ev_cost_ratio)
         else:
             project_ev_cost = 0.0
 
-        st.markdown("##### 🛠️ Upgrade Dept. [升級部門 (Target Level)]")
+        st.markdown(t("##### 🛠️ Upgrade Dept. (Target Level)"))
         st.caption(f"*(Infinite scaling. Max pure upgrade EV per year: `{eng_limit:.1f}`)*")
         
         def render_dept(label, key, obj_val, cap_text_func):
@@ -155,19 +155,19 @@ def render(game, view_party, opponent_party, cfg):
         remaining_wealth = cw - invest_wealth
         
         st.markdown("---")
-        st.markdown(f"**💰 Financial Checkout [財政結算]**")
+        st.markdown(t(f"**💰 Financial Checkout**"))
         st.write(f"- Total EV Cost: `{total_ev_required:.1f}` EV *(Unit Rate: `${unit_cost:.2f}`)*")
         st.write(f"- Total Funds Required: `${invest_wealth:.1f}`")
         
         is_invalid = False
         if remaining_wealth < 0:
-            st.error(f"🚨 **Insufficient Funds [資金不足]**: Estimated remainder `${remaining_wealth:.1f}`. Reduce EV spending!")
+            st.error(t(f"🚨 **Insufficient Funds**: Estimated remainder `${remaining_wealth:.1f}`. Reduce EV spending!"))
             is_invalid = True
         else:
-            st.success(f"✅ **Est. Remaining Funds:** `${cw:.1f}` - `${invest_wealth:.1f}` = **`${remaining_wealth:.1f}`**")
+            st.success(t(f"✅ **Est. Remaining Funds:** `${cw:.1f}` - `${invest_wealth:.1f}` = **`${remaining_wealth:.1f}`**"))
 
         if pure_upgrades > eng_limit:
-            st.error(f"🚨 Upgrade exceeded cap! Max allowed: `{eng_limit:.1f}`. (Current: `{pure_upgrades:.1f}`)")
+            st.error(t(f"🚨 Upgrade exceeded cap! Max allowed: `{eng_limit:.1f}`. (Current: `{pure_upgrades:.1f}`)"))
             is_invalid = True
 
     my_acts = {
@@ -238,7 +238,7 @@ def render(game, view_party, opponent_party, cfg):
     
     ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
     
-    if not is_invalid and st.button("Confirm Actions [確認行動並執行]", use_container_width=True, type="primary"):
+    if not is_invalid and st.button(t("Confirm Actions"), use_container_width=True, type="primary"):
         st.session_state[f"{view_party.name}_acts"] = my_acts
         if f"{opponent_party.name}_acts" not in st.session_state:
             game.proposing_party = opponent_party
