@@ -39,18 +39,15 @@ ZH_DICT = {
     "Unit Cost Analysis": "單位成本分析",
     "Claimed Decay": "宣告衰退率",
     "Total Plan Reward (Max=Budget-Salaries)": "專案總獎金 (上限=預算扣除薪資)",
-    "Plan Total Benefit (Construction Volume)": "專案總效益 (建設規模/產值)",
-    "Total Req. Cost": "專案總需成本",
     "Reg-Pays": "監管方墊付款",
     "Exec-Pays": "執行方自籌款",
     
     "Executive": "執行方 (Executive)",
     "Regulator": "監管方 (Regulator)",
     "Perf.": "政績",
-    "Macro Perf.": "監管政績",
-    "Proj Perf.": "執行政績",
-    "Regulator Perf.": "監管政績",
-    "Executive Perf.": "執行政績",
+    "Ruling Perf.": "當權政績",
+    "Exec Perf.": "執行政績",
+    "Prop Perf.": "提案政績",
     "Spin": "公關",
     
     "Party Overview": "政黨狀態總覽",
@@ -72,10 +69,9 @@ ZH_DICT = {
     "❌ Reject & Renegotiate": "❌ 拒絕並重新談判",
     "✅ Accept Ultimatum": "✅ 接受最後通牒",
     
-    "🗂️ Select Reconstruction Project": "🗂️ 選擇重建建案",
+    "🗂️ Select Reconstruction Project(s)": "🗂️ 選擇重建建案 (可複選)",
     "Available Projects": "可用建案清單",
-    "Selected:": "已選擇:",
-    "Cost:": "成本:",
+    "Selected Total EV:": "已選總建設規模 (EV):",
     "Est. Macro Effect (GDP):": "預估監管政績乘數 (GDP):",
     "Toggle Contract View": "一鍵切換合約視角",
     "My Proposal": "我方提案",
@@ -86,24 +82,25 @@ ZH_DICT = {
     "Reconstruction Contract": "重建合約書",
     "Client (Regulator)": "委託方 (Regulator)",
     "Contractor (Executive)": "乙方 (Executive)",
-    "Required EV Scale": "要求建設規模 (EV)",
+    "Required Total EV": "總要求建設規模 (EV)",
     "Regulator Provision": "監管方墊付額 (Reg-Pays)",
     "Executive Provision": "執行方自籌額 (Exec-Pays)",
     "Total Reward Pool": "專案總獎金",
     "Tier": "階級",
-    "Low": "低",
-    "Med": "中",
-    "High": "高",
+    "Low": "低階",
+    "Med": "中階",
+    "High": "高階",
     
     "Phase 2: Execution & Ops - Turn:": "第二階段：資源分配與執行 - 輪到：",
     "Operations Allocation": "資源與行動分配",
     "Intel Div.": "情報調查處",
     "Stealth & Counter-Intel Div.": "反情報與隱蔽處",
     "PR & Media Div.": "黨媒公關處",
-    "Edu. Div.": "教育處",
+    "Edu Shift": "洗腦教育方針",
     "Finance & Construction (EV)": "財政與工程建設 (EV)",
-    "Allocate Real EV to Project": "分配真實 EV 至專案",
+    "Total Real EV Generated": "生成真實 EV 總量",
     "Inject Fake EV (Cost Ratio:": "注入假 EV (豆腐渣工程) 成本比:",
+    "Allocate EV to specific projects:": "將可用 EV 分配至具體建案:",
     "Upgrade Dept. (Target Level)": "升級部門 (目標等級)",
     "Financial Checkout": "財務結算",
     "Confirm Actions": "確認行動並執行",
@@ -123,14 +120,10 @@ ZH_DICT = {
 def t(text):
     if not isinstance(text, str): return text
     lang = st.session_state.get('lang', 'EN')
-    if lang == 'EN':
-        return text
+    if lang == 'EN': return text
 
-    if text in ZH_DICT: 
-        return ZH_DICT[text]
-    
+    if text in ZH_DICT: return ZH_DICT[text]
     for en_key, zh_val in ZH_DICT.items():
         if en_key in text and len(en_key) > 4:
             text = text.replace(en_key, zh_val)
-            
     return text
