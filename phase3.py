@@ -134,15 +134,37 @@ def render(game, cfg):
             
         if censor_diff > 0: game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
         
-        p_ruling, p_exec, p_prop, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'], float(game.current_real_decay), game.year)
+        p_ruling, _, _, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'], float(game.current_real_decay), game.year)
         
-        r_p_a = p_ruling if game.ruling_party.name == game.party_A.name else 0
-        r_p_b = p_ruling if game.ruling_party.name == game.party_B.name else 0
-        e_p_a = p_exec if hp.name == game.party_A.name else 0
-        e_p_b = p_exec if hp.name == game.party_B.name else 0
-        pr_p_a = p_prop.get(game.party_A.name, 0.0)
-        pr_p_b = p_prop.get(game.party_B.name, 0.0)
+        # ⚠️ 政績歷史庫結算與折舊 (6年線性)
+        if game.ruling_party.name == game.party_A.name: game.party_A.perf_history['ruling'].append({'year': game.year, 'amount': p_ruling})
+        else: game.party_B.perf_history['ruling'].append({'year': game.year, 'amount': p_ruling})
+
+        inflation_corr = 5000.0 / max(1.0, game.gdp)
+        for p_obj in res_exec['completed_projects']:
+            depreciated_ev = 0.0
+            for inv in p_obj.get('investments', []):
+                age = game.year - inv['year']
+                retention = max(0.1, 1.0 - float(game.current_real_decay)) ** age
+                depreciated_ev += inv['amount'] * retention
+                
+            base_perf = (depreciated_ev * p_obj['exec_mult'] * inflation_corr) / 20.0
+            hp.perf_history['exec'].append({'year': game.year, 'amount': base_perf})
+            
+            author = p_obj.get('author', 'System')
+            for p in [game.party_A, game.party_B]:
+                if p.name == author:
+                    p.perf_history['prop'].append({'year': game.year, 'amount': base_perf})
+
+        # 取出折舊後的總和
+        r_p_a = formulas.get_depreciated_perf(game.party_A, 'ruling', game.year)
+        r_p_b = formulas.get_depreciated_perf(game.party_B, 'ruling', game.year)
+        e_p_a = formulas.get_depreciated_perf(game.party_A, 'exec', game.year)
+        e_p_b = formulas.get_depreciated_perf(game.party_B, 'exec', game.year)
+        pr_p_a = formulas.get_depreciated_perf(game.party_A, 'prop', game.year)
+        pr_p_b = formulas.get_depreciated_perf(game.party_B, 'prop', game.year)
         
+        # 相減淨值機制
         perf_A = r_p_a + e_p_a + pr_p_a
         perf_B = r_p_b + e_p_b + pr_p_b
 
@@ -159,10 +181,11 @@ def render(game, cfg):
         net_spin_A = spin_A - spin_B
         old_boundary = game.boundary_B
         
-        avg_edu = (hp.edu_stance + rp.edu_stance) / 2.0
+        c_pen_a = censor_weight if rp.name == game.party_B.name else 0.0
+        c_pen_b = censor_weight if rp.name == game.party_A.name else 0.0
 
         new_boundary, perf_used, perf_conquered, spin_used, spin_conquered = formulas.run_conquest_split(
-            game.boundary_B, net_perf_A, net_spin_A, game.sanity, game.emotion, avg_edu, 
+            game.boundary_B, net_perf_A, net_spin_A, game.sanity, game.emotion, c_pen_a, c_pen_b,
             getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name
         )
         
@@ -191,7 +214,6 @@ def render(game, cfg):
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
             'new_san': new_sanity, 'new_emo': new_emotion,
             'h_party_name': hp.name, 'r_party_name': rp.name,
-            'p_ruling': p_ruling, 'p_exec': p_exec, 'p_prop': p_prop,
             'r_p_a': r_p_a, 'r_p_b': r_p_b, 'e_p_a': e_p_a, 'e_p_b': e_p_b, 'pr_p_a': pr_p_a, 'pr_p_b': pr_p_b,
             'perf_A': perf_A, 'perf_B': perf_B, 'net_perf_A': net_perf_A,
             'spin_A': spin_A, 'spin_B': spin_B, 'net_spin_A': net_spin_A,
@@ -209,7 +231,7 @@ def render(game, cfg):
             'fine_value': fine_value,
             'hp_penalty': hp_wealth_penalty,
             'fake_ev_caught': fake_ev_caught,
-            'fake_ev_attempted': res_exec['total_fake_spent'],
+            'fake_ev_attempted': res_exec.get('total_fake_spent', 0.0),
             'chunk_size': chunk_size,
             'fine_mult': fine_mult,
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
@@ -217,7 +239,7 @@ def render(game, cfg):
             'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0)),
             'completed_projects': res_exec['completed_projects'], 'failed_projects': res_exec['failed_projects'],
             'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt,
-            'cost_real_ev': res_exec['cost_real_ev'], 'cost_fake_ev': res_exec['cost_fake_ev']
+            'cost_real_ev': res_exec.get('cost_real_ev', 0.0), 'cost_fake_ev': res_exec.get('cost_fake_ev', 0.0)
         }
         
         game.gdp = res_exec['est_gdp']
@@ -256,9 +278,9 @@ def render(game, cfg):
         else:
             st.success(t(f"**[Clean Gov] Zero Fake EV!**\n\nInvestigators confirm all projects are 100% genuine."))
             
-    if rep['completed_projects']:
+    if rep.get('completed_projects'):
         st.info(f"🎉 **{t('Completed')} Projects:** " + ", ".join([p['name'] for p in rep['completed_projects']]))
-    if rep['failed_projects']:
+    if rep.get('failed_projects'):
         st.warning(f"💀 **{t('Failed')} Projects:** " + ", ".join([p['name'] for p in rep['failed_projects']]))
             
     st.markdown("---")
@@ -271,35 +293,38 @@ def render(game, cfg):
         st.write(f"- **{t('Voter Emotion')}:** `{rep['old_emo']:.1f}` ➔ **`{game.emotion:.1f}`** ({game.emotion - rep['old_emo']:+.1f})")
         
         st.markdown(t(f"### 🏛️ Financial Summary"))
-        if rep['fine_value'] > 0:
+        if rep.get('fine_value', 0) > 0:
             st.success(t(f"Treasury Income: +`${rep['fine_value']:.1f}`"))
         
         with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
             st.write(f"**Project Net Profit:** `${rep['h_project_net']:.1f}`")
-            st.caption(f"*(Reward `${rep['payout_h']:.1f}` - Real Cost `${rep['cost_real_ev']:.1f}` - Fake Cost `${rep['cost_fake_ev']:.1f}`)*")
-            st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
-            if rep['caught_fake_ev'] > 0:
-                st.write(f"- Confiscated: `-${rep['caught_value']:.1f}`")
-                st.write(f"- Penalty Fine: `-${rep['fine_value']:.1f}`")
-            st.write(f"- Upgrade Costs: `-${rep['h_invest_wealth']:.1f}`")
-            net_cash = rep['h_project_net'] + rep['h_base'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
+            # 🛡️ 防呆：使用 .get() 確保向下相容舊存檔
+            cost_real_ev = rep.get('cost_real_ev', 0.0)
+            cost_fake_ev = rep.get('cost_fake_ev', 0.0)
+            st.caption(f"*(Reward `${rep.get('payout_h', 0.0):.1f}` - Real Cost `${cost_real_ev:.1f}` - Fake Cost `${cost_fake_ev:.1f}`)*")
+            st.write(f"+ Base Income: `${rep.get('h_base', 0.0):.1f}`")
+            if rep.get('caught_fake_ev', 0) > 0:
+                st.write(f"- Confiscated: `-${rep.get('caught_value', 0.0):.1f}`")
+                st.write(f"- Penalty Fine: `-${rep.get('fine_value', 0.0):.1f}`")
+            st.write(f"- Upgrade Costs: `-${rep.get('h_invest_wealth', 0.0):.1f}`")
+            net_cash = rep.get('h_project_net', 0.0) + rep.get('h_base', 0.0) - rep.get('hp_penalty', 0.0) - rep.get('h_invest_wealth', 0.0)
             st.write(f"**Final Cash Flow:** `${net_cash:.1f}`")
 
         with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
-            st.write(f"**Base Income:** `${rep['r_base']:.1f}`")
-            st.write(f"- Paid Executive: `-${rep['r_pays']:.1f}`")
-            st.write(f"+ Unspent Recovery: `${rep['unspent_proj']:.1f}`")
-            st.write(f"+ Budget Surplus: `${rep['base_r_surplus']:.1f}`")
-            if rep['r_extra'] > 0: 
-                st.write(f"+ Whistleblower Bonus: `${rep['r_extra']:.1f}`")
-            st.write(f"- Upgrade Costs: `-${rep['r_invest_wealth']:.1f}`")
-            net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_invest_wealth']
+            st.write(f"**Base Income:** `${rep.get('r_base', 0.0):.1f}`")
+            st.write(f"- Paid Executive: `-${rep.get('r_pays', 0.0):.1f}`")
+            st.write(f"+ Unspent Recovery: `${rep.get('unspent_proj', 0.0):.1f}`")
+            st.write(f"+ Budget Surplus: `${rep.get('base_r_surplus', 0.0):.1f}`")
+            if rep.get('r_extra', 0) > 0: 
+                st.write(f"+ Whistleblower Bonus: `${rep.get('r_extra', 0.0):.1f}`")
+            st.write(f"- Upgrade Costs: `-${rep.get('r_invest_wealth', 0.0):.1f}`")
+            net_cash_r = rep.get('r_base', 0.0) - rep.get('r_pays', 0.0) + rep.get('unspent_proj', 0.0) + rep.get('base_r_surplus', 0.0) + rep.get('r_extra', 0.0) - rep.get('r_invest_wealth', 0.0)
             st.write(f"**Final Cash Flow:** `${net_cash_r:.1f}`")
 
     with c2:
         st.markdown(t(f"### 🗳️ Electoral Shift"))
         
-        net_ammo = rep['net_perf_A'] + rep['net_spin_A']
+        net_ammo = rep.get('net_perf_A', 0) + rep.get('net_spin_A', 0)
         atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
         def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
         
@@ -311,25 +336,34 @@ def render(game, cfg):
         is_god_mode = st.session_state.get('god_mode', False)
         with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=is_god_mode):
             if is_god_mode:
-                st.write(f"*(Global Modifiers: Sanity `{rep['old_san']:.0f}`, Emotion `{rep['old_emo']:.0f}`)*")
+                san_acc = formulas.get_sanity_accuracy(rep.get('old_san', 50), rep.get('old_emo', 30))
+                st.write(f"*(Global Modifiers: Sanity `{rep.get('old_san', 50):.0f}`, Emotion `{rep.get('old_emo', 30):.0f}`)*")
+                st.caption(f"*💡 Sanity Accuracy (Anti-Spin Armor): `{san_acc*100:.1f}%`*")
                 
-                st.markdown(f"**{t('Ruling Perf.')}**: {game.party_A.name} `{rep['r_p_a']:+.1f}` | {game.party_B.name} `{rep['r_p_b']:+.1f}` ➔ **Net: `{rep['r_p_a'] - rep['r_p_b']:+.1f}`**")
-                st.markdown(f"**{t('Exec Perf.')}**: {game.party_A.name} `{rep['e_p_a']:+.1f}` | {game.party_B.name} `{rep['e_p_b']:+.1f}` ➔ **Net: `{rep['e_p_a'] - rep['e_p_b']:+.1f}`**")
-                st.markdown(f"**{t('Prop Perf.')}**: {game.party_A.name} `{rep['pr_p_a']:+.1f}` | {game.party_B.name} `{rep['pr_p_b']:+.1f}` ➔ **Net: `{rep['pr_p_a'] - rep['pr_p_b']:+.1f}`**")
+                r_p_a = rep.get('r_p_a', 0.0)
+                r_p_b = rep.get('r_p_b', 0.0)
+                e_p_a = rep.get('e_p_a', 0.0)
+                e_p_b = rep.get('e_p_b', 0.0)
+                pr_p_a = rep.get('pr_p_a', 0.0)
+                pr_p_b = rep.get('pr_p_b', 0.0)
                 
-                if abs(rep['net_perf_A']) >= 1.0:
+                st.markdown(f"**{t('Ruling Perf.')}**: {game.party_A.name} `{r_p_a:+.1f}` | {game.party_B.name} `{r_p_b:+.1f}` ➔ **Net: `{r_p_a - r_p_b:+.1f}`**")
+                st.markdown(f"**{t('Exec Perf.')}**: {game.party_A.name} `{e_p_a:+.1f}` | {game.party_B.name} `{e_p_b:+.1f}` ➔ **Net: `{e_p_a - e_p_b:+.1f}`**")
+                st.markdown(f"**{t('Prop Perf.')}**: {game.party_A.name} `{pr_p_a:+.1f}` | {game.party_B.name} `{pr_p_b:+.1f}` ➔ **Net: `{pr_p_a - pr_p_b:+.1f}`**")
+                
+                if abs(rep.get('net_perf_A', 0)) >= 1.0:
                     atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
-                    perf_blocked = rep['perf_used'] - rep['perf_conquered']
-                    st.success(f"⚡ **Fact Penetration**: {atk_p} exerted `{rep['perf_used']:.1f}` impact. Ignorant/Emotional armor blocked `{perf_blocked:.1f}`, conquering **{rep['perf_conquered']}** blocks!")
+                    perf_blocked = rep.get('perf_used', 0) - rep.get('perf_conquered', 0)
+                    st.success(f"⚡ **Fact Penetration**: {atk_p} exerted `{rep.get('perf_used', 0):.1f}` impact. Ignorant/Emotional armor blocked `{perf_blocked:.1f}`, conquering **{rep.get('perf_conquered', 0)}** blocks!")
                     
-                st.markdown(f"**Media & Spin Offense**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
-                if abs(rep['net_spin_A']) >= 1.0:
+                st.markdown(f"**Media & Spin Offense**: {game.party_A.name} `{rep.get('spin_A', 0):.1f}` | {game.party_B.name} `{rep.get('spin_B', 0):.1f}`")
+                if abs(rep.get('net_spin_A', 0)) >= 1.0:
                     atk_s = game.party_A.name if rep['net_spin_A'] > 0 else game.party_B.name
-                    blocked = rep['spin_used'] - rep['spin_conquered']
-                    st.warning(f"🛡️ **Brainwash Defense**: Rational sanity armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocks.")
+                    blocked = rep.get('spin_used', 0) - rep.get('spin_conquered', 0)
+                    st.warning(f"🛡️ **Brainwash Defense**: Rational sanity armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep.get('spin_conquered', 0)}** blocks.")
 
-                old_sup_A = rep['old_boundary'] * 0.5
-                new_sup_A = rep['new_boundary'] * 0.5
+                old_sup_A = rep.get('old_boundary', 100) * 0.5
+                new_sup_A = rep.get('new_boundary', 100) * 0.5
                 old_sup_B = 100.0 - old_sup_A
                 new_sup_B = 100.0 - new_sup_A
                 
@@ -356,8 +390,9 @@ def render(game, cfg):
             
             game.proposing_party = game.r_role_party
             
-            hp_ep = rep['ha_t_opt'] if hp.name == game.party_A.name else rep['ra_t_opt']
-            rp_ep = rep['ha_t_opt'] if rp.name == game.party_A.name else rep['ra_t_opt']
+            # 從剛剛存好的 rep 裡面讀取雙方智庫優化的值來生成新專案
+            hp_ep = rep.get('ha_t_opt', 0.0) if hp.name == game.party_A.name else rep.get('ra_t_opt', 0.0)
+            rp_ep = rep.get('ha_t_opt', 0.0) if rp.name == game.party_A.name else rep.get('ra_t_opt', 0.0)
             
             hp.projects = engine.generate_projects(hp_ep, hp.name)
             rp.projects = engine.generate_projects(rp_ep, rp.name)
