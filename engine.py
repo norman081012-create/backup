@@ -6,39 +6,37 @@ import streamlit as st
 import i18n
 t = i18n.t
 
-PROJECT_NAMES = ["Phoenix", "Citadel", "Aegis", "Titan", "Neon", "Echo", "Apex", "Nova", "Vanguard", "Zenith", "Helios", "Omega", "Genesis", "Valkyrie", "Atlas"]
+PROJECT_NAMES = ["Phoenix", "Citadel", "Aegis", "Titan", "Neon", "Echo", "Apex", "Nova", "Vanguard", "Zenith", "Helios", "Omega", "Genesis", "Valkyrie", "Atlas", "Apollo", "Orion", "Hyperion"]
 
-def generate_projects(tt_ep):
+def generate_projects(tt_ep, author_name):
     projects = []
-    # 智庫 EP 提供的被動優化加成 (最高 +0.2 監管倍率)
     ep_buff = (tt_ep / 10.0) * 0.2  
     
     tiers = [
         ('Low', 5, (50, 150), 0.8, (0.3, 1.3)),
-        ('Medium', 3, (150, 400), 1.0, (0.5, 1.5)),
+        ('Med', 3, (150, 400), 1.0, (0.5, 1.5)),
         ('High', 1, (400, 800), 1.2, (0.6, 1.8))
     ]
     
     for tier, count, ev_range, e_mult, m_range in tiers:
         for _ in range(count):
             ev = random.randint(*ev_range)
-            # 真實的監管/GDP 倍率
             m_mult = random.uniform(*m_range) + ep_buff
             
-            # 智庫 EP 決定的觀測誤差範圍 (EP 越高，誤差越小)
             error_margin = max(0.0, (10.0 - tt_ep) * 0.05) 
             obs_m_min = max(0.0, m_mult - random.uniform(0, error_margin))
             obs_m_max = m_mult + random.uniform(0, error_margin)
 
             projects.append({
-                'id': f"{tier[0]}-{random.randint(1000,9999)}",
+                'id': f"{author_name[:1]}-{tier[0]}-{random.randint(1000,9999)}",
                 'name': f"Project {random.choice(PROJECT_NAMES)}",
                 'tier': tier,
                 'ev': float(ev),
                 'exec_mult': e_mult,
                 'macro_mult': m_mult,
                 'obs_min': obs_m_min,
-                'obs_max': obs_m_max
+                'obs_max': obs_m_max,
+                'author': author_name
             })
     return projects
 
@@ -54,7 +52,6 @@ class Party:
         self.media_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.predict_ability = cfg.get('ABILITY_DEFAULT', 3.0)
         self.stealth_ability = cfg.get('ABILITY_DEFAULT', 3.0)
-        self.edu_ability = cfg.get('EDU_ABILITY_DEFAULT', 3.0)
         self.edu_stance = 0.0 
         
         self.current_forecast = 0.0
@@ -107,8 +104,8 @@ class GameEngine:
             'R_Party': self.r_role_party.name,
             'A_Edu': float(self.party_A.edu_stance),
             'B_Edu': float(self.party_B.edu_stance),
-            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability + self.party_A.edu_ability)/6,
-            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability + self.party_B.edu_ability)/6
+            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
+            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
         })
         self.swap_triggered_this_year = False
 
