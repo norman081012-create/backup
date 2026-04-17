@@ -118,27 +118,26 @@ def render(game, view_party, opponent_party, cfg):
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
         
         if is_h:
-            c_net = st.number_input(t("Total Real EV Generated"), min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
             fake_ev_cost_ratio = cfg.get('FAKE_EV_COST_RATIO', 0.2)
             fake_label = f"{t('Inject Fake EV (Cost Ratio:')} {fake_ev_cost_ratio})"
             fake_ev = st.number_input(fake_label, min_value=0.0, value=float(last_acts.get('fake_ev', 0.0)), key=f"fake_ev_{view_party.name}")
             
-            project_ev_cost = c_net + (fake_ev * fake_ev_cost_ratio)
-            total_avail_ev = c_net + fake_ev
-            
-            st.markdown(f"**{t('Allocate EV to active projects:')}** (Available: `{total_avail_ev:.1f}` EV)")
+            st.markdown(f"**{t('Allocate EV to active projects:')}**")
             if not game.active_projects:
                 st.info("No active projects.")
             else:
                 for p in game.active_projects:
-                    invested = sum(inv['amount'] for inv in p.get('investments', []))
+                    invested = sum(inv.get('real', inv['amount']) + inv.get('fake', 0) for inv in p.get('investments', []))
                     remaining = max(0.0, p['ev'] - invested)
                     min_req = remaining * 0.2
-                    default_alloc = float(min(min_req, total_avail_ev))
+                    default_alloc = float(min(min_req, remaining))
                     
                     label = f"[{p['author'][:1]}] {p['name']} (Rem: {remaining:.1f} | Min Req: {min_req:.1f})"
-                    alloc = st.number_input(label, min_value=0.0, max_value=float(total_avail_ev), value=default_alloc, key=f"alloc_{p['id']}")
+                    alloc = st.number_input(label, min_value=0.0, value=default_alloc, key=f"alloc_{p['id']}")
                     allocations[p['id']] = alloc
+                    c_net += alloc
+            
+            project_ev_cost = c_net + (fake_ev * fake_ev_cost_ratio)
         else:
             project_ev_cost = 0.0
 
@@ -204,10 +203,6 @@ def render(game, view_party, opponent_party, cfg):
 
         if pure_upgrades > eng_limit:
             st.error(t(f"🚨 Upgrade exceeded cap! Max allowed: `{eng_limit:.1f}`. (Current: `{pure_upgrades:.1f}`)"))
-            is_invalid = True
-            
-        if is_h and sum(allocations.values()) > total_avail_ev + 0.1:
-            st.error(t(f"🚨 Over-allocated EV! You allocated {sum(allocations.values()):.1f} but only have {total_avail_ev:.1f}."))
             is_invalid = True
 
     my_acts = {
