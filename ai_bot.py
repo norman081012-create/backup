@@ -16,21 +16,19 @@ def take_turn(game, cfg):
             max_proj = max(10.0, float(game.total_budget) - total_bonus)
             unit_cost = formulas.calc_unit_cost(cfg, game.gdp, ai_party.build_ability, ai_party.current_forecast)
 
-            # 📌 AI 自動從生成的建案池中挑選
+            # AI 自動從生成的建案池中挑選
             my_projects = ai_party.projects
             if is_h:
-                # 執行方傾向挑選 EV 較大、有賺頭的案子 (中/高階)
-                selected_proj = sorted(my_projects, key=lambda x: x['ev'], reverse=True)[0]
+                selected_projects = sorted(my_projects, key=lambda x: x['ev'], reverse=True)[:2]
                 proj_fund = max_proj * random.uniform(0.7, 0.9) 
-                bid_cost = selected_proj['ev']
+                bid_cost = sum(p['ev'] for p in selected_projects)
                 req_cost = bid_cost * unit_cost
                 r_pays = min(req_cost * random.uniform(0.2, 0.4), max_proj)
                 fine_mult = 0.3 
             else:
-                # 監管方傾向挑選 EV 較小、容易壓榨的案子 (低階)
-                selected_proj = sorted(my_projects, key=lambda x: x['ev'])[0]
+                selected_projects = sorted(my_projects, key=lambda x: x['ev'])[:3]
                 proj_fund = max_proj * random.uniform(0.2, 0.4) 
-                bid_cost = selected_proj['ev']
+                bid_cost = sum(p['ev'] for p in selected_projects)
                 req_cost = bid_cost * unit_cost
                 r_pays = 0.0 
                 fine_mult = random.uniform(0.8, 1.5) 
@@ -41,12 +39,7 @@ def take_turn(game, cfg):
                 'claimed_decay': ai_party.current_forecast, 'claimed_cost': unit_cost,
                 'author': active_role, 'author_party': ai_party.name,
                 'req_cost': req_cost, 'fine_mult': fine_mult,
-                'proj_name': selected_proj['name'],
-                'proj_tier': selected_proj['tier'],
-                'proj_exec_mult': selected_proj['exec_mult'],
-                'proj_macro_mult': selected_proj['macro_mult'],
-                'proj_obs_min': selected_proj['obs_min'],
-                'proj_obs_max': selected_proj['obs_max']
+                'selected_projects': selected_projects
             }
 
             if game.p1_step == 'ultimatum_draft_r':
@@ -84,27 +77,28 @@ def take_turn(game, cfg):
     elif game.phase == 2:
         d = st.session_state.get('turn_data', {})
         bid_cost = float(d.get('bid_cost', 1.0))
+        selected_projects = d.get('selected_projects', [])
         
         inv_cap = ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0)
         ci_cap = ai_party.stealth_ability * 10
-        med_cap = ai_party.media_ability * 10 * (1.2 if is_h else 1.0)
+        med_cap = ai_party.media_ability * 10 * (1.2 if not is_h else 1.0)
         
         my_acts = {
             'w_i_cen': 0, 'w_i_org': 0, 'w_i_fin': 0,
             'alloc_inv_censor': 0, 'alloc_inv_audit': 0, 'alloc_inv_fin': 0,
             'w_c_cen': 0, 'w_c_org': 0, 'w_c_fin': 0,
             'alloc_ci_anticen': 0, 'alloc_ci_hideorg': 0, 'alloc_ci_hidefin': 0,
-            'w_m_cam': 50, 'w_m_inc': 0, 'w_m_con': 50,
-            'alloc_med_camp': med_cap * 0.5, 'alloc_med_incite': 0, 'alloc_med_control': med_cap * 0.5,
+            'w_m_cam': 50, 'w_m_inc': 0, 'w_m_con': 50, 'w_m_edu': 0,
+            'alloc_med_camp': med_cap * 0.5, 'alloc_med_incite': 0, 'alloc_med_control': med_cap * 0.5, 'alloc_med_edu': 0,
             'edu_stance': ai_party.edu_stance, 'fake_ev': 0.0,
             't_pre': ai_party.predict_ability, 't_inv': ai_party.investigate_ability,
             't_med': ai_party.media_ability, 't_stl': ai_party.stealth_ability,
-            't_bld': ai_party.build_ability, 't_edu': ai_party.edu_ability,
-            'invest_wealth': 0.0, 'c_net': 0.0
+            't_bld': ai_party.build_ability,
+            'invest_wealth': 0.0, 'c_net': 0.0, 'allocations': {}
         }
 
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, ai_party.build_ability, game.current_real_decay)
-        maint_ev = sum([ai_party.predict_ability, ai_party.investigate_ability, ai_party.media_ability, ai_party.stealth_ability, ai_party.build_ability, ai_party.edu_ability]) * 5.0
+        maint_ev = sum([ai_party.predict_ability, ai_party.investigate_ability, ai_party.media_ability, ai_party.stealth_ability, ai_party.build_ability]) * 5.0
         eng_base_ev = ai_party.build_ability * 10 * (1.2 if is_h else 1.0)
 
         if is_h:
@@ -116,10 +110,19 @@ def take_turn(game, cfg):
             
             my_acts['fake_ev'] = fake_ev
             my_acts['c_net'] = c_net
+            
+            # AI 自動依序灌滿合約內的建案
+            allocations = {}
+            avail_ev = c_net + fake_ev
+            for p in selected_projects:
+                alloc_amt = min(avail_ev, p['ev'])
+                allocations[p['id']] = alloc_amt
+                avail_ev -= alloc_amt
+            my_acts['allocations'] = allocations
 
             total_ev_req = c_net + (fake_ev * cfg.get('FAKE_EV_COST_RATIO', 0.2)) + maint_ev
             ev_to_buy = max(0.0, total_ev_req - eng_base_ev)
-            my_acts['invest_wealth'] = ev_to_buy * max(0.01, unit_cost)
+            my_acts['invest_wealth'] = ev_to_buy * max(0.01, unit_cost / 1.2)
         else:
             my_acts['w_i_fin'] = 100
             my_acts['alloc_inv_fin'] = inv_cap
