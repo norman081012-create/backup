@@ -138,7 +138,7 @@ def render(game, view_party, opponent_party, cfg):
                 st.caption(f"💡 *{cap_text_func(new_ui_val)}*")
             return new_raw, ev_cost, maint_new, (ev_cost if is_up else 0.0)
 
-        t_pre, pre_cost, pre_maint, pre_up = render_dept("Think Tank", f"tt_pre_{view_party.name}", view_party.predict_ability, lambda v: f"Generates {v:.1f} EV for prediction.")
+        t_pre, pre_cost, pre_maint, pre_up = render_dept("Think Tank", f"tt_pre_{view_party.name}", view_party.predict_ability, lambda v: f"Generates {v:.1f} EP for prediction.")
         t_inv, inv_cost, inv_maint, inv_up = render_dept("Intel", f"tt_inv_{view_party.name}", view_party.investigate_ability, lambda v: f"Generates {v * r_bonus:.1f} Ops for intel.")
         t_med, med_cost, med_maint, med_up = render_dept("PR Media", f"tt_med_{view_party.name}", view_party.media_ability, lambda v: f"Generates {v * h_bonus:.1f} Pwr for PR/Control.")
         t_stl, stl_cost, stl_maint, stl_up = render_dept("Stealth", f"tt_stl_{view_party.name}", view_party.stealth_ability, lambda v: f"Generates {v:.1f} Ops for stealth.")
@@ -203,11 +203,14 @@ def render(game, view_party, opponent_party, cfg):
     
     avg_edu_stance = (act_ha.get('edu_stance', 0.0) + act_ra.get('edu_stance', 0.0)) / 2.0
 
+    macro_mult = float(d.get('proj_macro_mult', 1.0))
+    exec_mult = float(d.get('proj_exec_mult', 1.0))
+
     shift_preview = formulas.calc_performance_preview(
         cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
         res_prev['est_gdp'], game.gdp, 
         float(d.get('claimed_decay', 0.0)), game.sanity, game.emotion, bid_cost, res_prev['c_net_total'],
-        h_media_pwr, r_media_pwr, avg_edu_stance
+        h_media_pwr, r_media_pwr, avg_edu_stance, macro_mult, exec_mult
     )
     
     h_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
