@@ -16,7 +16,6 @@ def take_turn(game, cfg):
             max_proj = max(10.0, float(game.total_budget) - total_bonus)
             unit_cost = formulas.calc_unit_cost(cfg, game.gdp, ai_party.build_ability, ai_party.current_forecast)
 
-            # AI 自動從生成的建案池中挑選
             my_projects = ai_party.projects
             if is_h:
                 selected_projects = sorted(my_projects, key=lambda x: x['ev'], reverse=True)[:2]
@@ -70,6 +69,11 @@ def take_turn(game, cfg):
                 st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} rejected the draft. Renegotiation started."
             else:
                 st.session_state.turn_data.update(game.p1_selected_plan)
+                
+                for np_proj in game.p1_selected_plan.get('selected_projects', []):
+                    if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
+                        game.active_projects.append(np_proj)
+                        
                 game.phase = 2
                 game.proposing_party = game.ruling_party
                 st.session_state.news_flash = f"🗞️ **[BREAKING]** {ai_party.name} accepted the draft. Bill passed!"
@@ -77,7 +81,6 @@ def take_turn(game, cfg):
     elif game.phase == 2:
         d = st.session_state.get('turn_data', {})
         bid_cost = float(d.get('bid_cost', 1.0))
-        selected_projects = d.get('selected_projects', [])
         
         inv_cap = ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0)
         ci_cap = ai_party.stealth_ability * 10
@@ -111,11 +114,13 @@ def take_turn(game, cfg):
             my_acts['fake_ev'] = fake_ev
             my_acts['c_net'] = c_net
             
-            # AI 自動依序灌滿合約內的建案
             allocations = {}
             avail_ev = c_net + fake_ev
-            for p in selected_projects:
-                alloc_amt = min(avail_ev, p['ev'])
+            for p in game.active_projects:
+                invested = sum(inv['amount'] for inv in p.get('investments', []))
+                remaining = max(0.0, p['ev'] - invested)
+                min_req = remaining * 0.2
+                alloc_amt = min(avail_ev, min_req * 1.5) 
                 allocations[p['id']] = alloc_amt
                 avail_ev -= alloc_amt
             my_acts['allocations'] = allocations
