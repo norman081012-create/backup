@@ -41,7 +41,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     l_gdp = gdp * (real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
     unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, real_decay)
     
-    # Exec效率加成 1.2x -> 實際花費的 EV 會以更低的單位成本計算
     unit_cost_eff = unit_cost / 1.2
     
     req_cost = total_bid_cost * unit_cost
@@ -80,6 +79,8 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     failed_projects = []
     ongoing_projects = []
     total_gdp_addition = 0.0
+    
+    fake_ratio = fake_ev_spent / max(1.0, c_net_real + fake_ev_spent) if (c_net_real + fake_ev_spent) > 0 else 0.0
 
     for p in active_projects:
         p_copy = dict(p)
@@ -90,11 +91,21 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
         alloc = effective_allocs.get(p_copy['id'], 0.0)
         
         if alloc > 0:
-            p_copy['investments'].append({'year': current_year, 'amount': alloc})
+            this_year_fake = alloc * fake_ratio
+            this_year_real = alloc - this_year_fake
+            p_copy['investments'].append({'year': current_year, 'amount': alloc, 'real': this_year_real, 'fake': this_year_fake})
             
         total_invested_now = invested_so_far + alloc
         
         if total_invested_now >= p_copy['ev'] * 0.99:
+            tot_real = sum(inv.get('real', inv['amount']) for inv in p_copy['investments'])
+            tot_fake = sum(inv.get('fake', 0.0) for inv in p_copy['investments'])
+            tot_amt = tot_real + tot_fake
+            quality_ratio = (tot_real + 0.2 * tot_fake) / max(1.0, tot_amt)
+            
+            p_copy['exec_mult'] *= quality_ratio
+            p_copy['macro_mult'] *= quality_ratio
+            
             completed_projects.append(p_copy)
             total_gdp_addition += p_copy['ev'] * p_copy['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
         else:
@@ -118,7 +129,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     }
 
 def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects, real_decay, current_year):
-    # 1. Ruling Perf (Macro / GDP)
     target_gdp_growth_val = sum(p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2) for p in completed_projects)
     delta_A = (target_gdp_growth_val / max(1.0, curr_gdp)) * 100.0
     
@@ -129,7 +139,6 @@ def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects, real_
     p_ruling_raw = (delta_A * 0.05) + (gap * 0.15)
     p_ruling = p_ruling_raw * cfg.get('AMMO_MULTIPLIER', 50.0)
     
-    # 2. Exec & Proposal Perf (w/ Depreciation)
     exec_perf = 0.0
     proposal_perf = {}
     inflation_corr = 5000.0 / max(1.0, curr_gdp)
