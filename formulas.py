@@ -46,15 +46,18 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     req_cost = total_bid_cost * unit_cost
     available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
+    # allocations contains ONLY Real EV
+    c_net_real = sum(allocations.values()) if allocations else 0.0
+    
     if c_net_override is not None:
-        c_net_real = min(float(total_bid_cost), c_net_override)
+        c_net_real = c_net_override
         c_net_total = c_net_real + fake_ev_safe
         act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost_eff
         h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
     else:
-        if req_cost <= available_fund:
-            act_fund = req_cost
-            c_net_real = float(total_bid_cost)
+        req_cost_real = c_net_real * unit_cost_eff
+        if req_cost_real <= available_fund:
+            act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost_eff
             c_net_total = c_net_real + fake_ev_safe
             h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
         else:
@@ -67,20 +70,10 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
-    total_allocated = sum(allocations.values())
-    effective_allocs = {}
-    for pid, amt in allocations.items():
-        if fake_ev_caught > 0 and total_allocated > 0:
-            effective_allocs[pid] = amt - (fake_ev_caught * (amt / total_allocated))
-        else:
-            effective_allocs[pid] = amt
-
     completed_projects = []
     failed_projects = []
     ongoing_projects = []
     total_gdp_addition = 0.0
-    
-    fake_ratio = fake_ev_spent / max(1.0, c_net_real + fake_ev_spent) if (c_net_real + fake_ev_spent) > 0 else 0.0
 
     for p in active_projects:
         p_copy = dict(p)
@@ -88,19 +81,22 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
         
         invested_so_far = sum(inv['amount'] for inv in p_copy['investments'])
         remaining_ev = p_copy['ev'] - invested_so_far
-        alloc = effective_allocs.get(p_copy['id'], 0.0)
         
-        if alloc > 0:
-            this_year_fake = alloc * fake_ratio
-            this_year_real = alloc - this_year_fake
-            p_copy['investments'].append({'year': current_year, 'amount': alloc, 'real': this_year_real, 'fake': this_year_fake})
+        alloc_real = allocations.get(p_copy['id'], 0.0)
+        alloc_fake = fake_ev_safe * (alloc_real / max(1.0, c_net_real)) if c_net_real > 0 else 0.0
+        alloc_total = alloc_real + alloc_fake
+        
+        if alloc_total > 0:
+            p_copy['investments'].append({'year': current_year, 'amount': alloc_total, 'real': alloc_real, 'fake': alloc_fake})
             
-        total_invested_now = invested_so_far + alloc
+        total_invested_now = invested_so_far + alloc_total
         
         if total_invested_now >= p_copy['ev'] * 0.99:
             tot_real = sum(inv.get('real', inv['amount']) for inv in p_copy['investments'])
             tot_fake = sum(inv.get('fake', 0.0) for inv in p_copy['investments'])
             tot_amt = tot_real + tot_fake
+            
+            # ⚠️ 假 EV 轉換率懲罰：真實EV + 0.2*假EV / 總量
             quality_ratio = (tot_real + 0.2 * tot_fake) / max(1.0, tot_amt)
             
             p_copy['exec_mult'] *= quality_ratio
@@ -110,7 +106,7 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
             total_gdp_addition += p_copy['ev'] * p_copy['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
         else:
             min_req = remaining_ev * 0.2
-            if alloc < min_req - 0.01:
+            if alloc_total < min_req - 0.01:
                 failed_projects.append(p_copy)
             else:
                 ongoing_projects.append(p_copy)
