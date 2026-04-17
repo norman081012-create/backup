@@ -18,6 +18,13 @@ import ai_bot
 st.set_page_config(page_title="Symbiocracy Simulator v4.0.0", layout="wide")
 st.components.v1.html("<script>window.parent.document.querySelector('.main').scrollTo(0,0);</script>", height=0)
 
+st.markdown("""
+<style>
+/* 強制將一般文本加亮，確保在黑底模式下清晰可見 */
+p, li, .stMarkdown { color: #FAFAFA !important; }
+</style>
+""", unsafe_allow_html=True)
+
 if 'lang' not in st.session_state: st.session_state.lang = 'EN'
 t = i18n.t
 
@@ -52,11 +59,11 @@ if game.phase == 0:
     
     st.markdown(t("""
     <div style='background-color: #1E1E1E; padding: 20px; border-radius: 10px; border-left: 5px solid #FF4B4B;'>
-    <h3>🌍 Background Lore [背景提要]</h3>
-    <p><b>The year is 2077. World War III has reduced the old global order to ashes.</b></p>
-    <p>From the radioactive ruins, the nation of <b>Star Era</b> emerges as the very first state to adopt a revolutionary governance system: <b>Symbiocracy (共生體制)</b>.</p>
-    <p>To prevent the corruption and autocracy that destroyed the old world, absolute power is strictly divided. The <b>Regulator (Client)</b> controls the national budget and drafts reconstruction contracts, while the <b>Executive (Contractor)</b> physically executes the projects.</p>
-    <p>You must rebuild civilization while surviving the cutthroat political arena. Welcome to the new world.</p>
+    <h3 style='color:#FFFFFF;'>🌍 Background Lore [背景提要]</h3>
+    <p style='color:#FFFFFF;'><b>The year is 2077. World War III has reduced the old global order to ashes.</b></p>
+    <p style='color:#FFFFFF;'>From the radioactive ruins, the nation of <b>Star Era</b> emerges as the very first state to adopt a revolutionary governance system: <b>Symbiocracy (共生體制)</b>.</p>
+    <p style='color:#FFFFFF;'>To prevent the corruption and autocracy that destroyed the old world, absolute power is strictly divided. The <b>Regulator (Client)</b> controls the national budget and drafts reconstruction contracts, while the <b>Executive (Contractor)</b> physically executes the projects.</p>
+    <p style='color:#FFFFFF;'>You must rebuild civilization while surviving the cutthroat political arena. Welcome to the new world.</p>
     </div>
     """), unsafe_allow_html=True)
     
@@ -110,8 +117,7 @@ if 'turn_initialized' not in st.session_state:
         p.latest_poll = None
         p.poll_count = 0 
         
-        # 📌 初始化當年度建案池 (包含智庫 EP 帶來的優化)
-        p.projects = engine.generate_projects(p.predict_ability)
+        p.projects = engine.generate_projects(p.predict_ability, p.name)
     
     if not hasattr(game, 'p1_step'):
         game.p1_step = 'draft_r'
