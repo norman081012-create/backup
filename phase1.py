@@ -30,6 +30,7 @@ def render(game, view_party, cfg):
             
             opp_role = 'H' if active_role == 'R' else 'R'
             opp_plan = game.p1_proposals.get(opp_role)
+            opp = game.party_B if view_party.name == game.party_A.name else game.party_A
             
             with c_fine:
                 if active_role == 'R':
@@ -39,16 +40,17 @@ def render(game, view_party, cfg):
                     st.info(f"⚖️ Judicial Fine: **{fine_mult}x**")
 
             # --- PROJECT SELECTION ---
-            st.markdown(t("### 🗂️ Select Reconstruction Project"))
-            my_projects = view_party.projects
-            def format_proj(p):
-                return f"[{t(p['tier'])}] {p['name']} (EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
-                
-            selected_proj_id = st.selectbox(t("Available Projects"), options=[p['id'] for p in my_projects], format_func=lambda x: format_proj(next(p for p in my_projects if p['id'] == x)))
-            selected_proj = next(p for p in my_projects if p['id'] == selected_proj_id)
+            st.markdown(t("### 🗂️ Select Reconstruction Project(s)"))
+            all_available_projects = view_party.projects + opp.projects
             
-            bid_cost = selected_proj['ev']
-            st.info(f"**{t('Selected:')}** {selected_proj['name']} | **{t('Cost:')}** {bid_cost} EV | **{t('Est. Macro Effect (GDP):')}** {selected_proj['obs_min']:.2f}x ~ {selected_proj['obs_max']:.2f}x")
+            def format_proj(p):
+                return f"[{p['author']}] {p['name']} ({t('Tier')}: {t(p['tier'][0])} | EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
+                
+            selected_proj_ids = st.multiselect(t("Available Projects"), options=[p['id'] for p in all_available_projects], format_func=lambda x: format_proj(next(p for p in all_available_projects if p['id'] == x)))
+            selected_projects = [p for p in all_available_projects if p['id'] in selected_proj_ids]
+            
+            bid_cost = sum(p['ev'] for p in selected_projects)
+            st.info(f"**{t('Selected Total EV:')}** {bid_cost:.1f} EV")
             
             input_decay_key = f"ui_decay_val_{game.year}_{active_role}"
             input_cost_key = f"ui_cost_val_{game.year}_{active_role}"
@@ -76,11 +78,7 @@ def render(game, view_party, cfg):
                 opp_txt1 = f"Opp. Claimed: {opp_claimed_decay:.3f}" if opp_claimed_decay is not None else "Awaiting Opp."
                 
                 current_val = st.session_state.get(widget_decay_key, tt_decay)
-                conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-                gdp_loss = game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))
-                req_infra_to_balance = gdp_loss / conv_rate
-                
-                st.markdown(t(f"**Claimed Decay (Current: {current_val:.3f}) (Eqv. to {req_infra_to_balance:.1f} Infra Loss)**") + f" | {t(opp_txt1)}")
+                st.markdown(t(f"**Claimed Decay (Current: {current_val:.3f})**") + f" | {t(opp_txt1)}")
                 claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
@@ -97,19 +95,18 @@ def render(game, view_party, cfg):
             def_proj = float(opp_plan.get('proj_fund', 0.0)) if opp_plan else 0.0
             def_rpays = float(opp_plan.get('r_pays', 0.0)) if opp_plan else 0.0
             
-            st.markdown(f"**{t('Plan Total Benefit (Construction Volume)')}:** {bid_cost} EV")
             proj_fund = st.slider(t("Total Plan Reward (Max=Budget-Salaries)"), 0.0, max_proj_fund, min(def_proj, max_proj_fund), 10.0)
-            r_pays = st.slider(t("💰 Reg-Pays"), 0.0, max_proj_fund, def_rpays, 10.0)
+            r_pays = st.slider(t("Reg-Pays"), 0.0, max_proj_fund, def_rpays, 10.0)
             
             req_cost = bid_cost * claimed_cost
             h_pays = req_cost - r_pays
             
             is_invalid = False
             warning_msg = ""
-            if proj_fund <= 0:
+            if len(selected_projects) == 0:
+                is_invalid = True; warning_msg = t("⚠️ Error: Must select at least one project!")
+            elif proj_fund <= 0:
                 is_invalid = True; warning_msg = t("⚠️ Error: Reward must be > 0!")
-            elif bid_cost <= 0:
-                is_invalid = True; warning_msg = t("⚠️ Error: Benefit must be > 0!")
             elif r_pays > req_cost:
                 is_invalid = True; warning_msg = t("⚠️ Error: Reg-Pays cannot exceed Total Req. Cost!")
 
@@ -129,12 +126,7 @@ def render(game, view_party, cfg):
                 'author_party': view_party.name, 
                 'req_cost': req_cost,
                 'fine_mult': fine_mult,
-                'proj_name': selected_proj['name'],
-                'proj_tier': selected_proj['tier'],
-                'proj_exec_mult': selected_proj['exec_mult'],
-                'proj_macro_mult': selected_proj['macro_mult'],
-                'proj_obs_min': selected_proj['obs_min'],
-                'proj_obs_max': selected_proj['obs_max']
+                'selected_projects': selected_projects
             }
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -192,7 +184,7 @@ def render(game, view_party, cfg):
     elif game.p1_step == 'voting_confirm':
         if view_party.name != game.proposing_party.name: st.warning(t("⏳ Waiting for opponent confirmation..."))
         else:
-            ui_proposal.render_proposal_component(t('📜 Draft to Confirm'), game.p1_selected_plan, game, view_party, cfg)
+            ui_proposal.render_proposal_component(t('📜 Current Draft Preview'), game.p1_selected_plan, game, view_party, cfg)
             st.markdown("---")
             c1, c2, c3, c4 = st.columns(4)
             if c1.button(t("✅ Agree to Bill"), use_container_width=True, type="primary"):
