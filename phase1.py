@@ -39,7 +39,6 @@ def render(game, view_party, cfg):
                     fine_mult = opp_plan.get('fine_mult', 0.3) if opp_plan else 0.3
                     st.info(f"⚖️ Judicial Fine: **{fine_mult}x**")
 
-            # --- PROJECT SELECTION ---
             st.markdown(t("### 🗂️ Select Reconstruction Project(s)"))
             all_available_projects = view_party.projects + opp.projects
             
@@ -89,8 +88,7 @@ def render(game, view_party, cfg):
                 conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
                 equiv_infra_loss = (game.gdp * (claimed_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
                 
-                st.markdown(t(f"**Claimed Decay (Current: {claimed_decay:.3f})**") + f" | {t(opp_txt1)}")
-                st.caption(f"*({t('Requires')} {equiv_infra_loss:.1f} EV)*")
+                st.markdown(t(f"**Claimed Decay (Current: {claimed_decay:.3f})**") + f" | {t(opp_txt1)} *({t('Requires')} {equiv_infra_loss:.1f} EV)*")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
