@@ -68,17 +68,16 @@ def render_proposal_component(title, plan, game, view_party, cfg):
         eval_decay = cl_decay if use_claimed else tt_decay
         eval_cost = cl_cost if use_claimed else tt_unit_cost
 
-        preview_allocations = {p['id']: p['ev'] for p in selected_projects}
+        # Preview assumption: Executive will fund these projects equally based on bid_cost proportions
+        preview_allocations = {p['id']: {'real': p['ev'], 'fake': 0.0} for p in selected_projects}
         
         res = formulas.calc_economy(
             cfg=cfg, gdp=game.gdp, budget_t=game.total_budget, 
             proj_fund=plan.get('proj_fund', 0), total_bid_cost=plan.get('bid_cost', 1), 
             build_abi=sim_h_party.build_ability, real_decay=eval_decay, 
             override_unit_cost=eval_cost, r_pays=plan.get('r_pays', 0), 
-            h_wealth=sim_h_party.wealth, c_net_override=None, 
-            fake_ev_spent=0.0, fake_ev_safe=0.0, 
-            active_projects=selected_projects, allocations=preview_allocations, 
-            fake_ev_caught=0.0, current_year=game.year
+            h_wealth=sim_h_party.wealth, allocations=preview_allocations, 
+            fake_ev_caught=0.0, current_year=game.year, active_projects=selected_projects
         )
         
         eval_req_cost = res['req_cost']          
