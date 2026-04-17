@@ -136,8 +136,6 @@ def render(game, cfg):
         
         p_ruling, p_exec, p_prop, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'], float(game.current_real_decay), game.year)
         
-        perf_A = 0.0; perf_B = 0.0
-        
         r_p_a = p_ruling if game.ruling_party.name == game.party_A.name else 0
         r_p_b = p_ruling if game.ruling_party.name == game.party_B.name else 0
         e_p_a = p_exec if hp.name == game.party_A.name else 0
@@ -145,6 +143,7 @@ def render(game, cfg):
         pr_p_a = p_prop.get(game.party_A.name, 0.0)
         pr_p_b = p_prop.get(game.party_B.name, 0.0)
         
+        # 相減淨值機制
         perf_A = r_p_a + e_p_a + pr_p_a
         perf_B = r_p_b + e_p_b + pr_p_b
 
@@ -331,7 +330,8 @@ def render(game, cfg):
                 st.markdown(f"#### 📊 **{game.party_A.name} True Support:** `{old_sup_A:.1f}%` ➔ **`{new_sup_A:.1f}%`** ({new_sup_A - old_sup_A:+.1f}%)")
                 st.markdown(f"#### 📊 **{game.party_B.name} True Support:** `{old_sup_B:.1f}%` ➔ **`{new_sup_B:.1f}%`** ({new_sup_B - old_sup_B:+.1f}%)")
         else:
-            st.caption(t("*(True support hidden. Conduct polls to reveal.)*"))
+            with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=False):
+                st.warning(t("*(True support hidden. Conduct polls to reveal.)*"))
 
     st.markdown("---")
     if st.button(t("Next Year"), type="primary", use_container_width=True):
