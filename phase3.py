@@ -20,7 +20,6 @@ def render(game, cfg):
         fine_mult = float(d.get('fine_mult', 0.3)) 
         
         fake_ev = float(ha.get('fake_ev') or 0.0)
-        c_net_h = float(ha.get('c_net', 0))
         allocations = ha.get('allocations', {})
         
         r_inv_fin = float(ra.get('alloc_inv_fin', 0))
@@ -77,9 +76,9 @@ def render(game, cfg):
         confiscated_to_budget = fine_value
         hp_wealth_penalty = (caught_value + fine_value)
         
-        for k in ['t_pre', 't_inv', 't_med', 't_stl', 't_bld', 'edu_stance']:
-            if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ra[k]))
-            if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ha[k]))
+        for k in ['t_pre', 't_inv', 't_med', 't_bld', 'edu_stance']:
+            if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ra[k]))
+            if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ha[k]))
 
         req_cost = float(d.get('req_cost', 0.0))
         proj_fund = float(d.get('proj_fund') or 0.0)
@@ -92,15 +91,13 @@ def render(game, cfg):
         
         actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
         
-        eval_fake_ev_safe = safe_fake_ev
         res_exec = formulas.calc_economy(
             cfg=cfg, gdp=float(game.gdp), budget_t=float(game.total_budget), 
             proj_fund=proj_fund, total_bid_cost=bid_cost, 
             build_abi=float(hp.build_ability), real_decay=float(game.current_real_decay), 
             override_unit_cost=None, r_pays=r_pays, h_wealth=actual_h_wealth_available, 
-            c_net_override=c_net_h, fake_ev_spent=fake_ev, fake_ev_safe=eval_fake_ev_safe, 
-            active_projects=game.active_projects, allocations=allocations, 
-            fake_ev_caught=caught_fake_ev, current_year=game.year
+            allocations=allocations, 
+            fake_ev_caught=caught_fake_ev, current_year=game.year, active_projects=game.active_projects
         )
         
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -184,7 +181,6 @@ def render(game, cfg):
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
         
-        # ⚠️ 將需要存續到明年的參數存進報表
         ha_t_opt = float(ha.get('alloc_tt_opt', 0.0))
         ra_t_opt = float(ra.get('alloc_tt_opt', 0.0))
        
@@ -217,7 +213,7 @@ def render(game, cfg):
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
             'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0)),
             'completed_projects': res_exec['completed_projects'], 'failed_projects': res_exec['failed_projects'],
-            'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt  # 存入智庫優化值
+            'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt 
         }
         
         game.gdp = res_exec['est_gdp']
@@ -307,8 +303,9 @@ def render(game, cfg):
         else:
             st.success(t(f"🔥 **Net Advantage:** `{abs(net_ammo):.1f}`！**{atk_party}** launched an offensive against **{def_party}**!"))
 
-        if st.session_state.get('god_mode'):
-            with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=True):
+        is_god_mode = st.session_state.get('god_mode', False)
+        with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=is_god_mode):
+            if is_god_mode:
                 st.write(f"*(Global Modifiers: Sanity `{rep['old_san']:.0f}`, Emotion `{rep['old_emo']:.0f}`)*")
                 
                 st.markdown(f"**{t('Ruling Perf.')}**: {game.party_A.name} `{rep['r_p_a']:+.1f}` | {game.party_B.name} `{rep['r_p_b']:+.1f}` ➔ **Net: `{rep['r_p_a'] - rep['r_p_b']:+.1f}`**")
@@ -333,8 +330,7 @@ def render(game, cfg):
                 
                 st.markdown(f"#### 📊 **{game.party_A.name} True Support:** `{old_sup_A:.1f}%` ➔ **`{new_sup_A:.1f}%`** ({new_sup_A - old_sup_A:+.1f}%)")
                 st.markdown(f"#### 📊 **{game.party_B.name} True Support:** `{old_sup_B:.1f}%` ➔ **`{new_sup_B:.1f}%`** ({new_sup_B - old_sup_B:+.1f}%)")
-        else:
-            with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=False):
+            else:
                 st.warning(t("*(True support hidden. Conduct polls to reveal.)*"))
 
     st.markdown("---")
@@ -355,7 +351,6 @@ def render(game, cfg):
             
             game.proposing_party = game.r_role_party
             
-            # 從剛剛存好的 rep 裡面讀取雙方智庫優化的值來生成新專案
             hp_ep = rep['ha_t_opt'] if hp.name == game.party_A.name else rep['ra_t_opt']
             rp_ep = rep['ha_t_opt'] if rp.name == game.party_A.name else rep['ra_t_opt']
             
