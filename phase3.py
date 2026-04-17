@@ -4,6 +4,7 @@
 import streamlit as st
 import random
 import formulas
+import engine
 import i18n
 t = i18n.t
 
@@ -92,7 +93,6 @@ def render(game, cfg):
         actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
         
         eval_fake_ev_safe = safe_fake_ev
-        
         res_exec = formulas.calc_economy(
             cfg=cfg, gdp=float(game.gdp), budget_t=float(game.total_budget), 
             proj_fund=proj_fund, total_bid_cost=bid_cost, 
@@ -168,7 +168,6 @@ def render(game, cfg):
             getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name
         )
         
-        # ⚠️ Update the global active projects list by taking only ongoing ones
         game.active_projects = res_exec['ongoing_projects']
         
         game.boundary_B = new_boundary
@@ -353,8 +352,10 @@ def render(game, cfg):
             game.proposing_party = game.r_role_party
             game.last_year_report = None
             
-            for p in [game.party_A, game.party_B]:
-                p.projects = engine.generate_projects(p.predict_ability, p.name)
+            ha_t_opt = float(ha.get('alloc_tt_opt', 0.0))
+            ra_t_opt = float(ra.get('alloc_tt_opt', 0.0))
+            hp.projects = engine.generate_projects(ha_t_opt, hp.name)
+            rp.projects = engine.generate_projects(ra_t_opt, rp.name)
             
             for k in list(st.session_state.keys()):
                 if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
