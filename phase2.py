@@ -17,6 +17,7 @@ def render(game, view_party, opponent_party, cfg):
     d = st.session_state.get('turn_data', {})
     req_cost = float(d.get('req_cost', 0.0))
     bid_cost = float(d.get('bid_cost', 1.0))
+    proj_fund = float(d.get('proj_fund', 0.0))
     
     if is_h: cw = float(view_party.wealth) + float(d.get('r_pays', 0.0))
     else: cw = float(view_party.wealth) - float(d.get('r_pays', 0.0))
@@ -25,8 +26,15 @@ def render(game, view_party, opponent_party, cfg):
     r_bonus = 1.2 if not is_h else 1.0
     
     med_cap = int(view_party.media_ability * 10.0 * r_bonus)
-    inv_cap = int((view_party.investigate_ability + view_party.stealth_ability) * 10.0 * r_bonus) # Combined Intel & Stealth
-    tt_cap = int(view_party.predict_ability * 10.0)
+    inv_cap = int(view_party.investigate_ability * 10.0 * r_bonus)
+    ci_cap = int(view_party.stealth_ability * 10.0)
+    
+    # 執行方 TT 產出 1.2x，監管方維持 1.0x
+    tt_cap = int(view_party.predict_ability * 10.0 * (1.2 if is_h else 1.0))
+    
+    # Intel & Ops 合併容量
+    ops_cap = inv_cap + ci_cap
+    
     eng_base_ev = view_party.build_ability * 10.0 * h_bonus
     eng_limit = 100.0 + (view_party.build_ability * 100.0) * h_bonus
     
@@ -48,19 +56,19 @@ def render(game, view_party, opponent_party, cfg):
         if tt_invalid: st.error(f"Exceeded Think Tank Capacity! ({tt_used}/{tt_cap})")
 
         # 2. Combined Intel & Ops
-        st.write(f"**Intel & Ops Div.** (Capacity: {inv_cap} Ops)")
+        st.write(f"**Intel & Ops Div.** (Capacity: {ops_cap} Ops)")
         col_i1, col_i2, col_i3 = st.columns(3)
         if not is_h:
-            w_i_cen = col_i1.number_input("Censorship", min_value=0, max_value=inv_cap, value=int(last_acts.get('alloc_inv_censor', 0)), key=f"w_i_cen_{view_party.name}")
+            w_i_cen = col_i1.number_input("Censorship", min_value=0, max_value=ops_cap, value=int(last_acts.get('alloc_inv_censor', 0)), key=f"w_i_cen_{view_party.name}")
         else:
-            w_i_cen = col_i1.number_input("Anti-Censor", min_value=0, max_value=inv_cap, value=int(last_acts.get('alloc_ci_anticen', 0)), key=f"w_c_cen_{view_party.name}")
+            w_i_cen = col_i1.number_input("Anti-Censor", min_value=0, max_value=ops_cap, value=int(last_acts.get('alloc_ci_anticen', 0)), key=f"w_c_cen_{view_party.name}")
             
-        w_i_org = col_i2.number_input("Audit Org" if not is_h else "Hide Org", min_value=0, max_value=inv_cap, value=int(last_acts.get('alloc_inv_audit' if not is_h else 'alloc_ci_hideorg', 0)), key=f"w_i_org_{view_party.name}")
-        w_i_fin = col_i3.number_input("Trace Fin" if not is_h else "Hide Fin", min_value=0, max_value=inv_cap, value=int(last_acts.get('alloc_inv_fin' if not is_h else 'alloc_ci_hidefin', 0)), key=f"w_i_fin_{view_party.name}")
+        w_i_org = col_i2.number_input("Audit Org" if not is_h else "Hide Org", min_value=0, max_value=ops_cap, value=int(last_acts.get('alloc_inv_audit' if not is_h else 'alloc_ci_hideorg', 0)), key=f"w_i_org_{view_party.name}")
+        w_i_fin = col_i3.number_input("Trace Fin" if not is_h else "Hide Fin", min_value=0, max_value=ops_cap, value=int(last_acts.get('alloc_inv_fin' if not is_h else 'alloc_ci_hidefin', 0)), key=f"w_i_fin_{view_party.name}")
         
         inv_used = w_i_cen + w_i_org + w_i_fin
-        inv_invalid = inv_used > inv_cap
-        if inv_invalid: st.error(f"Exceeded Intel & Ops Capacity! ({inv_used}/{inv_cap})")
+        inv_invalid = inv_used > ops_cap
+        if inv_invalid: st.error(f"Exceeded Intel & Ops Capacity! ({inv_used}/{ops_cap})")
 
         # 3. Media & PR
         st.write(f"**PR & Media Div.** (Capacity: {med_cap} Power)")
@@ -92,17 +100,16 @@ def render(game, view_party, opponent_party, cfg):
 
     with c2:
         st.markdown(t(f"#### 🔒 Finance & Construction (EV)"))
-        st.caption(f"Max pure upgrade EV per year: {eng_limit:.1f}")
+        st.caption(f"Max real EV produced per year: `{eng_limit:.1f}`")
         
         c_net_total = 0.0
         fake_ev_total = 0.0
         allocations = {}
-        alloc_invalid = False
         
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
         
         if is_h:
-            st.markdown(t(f"**{t('Allocate EV to active projects:')}**"))
+            st.markdown(f"**{t('Allocate EV to active projects:')}**")
             if not game.active_projects:
                 st.info("No active projects.")
             else:
@@ -111,7 +118,14 @@ def render(game, view_party, opponent_party, cfg):
                     remaining = max(0.0, p['ev'] - invested)
                     min_req = remaining * 0.2
                     
-                    st.write(f"**[{p['author'][:1]}] {p['name']}** (Rem: {remaining:.1f} | Min Req: {min_req:.1f})")
+                    # 預估政績與獎金
+                    est_reward = proj_fund * (p['ev'] / max(1.0, bid_cost))
+                    est_my_perf = (p['ev'] * p['exec_mult'] * (5000.0 / game.gdp)) / 20.0
+                    est_opp_perf = p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2) / max(1.0, game.gdp) * 100.0 * 0.05 * 50.0
+                    
+                    st.markdown(f"**[{p['author'][:1]}] {p['name']}** (Rem: {remaining:.1f} | Min Req: {min_req:.1f})")
+                    st.caption(f"🏆 Est. Reward: ${est_reward:.1f} | 📈 Est. Perf (Me: +{est_my_perf:.1f} / Opp: +{est_opp_perf:.1f})")
+                    
                     col_p1, col_p2, col_status = st.columns([2, 2, 1])
                     
                     real_alloc = col_p1.number_input(f"{t('Real EV')}", min_value=0.0, max_value=float(remaining*1.5), value=float(min_req), key=f"real_{p['id']}")
@@ -167,7 +181,7 @@ def render(game, view_party, opponent_party, cfg):
 
             return new_raw, ev_cost, maint_new, (ev_cost if is_up else 0.0)
 
-        t_pre, pre_cost, pre_maint, pre_up = render_dept("Think Tank", f"tt_pre_{view_party.name}", view_party.predict_ability, lambda v: f"Generates {v:.1f} EP for prediction & optimization.")
+        t_pre, pre_cost, pre_maint, pre_up = render_dept("Think Tank", f"tt_pre_{view_party.name}", view_party.predict_ability, lambda v: f"Generates {v * (1.2 if is_h else 1.0):.1f} EP for prediction & optimization.")
         t_inv, inv_cost, inv_maint, inv_up = render_dept("Intel & Ops", f"tt_inv_{view_party.name}", view_party.investigate_ability, lambda v: f"Generates {v * r_bonus:.1f} Ops.")
         t_med, med_cost, med_maint, med_up = render_dept("PR Media", f"tt_med_{view_party.name}", view_party.media_ability, lambda v: f"Generates {v * r_bonus:.1f} Pwr for PR/Control/Edu.")
         t_bld, bld_cost, bld_maint, bld_up = render_dept("Engineering", f"tt_bld_{view_party.name}", view_party.build_ability, lambda v: f"Unlocks {100.0 + (v * 100.0 * h_bonus):.1f} EV upgrade cap.")
