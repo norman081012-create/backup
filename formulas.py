@@ -46,16 +46,13 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     req_cost = total_bid_cost * unit_cost
     available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
-    # allocations structure is now: {proj_id: {'real': amount, 'fake': amount}}
     c_net_real = sum(data.get('real', 0.0) for data in allocations.values())
     total_fake_spent = sum(data.get('fake', 0.0) for data in allocations.values())
     c_net_total = c_net_real + total_fake_spent
     
-    # Calculate how much funding is actually claimed based on completion proportion
     h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
     act_fund = (c_net_real + total_fake_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost_eff
     
-    # If act_fund exceeds available funds, scale down EVERYTHING (Real and Fake)
     scale_down_ratio = 1.0
     if act_fund > available_fund and act_fund > 0:
         scale_down_ratio = available_fund / act_fund
@@ -85,7 +82,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
         alloc_real = alloc_data.get('real', 0.0) * scale_down_ratio
         alloc_fake = alloc_data.get('fake', 0.0) * scale_down_ratio
         
-        # Apply catch penalty to this specific project's fake EV if caught
         total_fake_this_year = sum(d.get('fake', 0.0) * scale_down_ratio for d in allocations.values())
         if fake_ev_caught > 0 and total_fake_this_year > 0:
             caught_ratio = fake_ev_caught / total_fake_this_year
@@ -103,7 +99,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
             tot_fake = sum(inv.get('fake', 0.0) for inv in p_copy['investments'])
             tot_amt = tot_real + tot_fake
             
-            # Fake EV Dilution Penalty
             quality_ratio = (tot_real + 0.2 * tot_fake) / max(1.0, tot_amt)
             
             p_copy['exec_mult'] *= quality_ratio
@@ -112,7 +107,6 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
             completed_projects.append(p_copy)
             total_gdp_addition += p_copy['ev'] * p_copy['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
         else:
-            # Check survival logic (Real + 0.2*Fake >= Min Req)
             min_req = remaining_ev * 0.2
             effective_survival_alloc = alloc_real + (alloc_fake * 0.2)
             
@@ -122,12 +116,18 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
                 ongoing_projects.append(p_copy)
     
     est_gdp = max(0.0, gdp - l_gdp + total_gdp_addition)
-    h_project_profit = payout_h + r_pays - act_fund
+    
+    # 修改：直接回傳獨立的成本，讓 UI 好算
+    cost_real_ev = c_net_real * unit_cost_eff
+    cost_fake_ev = (total_fake_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost_eff
+    
+    h_project_profit = payout_h + r_pays - (cost_real_ev + cost_fake_ev)
     
     return {
         'est_gdp': est_gdp, 'payout_h': payout_h, 'payout_r': payout_r,
         'h_idx': h_idx, 'c_net': c_net_real, 'c_net_total': c_net_total, 'l_gdp': l_gdp, 
         'unit_cost': unit_cost_eff, 'act_fund': act_fund, 
+        'cost_real_ev': cost_real_ev, 'cost_fake_ev': cost_fake_ev,
         'h_project_profit': h_project_profit, 'req_cost': req_cost,
         'completed_projects': completed_projects,
         'failed_projects': failed_projects,
