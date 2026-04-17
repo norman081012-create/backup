@@ -36,7 +36,8 @@ def generate_projects(tt_ep, author_name):
                 'macro_mult': m_mult,
                 'obs_min': obs_m_min,
                 'obs_max': obs_m_max,
-                'author': author_name
+                'author': author_name,
+                'investments': [] # Tracks dicts like {'year': 1, 'amount': 50}
             })
     return projects
 
@@ -93,6 +94,8 @@ class GameEngine:
         
         self.boundary_B = 100 
         self.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
+        
+        self.active_projects = [] # 國家正在進行中的建案池
 
     def record_history(self, is_election):
         self.history.append({
