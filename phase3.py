@@ -134,11 +134,17 @@ def render(game, cfg):
             
         if censor_diff > 0: game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
         
-        p_ruling, _, _, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'], float(game.current_real_decay), game.year)
+        # 接收新增的 p_opp
+        p_ruling, p_opp, _, _, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'], float(game.current_real_decay), game.year)
         
         # ⚠️ 政績歷史庫結算與折舊 (6年線性)
-        if game.ruling_party.name == game.party_A.name: game.party_A.perf_history['ruling'].append({'year': game.year, 'amount': p_ruling})
-        else: game.party_B.perf_history['ruling'].append({'year': game.year, 'amount': p_ruling})
+        ruling_party = game.party_A if game.ruling_party.name == game.party_A.name else game.party_B
+        opp_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
+        
+        if p_ruling > 0:
+            ruling_party.perf_history['ruling'].append({'year': game.year, 'amount': p_ruling})
+        if p_opp > 0:
+            opp_party.perf_history['ruling'].append({'year': game.year, 'amount': p_opp})
 
         inflation_corr = 5000.0 / max(1.0, game.gdp)
         for p_obj in res_exec['completed_projects']:
