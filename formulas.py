@@ -73,19 +73,22 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_de
         'h_project_profit': h_project_profit, 'req_cost': req_cost
     }
 
-def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total):
-    delta_A = ((new_gdp - curr_gdp) / max(1.0, curr_gdp)) * 100.0
+def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total, macro_mult=1.0, exec_mult=1.0):
+    target_gdp_growth = (bid_cost * cfg.get('GDP_CONVERSION_RATE', 0.2)) / max(1.0, curr_gdp) * 100.0
+    
+    # Regulator (Macro) Performance
+    delta_A = target_gdp_growth * macro_mult
     expected_loss_pct = (claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']) * 100.0
     delta_E = -expected_loss_pct
 
     gap = delta_A - delta_E
     p_plan = (delta_A * 0.05) + (gap * 0.15)
 
+    # Executive (Project) Performance
     completion_rate = c_net_total / max(1.0, float(bid_cost))
     delta_C = (completion_rate - 0.5) * 2.0 
     
-    target_gdp_growth = (bid_cost * cfg.get('GDP_CONVERSION_RATE', 0.2)) / max(1.0, curr_gdp) * 100.0
-    p_exec = target_gdp_growth * delta_C * 0.1
+    p_exec = target_gdp_growth * exec_mult * delta_C * 0.1
 
     support_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
     return p_plan * support_mult, p_exec * support_mult, delta_A, delta_E, delta_C
@@ -167,11 +170,9 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
 
     return B, perf_used, perf_conquered, spin_used, spin_conquered
 
-def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net_total, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0):
-    p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total)
+def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net_total, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0, macro_mult=1.0, exec_mult=1.0):
+    p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total, macro_mult, exec_mult)
 
-    # 監管方 (Regulator) 嚴格且唯一地取得大環境/預期政績 (p_plan)
-    # 執行方 (Executive) 嚴格且唯一地取得專案執行表現 (p_exec)
     h_perf = p_exec 
     r_perf = p_plan
 
