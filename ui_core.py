@@ -14,9 +14,18 @@ def sync_party_names(game, cfg):
     game.party_A.name = cfg['PARTY_A_NAME']; game.party_B.name = cfg['PARTY_B_NAME']
 
 def render_global_settings(cfg, game):
-    st.sidebar.title("🎛️ 控制面板")
+    st.sidebar.title(t("🎛️ Control Panel"))
+    
+    # 語言切換按鈕
+    current_lang = st.session_state.get('lang', 'EN')
+    toggle_text = "🌐 切換至繁體中文" if current_lang == 'EN' else "🌐 Switch to English"
+    if st.sidebar.button(toggle_text, use_container_width=True):
+        st.session_state.lang = 'ZH' if current_lang == 'EN' else 'EN'
+        st.rerun()
+        
+    st.sidebar.markdown("---")
 
-    with st.sidebar.expander("📝 即時參數設定", expanded=False):
+    with st.sidebar.expander(t("📝 Live Parameters"), expanded=False):
         trans = config.get_config_translations()
         for key, default_val in config.DEFAULT_CONFIG.items():
             label = trans.get(key, key)
@@ -38,15 +47,15 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
     
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown("### 🌐 National Status [國家總體狀態]")
+        st.markdown(f"### 🌐 {t('National Status')}")
         san_chg = (disp_san - rep['old_san']) if rep else 0
         c_color = "green" if san_chg > 0 else "red" if san_chg < 0 else "gray"
         
         emo_chg = disp_emo - rep['old_emo'] if rep else 0
         e_color = "red" if emo_chg > 0 else "green" if emo_chg < 0 else "gray"
         
-        st.markdown(f"**Sanity [公民素養]:** {config.get_civic_index_text(disp_san)} <span style='color:{c_color}'>*({san_chg:+.1f})*</span> &nbsp;&nbsp;", unsafe_allow_html=True)
-        st.markdown(f"**Emotion [選民情緒]:** {config.get_emotion_text(disp_emo)} <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
+        st.markdown(f"**{t('Civic Literacy')}:** {config.get_civic_index_text(disp_san)} <span style='color:{c_color}'>*({san_chg:+.1f})*</span> &nbsp;&nbsp;", unsafe_allow_html=True)
+        st.markdown(f"**{t('Voter Emotion')}:** {config.get_emotion_text(disp_emo)} <span style='color:{e_color}'>*({emo_chg:+.1f})*</span>", unsafe_allow_html=True)
         
         gdp_base = rep['old_gdp'] if rep else game.gdp
         gdp_diff = disp_gdp - gdp_base
@@ -56,20 +65,20 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
         st.markdown(f"**{label_gdp}:** `{disp_gdp:.1f}` <span style='color:{g_color}'>*({gdp_diff:+.1f}, {gdp_pct:+.2f}%)*</span>", unsafe_allow_html=True)
 
     with c2:
-        st.markdown("### 💰 H-System Funds [執行系統資源池]")
+        st.markdown(f"### 💰 {t('Executive Resources')}")
         if game.year == 1 and not is_preview: st.info("Initial year setup. [首年重組，獎勵暫緩。]")
         else:
             current_h_ratio = (disp_h_fund / disp_budg) * 100 if disp_budg > 0 else 50
             budg_chg = disp_budg - rep['old_budg'] if rep else 0
             b_color = "green" if budg_chg > 0 else "red" if budg_chg < 0 else "gray"
-            st.markdown(f"**Total Budget [國家總預算]:** `{disp_budg:.1f}` <span style='color:{b_color}'>*({budg_chg:+.1f})*</span>", unsafe_allow_html=True)
-            st.markdown(f"**Project Fund [專案獎金]:** `{disp_h_fund:.1f}` *(Ratio: {current_h_ratio:.1f}%)*")
+            st.markdown(f"**{t('Total Budget Pool')}:** `{disp_budg:.1f}` <span style='color:{b_color}'>*({budg_chg:+.1f})*</span>", unsafe_allow_html=True)
+            st.markdown(f"**{t('Reward Fund')}:** `{disp_h_fund:.1f}` *(Ratio: {current_h_ratio:.1f}%)*")
 
     with c3:
         fc = view_party.current_forecast
         p_acc_weight = cfg.get('PREDICT_ACCURACY_WEIGHT', 0.8)
         acc = int(((view_party.predict_ability / 10.0) * p_acc_weight) * 100)
-        st.markdown(f"### 🕵️ Think Tank Intel [智庫情報] (Acc: {acc}%)")
+        st.markdown(f"### 🕵️ {t('Think Tank Intel')} (Acc: {acc}%)")
         
         st.write(f"Est. Decay [預估衰退]: `{fc:.3f}`")
         eval_scenario = config.get_economic_forecast_text(fc * 100)
@@ -85,8 +94,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
 
     with c4:
         if game.phase == 1:
-            st.markdown("### 📊 Financial Report [財務收支報告]")
-            st.write(f"Net Assets [可用淨資產]: **{view_party.wealth:.1f}**")
+            st.markdown(f"### 📊 {t('Financial Report')}")
+            st.write(f"{t('Available Net Assets')}: **{view_party.wealth:.1f}**")
                 
             if rep:
                 my_is_h = view_party.name == rep['h_party_name']
@@ -108,11 +117,11 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 my_net = preview_data['h_inc'] if (view_party.name == game.h_role_party.name) else preview_data['r_inc']
                 opp_net = preview_data['r_inc'] if (view_party.name == game.h_role_party.name) else preview_data['h_inc']
                 
-                st.markdown("### 📊 Think Tank Forecast [智庫預測]")
+                st.markdown(f"### 📊 {t('Think Tank Analysis Report')}")
                 def fmt_roi(val): return "∞%" if val == float('inf') else f"{val:+.1f}%"
                 
-                st.markdown(f"**Our Est. Net Profit [我方預估淨利]:** `${my_net:.1f}` *(ROI: {fmt_roi(preview_data.get('my_roi', 0))})*")
-                st.markdown(f"**Opp. Est. Net Profit [對手預估淨利]:** `${opp_net:.1f}` *(ROI: {fmt_roi(preview_data.get('opp_roi', 0))})*")
+                st.markdown(f"**{t('Our Est. Net Profit')}:** `${my_net:.1f}` *(ROI: {fmt_roi(preview_data.get('my_roi', 0))})*")
+                st.markdown(f"**{t('Opp. Est. Net Profit')}:** `${opp_net:.1f}` *(ROI: {fmt_roi(preview_data.get('opp_roi', 0))})*")
                 
                 my_perf = preview_data['my_perf']
                 my_spin = preview_data['my_spin']
@@ -123,8 +132,8 @@ def render_dashboard(game, view_party, cfg, is_preview=False, preview_data=None)
                 spin_ap = preview_data['spin_ap_center'] * 100
 
                 st.markdown(f"**Est. Ammo Generation [預估彈藥生成]:**")
-                st.markdown(f"&nbsp;&nbsp;🔹 **Our Side [我方]:** Perf. [政績] `{my_perf:+.1f}` | Spin [公關] `{my_spin:+.1f}`")
-                st.markdown(f"&nbsp;&nbsp;🔸 **Opp. [對手]:** Perf. [政績] `{opp_perf:+.1f}` | Spin [公關] `{opp_spin:+.1f}`")
+                st.markdown(f"&nbsp;&nbsp;🔹 **Our Side [我方]:** Perf. `{my_perf:+.1f}` | Spin `{my_spin:+.1f}`")
+                st.markdown(f"&nbsp;&nbsp;🔸 **Opp. [對手]:** Perf. `{opp_perf:+.1f}` | Spin `{opp_spin:+.1f}`")
                 
                 st.caption(f"🎯 **Center Swing Voter AP [中間選民穿甲率預測]:**")
                 st.caption(f"Perf. Piercing [政績穿甲]: `{perf_ap:.1f}%` | Spin Piercing [公關穿甲]: `{spin_ap:.1f}%`")
@@ -137,13 +146,13 @@ def render_message_board(game):
         st.session_state.news_flash = None
         
     if game.phase == 1:
-        if game.year == 1: st.info("📢 **[Annual Notice]** A new year begins. Please negotiate the budget.")
-        elif game.last_year_report: st.info("📢 **[Annual Notice]** A new year begins. Please negotiate the budget.")
+        if game.year == 1: st.info(f"📢 **{t('[ANNUAL NOTICE]')}** {t('A new year begins. The nation awaits rebuilding; initiate budget negotiations immediately.')}")
+        elif game.last_year_report: st.info(f"📢 **{t('[ANNUAL NOTICE]')}** {t('A new year begins. Initiate budget negotiations.')}")
     elif game.phase == 2:
-        st.info("📢 **[Annual Notice]** Bill passed. Allocate party funds for upgrades, PR, and operations.")
+        st.info(f"📢 **{t('[ANNUAL NOTICE]')}** Bill passed. Allocate party funds for upgrades, PR, and operations.")
 
 def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
-    st.header("👤 Party Overview [政黨狀態總覽]")
+    st.header(f"👤 {t('Party Overview')}")
     c1, c2 = st.columns(2)
     opp = game.party_B if view_party.name == game.party_A.name else game.party_A
     
@@ -163,11 +172,11 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
             logo = config.get_party_logo(party.name)
             
             eye = "👁️ " if party.name == view_party.name else ""
-            st.markdown(f"## {eye}{logo} {party.name} {crown_str}")
+            st.markdown(f"## {eye}{logo} {party.name} {t(crown_str.split(' ')[1]) if len(crown_str.split(' '))>1 else crown_str}")
             st.markdown(f"#### {role_badge}")
 
             if party.name == view_party.name:
-                st.markdown(f"### 💰 **Party Funds:** `${party.wealth:.1f}`")
+                st.markdown(f"### 💰 **{t('Party Wealth')}:** `${party.wealth:.1f}`")
             else:
                 rng = random.Random(f"wealth_{party.name}_{game.year}")
                 opp_stl = party.stealth_ability / 10.0
@@ -175,10 +184,10 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 err_margin = max(0.0, 1.0 + opp_stl - my_inv_raw) * cfg.get('OBS_ERR_BASE', 0.7)
                 blur = err_margin if not god_mode else 0.0
                 est_wealth = party.wealth * (1 + rng.uniform(-blur, blur))
-                st.markdown(f"### 💰 **Party Funds:** `${est_wealth:.1f}` *(Est.)*")
+                st.markdown(f"### 💰 **{t('Party Wealth')}:** `${est_wealth:.1f}` *({t('Est.')})*")
 
             if is_election_year or god_mode: 
-                disp_sup = f"{party.support:.1f}% 🏆(Win)" if is_winner else f"{party.support:.1f}% 💀(Loss)"
+                disp_sup = f"{party.support:.1f}% 🏆{t('(Won!)')}" if is_winner else f"{party.support:.1f}% 💀{t('(Lost)')}"
             else:
                 if party.latest_poll is not None:
                     best_type = None
@@ -192,7 +201,7 @@ def render_party_cards(game, view_party, god_mode, is_election_year, cfg):
                 else:
                     disp_sup = "??? (Polls Needed)"
             
-            st.markdown(f"### 📊 Support: **{disp_sup}**")
+            st.markdown(f"### 📊 {t('Support:')} **{disp_sup}**")
             
             if party.name == view_party.name and not is_election_year:
                 b1, b2, b3 = st.columns(3)
@@ -249,9 +258,9 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     
     obs_abis = get_observed_abilities(view_party, opp, game, cfg)
     
-    st.write(f"Think Tank: {obs_abis['predict']*10:.1f}% | Intel: {obs_abis['investigate']*10:.1f}%")
-    st.write(f"Media PR: {obs_abis['media']*10:.1f}% | Stealth: {obs_abis['stealth']*10:.1f}%")
-    st.write(f"Engineering: {obs_abis['build']*10:.1f}% | Education: {obs_abis['edu']*10:.1f}%")
+    st.write(f"{t('Think Tank')}: {obs_abis['predict']*10:.1f}% | {t('Intelligence')}: {obs_abis['investigate']*10:.1f}%")
+    st.write(f"{t('Media Dept')}: {obs_abis['media']*10:.1f}% | {t('Counter-Intel')}: {obs_abis['stealth']*10:.1f}%")
+    st.write(f"{t('Engineering')}: {obs_abis['build']*10:.1f}% | {t('Edu Dept')}: {obs_abis['edu']*10:.1f}%")
     
     est_unit_cost = formulas.calc_unit_cost(cfg, game.gdp, obs_abis['build'], view_party.current_forecast)
     eval_txt = config.get_intel_market_eval(est_unit_cost)
@@ -266,7 +275,7 @@ def render_sidebar_intel_audit(game, view_party, cfg):
     st.write(f"**Current Inflation:** `{inflation_rate:.1f}%\`")
     total_maint = (view_party.predict_ability + view_party.investigate_ability + view_party.media_ability + view_party.stealth_ability + view_party.build_ability + view_party.edu_ability) * 1.5
     
-    st.write(f"Think Tank: {view_party.predict_ability*10:.0f} | Intel: {view_party.investigate_ability*10:.0f}")
-    st.write(f"Media PR: {view_party.media_ability*10:.0f} | Stealth: {view_party.stealth_ability*10:.0f}")
-    st.write(f"Engineering: {view_party.build_ability*10:.0f} | Education: {view_party.edu_ability*10:.0f}")
+    st.write(f"{t('Think Tank')}: {view_party.predict_ability*10:.0f} | {t('Intelligence')}: {view_party.investigate_ability*10:.0f}")
+    st.write(f"{t('Media Dept')}: {view_party.media_ability*10:.0f} | {t('Counter-Intel')}: {view_party.stealth_ability*10:.0f}")
+    st.write(f"{t('Engineering')}: {view_party.build_ability*10:.0f} | {t('Edu Dept')}: {view_party.edu_ability*10:.0f}")
     st.write(f"**(Next Year Est. Maint. Cost: -{total_maint:.1f} EV)**")
