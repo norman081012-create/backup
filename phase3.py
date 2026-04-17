@@ -143,7 +143,6 @@ def render(game, cfg):
         pr_p_a = p_prop.get(game.party_A.name, 0.0)
         pr_p_b = p_prop.get(game.party_B.name, 0.0)
         
-        # 相減淨值機制
         perf_A = r_p_a + e_p_a + pr_p_a
         perf_B = r_p_b + e_p_b + pr_p_b
 
@@ -184,6 +183,10 @@ def render(game, cfg):
         f_target_san = max(0.0, min(100.0, 50.0 + (ha.get('edu_stance', 0) + ra.get('edu_stance', 0)) * 0.5))
         f_san_move = (f_target_san - game.sanity) * 0.2
         new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
+        
+        # ⚠️ 將需要存續到明年的參數存進報表
+        ha_t_opt = float(ha.get('alloc_tt_opt', 0.0))
+        ra_t_opt = float(ra.get('alloc_tt_opt', 0.0))
        
         game.last_year_report = {
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
@@ -213,7 +216,8 @@ def render(game, cfg):
             'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
             'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
             'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0)),
-            'completed_projects': res_exec['completed_projects'], 'failed_projects': res_exec['failed_projects']
+            'completed_projects': res_exec['completed_projects'], 'failed_projects': res_exec['failed_projects'],
+            'ha_t_opt': ha_t_opt, 'ra_t_opt': ra_t_opt  # 存入智庫優化值
         }
         
         game.gdp = res_exec['est_gdp']
@@ -350,12 +354,15 @@ def render(game, cfg):
                 game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
             
             game.proposing_party = game.r_role_party
-            game.last_year_report = None
             
-            ha_t_opt = float(ha.get('alloc_tt_opt', 0.0))
-            ra_t_opt = float(ra.get('alloc_tt_opt', 0.0))
-            hp.projects = engine.generate_projects(ha_t_opt, hp.name)
-            rp.projects = engine.generate_projects(ra_t_opt, rp.name)
+            # 從剛剛存好的 rep 裡面讀取雙方智庫優化的值來生成新專案
+            hp_ep = rep['ha_t_opt'] if hp.name == game.party_A.name else rep['ra_t_opt']
+            rp_ep = rep['ha_t_opt'] if rp.name == game.party_A.name else rep['ra_t_opt']
+            
+            hp.projects = engine.generate_projects(hp_ep, hp.name)
+            rp.projects = engine.generate_projects(rp_ep, rp.name)
+            
+            game.last_year_report = None
             
             for k in list(st.session_state.keys()):
                 if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
