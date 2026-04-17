@@ -34,64 +34,71 @@ def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float,
     
     return caught_fake_ev, safe_fake_ev, caught_value, fine
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, bid_cost, build_abi, forecast_decay, r_pays=0.0, h_wealth=0.0, c_net_override=None, override_unit_cost=None, fake_ev_spent=0.0, fake_ev_safe=0.0):
-    l_gdp = gdp * (forecast_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
-    unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, forecast_decay)
-    req_cost = bid_cost * unit_cost
+def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_decay, r_pays, h_wealth, c_net_real, fake_ev_safe, fake_ev_spent, projects, allocations, fake_ev_caught):
+    l_gdp = gdp * (real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
+    unit_cost = calc_unit_cost(cfg, gdp, build_abi, real_decay)
     
+    # Exec效率加成 1.2x -> 實際花費的 EV 會以更低的單位成本計算
+    unit_cost = unit_cost / 1.2
+    
+    req_cost = total_bid_cost * unit_cost
     available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
-    if c_net_override is not None:
-        c_net_real = min(float(bid_cost), c_net_override)
-        c_net_total = c_net_real + fake_ev_safe
-        act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost
-        h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
-    else:
-        if req_cost <= available_fund:
-            act_fund = req_cost
-            c_net_real = float(bid_cost)
-            c_net_total = c_net_real + fake_ev_safe
-            h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
-        else:
-            act_fund = available_fund
-            c_net_real = act_fund / max(0.01, unit_cost)
-            c_net_total = c_net_real + fake_ev_safe
-            h_idx = min(1.0, c_net_total / max(1.0, float(bid_cost)))
-
+    c_net_total = c_net_real + fake_ev_safe
+    act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost
+    h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
+    
     payout_h = min(budget_t, proj_fund * h_idx)
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
-    est_gdp = max(0.0, gdp - l_gdp + (c_net_real * cfg.get('GDP_CONVERSION_RATE', 0.2)))
+    total_allocated = sum(allocations.values())
+    completed_projects = []
+    total_gdp_addition = 0.0
     
+    for p in projects:
+        alloc = allocations.get(p['id'], 0.0)
+        if fake_ev_caught > 0 and total_allocated > 0:
+            alloc -= fake_ev_caught * (alloc / total_allocated)
+        if alloc >= p['ev'] * 0.99:
+            completed_projects.append(p)
+            total_gdp_addition += p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
+    
+    est_gdp = max(0.0, gdp - l_gdp + total_gdp_addition)
     h_project_profit = payout_h + r_pays - act_fund
     
     return {
         'est_gdp': est_gdp, 'payout_h': payout_h, 'payout_r': payout_r,
         'h_idx': h_idx, 'c_net': c_net_real, 'c_net_total': c_net_total, 'l_gdp': l_gdp, 
         'unit_cost': unit_cost, 'act_fund': act_fund, 
-        'h_project_profit': h_project_profit, 'req_cost': req_cost
+        'h_project_profit': h_project_profit, 'req_cost': req_cost,
+        'completed_projects': completed_projects
     }
 
-def generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total, macro_mult=1.0, exec_mult=1.0):
-    target_gdp_growth = (bid_cost * cfg.get('GDP_CONVERSION_RATE', 0.2)) / max(1.0, curr_gdp) * 100.0
+def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects):
+    # 1. Ruling Perf (Macro / GDP)
+    target_gdp_growth_val = sum(p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2) for p in completed_projects)
+    delta_A = (target_gdp_growth_val / max(1.0, curr_gdp)) * 100.0
     
-    # Regulator (Macro) Performance
-    delta_A = target_gdp_growth * macro_mult
     expected_loss_pct = (claimed_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE']) * 100.0
     delta_E = -expected_loss_pct
-
     gap = delta_A - delta_E
-    p_plan = (delta_A * 0.05) + (gap * 0.15)
-
-    # Executive (Project) Performance
-    completion_rate = c_net_total / max(1.0, float(bid_cost))
-    delta_C = (completion_rate - 0.5) * 2.0 
     
-    p_exec = target_gdp_growth * exec_mult * delta_C * 0.1
-
-    support_mult = cfg.get('AMMO_MULTIPLIER', 50.0) 
-    return p_plan * support_mult, p_exec * support_mult, delta_A, delta_E, delta_C
+    p_ruling_raw = (delta_A * 0.05) + (gap * 0.15)
+    p_ruling = p_ruling_raw * cfg.get('AMMO_MULTIPLIER', 50.0)
+    
+    # 2. Exec & Proposal Perf
+    exec_perf = 0.0
+    proposal_perf = {}
+    inflation_corr = 5000.0 / max(1.0, curr_gdp)
+    
+    for p in completed_projects:
+        base_perf = (p['ev'] * p['exec_mult'] * inflation_corr) / 20.0
+        exec_perf += base_perf
+        author = p.get('author', 'System')
+        proposal_perf[author] = proposal_perf.get(author, 0.0) + base_perf
+        
+    return p_ruling, exec_perf, proposal_perf, delta_A, delta_E
 
 def calc_incite_success(base_incite_rolls, current_emotion, is_preview=False):
     if is_preview:
@@ -170,20 +177,22 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
 
     return B, perf_used, perf_conquered, spin_used, spin_conquered
 
-def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net_total, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0, macro_mult=1.0, exec_mult=1.0):
-    p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total, macro_mult, exec_mult)
+def calc_performance_preview(cfg, hp, rp, ruling_party_name, curr_gdp, claimed_decay, sanity, emotion, projects, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0):
+    p_ruling, p_exec, p_prop, d_a, d_e = generate_raw_support(cfg, curr_gdp, claimed_decay, projects)
 
-    h_perf = p_exec 
-    r_perf = p_plan
+    h_perf = p_exec + p_prop.get(hp.name, 0.0)
+    r_perf = p_prop.get(rp.name, 0.0)
+    
+    if ruling_party_name == hp.name: h_perf += p_ruling
+    else: r_perf += p_ruling
 
     perf_ap_center = 1.0 - get_perf_rigidity(100, sanity, emotion, avg_edu)
     spin_ap_center = 1.0 - get_spin_rigidity(100, sanity, emotion, avg_edu)
 
     return {
-        hp.name: {'perf': h_perf, 'spin': h_spin_pwr},
-        rp.name: {'perf': r_perf, 'spin': r_spin_pwr},
+        hp.name: {'perf': h_perf, 'spin': h_spin_pwr, 'ruling': p_ruling if ruling_party_name==hp.name else 0, 'exec': p_exec, 'prop': p_prop.get(hp.name, 0)},
+        rp.name: {'perf': r_perf, 'spin': r_spin_pwr, 'ruling': p_ruling if ruling_party_name==rp.name else 0, 'exec': 0, 'prop': p_prop.get(rp.name, 0)},
         'perf_ap_center': perf_ap_center,
         'spin_ap_center': spin_ap_center,
-        'p_plan': p_plan, 'p_exec': p_exec,
-        'delta_A': d_a, 'delta_E': d_e, 'delta_C': d_c
+        'delta_A': d_a, 'delta_E': d_e
     }
