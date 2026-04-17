@@ -27,6 +27,7 @@ def render(game, view_party, opponent_party, cfg):
     med_cap = view_party.media_ability * 10.0 * r_bonus
     inv_cap = view_party.investigate_ability * 10.0 * r_bonus
     ci_cap = view_party.stealth_ability * 10.0
+    tt_cap = view_party.predict_ability * 10.0
     eng_base_ev = view_party.build_ability * 10.0 * h_bonus
     eng_limit = 100.0 + (view_party.build_ability * 100.0) * h_bonus
     
@@ -36,6 +37,16 @@ def render(game, view_party, opponent_party, cfg):
     with c1:
         st.markdown(t("#### 📣 Operations Allocation"))
         
+        st.write(f"**Think Tank Div.** (Capacity: {tt_cap:.1f} EP)")
+        col_t1, col_t2, col_t3 = st.columns(3)
+        w_t_dec = col_t1.number_input("Observe Decay", min_value=0, max_value=100, value=last_acts.get('w_t_dec', 33), key=f"w_t_dec_{view_party.name}")
+        w_t_obs = col_t2.number_input("Observe Proj", min_value=0, max_value=100, value=last_acts.get('w_t_obs', 33), key=f"w_t_obs_{view_party.name}")
+        w_t_opt = col_t3.number_input("Optimize Proj", min_value=0, max_value=100, value=last_acts.get('w_t_opt', 34), key=f"w_t_opt_{view_party.name}")
+        t_tot = max(1, w_t_dec + w_t_obs + w_t_opt)
+        alloc_tt_dec = tt_cap * (w_t_dec / t_tot) if w_t_dec else 0
+        alloc_tt_obs = tt_cap * (w_t_obs / t_tot) if w_t_obs else 0
+        alloc_tt_opt = tt_cap * (w_t_opt / t_tot) if w_t_opt else 0
+
         st.write(f"**Intel Div.** (Capacity: {inv_cap:.1f} Ops)")
         col_i1, col_i2, col_i3 = st.columns(3)
         if not is_h:
@@ -107,8 +118,7 @@ def render(game, view_party, opponent_party, cfg):
         unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
         
         if is_h:
-            st.markdown(t(f"**{t('Total Real EV Generated')}**"))
-            c_net = st.number_input(f"Target: {bid_cost} EV", min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
+            c_net = st.number_input(t("Total Real EV Generated"), min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
             fake_ev_cost_ratio = cfg.get('FAKE_EV_COST_RATIO', 0.2)
             fake_label = f"{t('Inject Fake EV (Cost Ratio:')} {fake_ev_cost_ratio})"
             fake_ev = st.number_input(fake_label, min_value=0.0, value=float(last_acts.get('fake_ev', 0.0)), key=f"fake_ev_{view_party.name}")
@@ -124,9 +134,10 @@ def render(game, view_party, opponent_party, cfg):
                     invested = sum(inv['amount'] for inv in p.get('investments', []))
                     remaining = max(0.0, p['ev'] - invested)
                     min_req = remaining * 0.2
+                    default_alloc = float(min(min_req, total_avail_ev))
                     
                     label = f"[{p['author'][:1]}] {p['name']} (Rem: {remaining:.1f} | Min Req: {min_req:.1f})"
-                    alloc = st.number_input(label, min_value=0.0, max_value=float(total_avail_ev), value=float(min_req), key=f"alloc_{p['id']}")
+                    alloc = st.number_input(label, min_value=0.0, max_value=float(total_avail_ev), value=default_alloc, key=f"alloc_{p['id']}")
                     allocations[p['id']] = alloc
         else:
             project_ev_cost = 0.0
@@ -200,6 +211,8 @@ def render(game, view_party, opponent_party, cfg):
             is_invalid = True
 
     my_acts = {
+        'w_t_dec': w_t_dec, 'w_t_obs': w_t_obs, 'w_t_opt': w_t_opt,
+        'alloc_tt_dec': alloc_tt_dec, 'alloc_tt_obs': alloc_tt_obs, 'alloc_tt_opt': alloc_tt_opt,
         'w_i_cen': w_i_cen, 'w_i_org': w_i_org, 'w_i_fin': w_i_fin,
         'alloc_inv_censor': alloc_inv_censor, 'alloc_inv_audit': alloc_inv_audit, 'alloc_inv_fin': alloc_inv_fin,
         'w_c_cen': w_c_cen, 'w_c_org': w_c_org, 'w_c_fin': w_c_fin,
