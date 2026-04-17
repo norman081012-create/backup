@@ -29,7 +29,7 @@ EXACT_MATCH_DICT = {
 DYNAMIC_REPLACEMENTS = {
     "Symbiocracy Simulator v3.0.0": "共生體制模擬器 v3.0.0",
     "Phase 1: R-System Proposal": "第一階段：監管系統 (Regulator) 提案",
-    "Phase 2: Execution - Turn:": "第二階段：資源分配與執行 - 輪到：",
+    "Phase 2: Execution & Ops - Turn:": "第二階段：資源分配與執行 - 輪到：",
     "Phase 3: Annual Resolution Report": "第三階段：年度結算與社會影響報告",
     "Game Over! Final Symbiocracy Summary": "🏁 遊戲結束！共生體制最終歷史結算",
     
@@ -77,23 +77,21 @@ DYNAMIC_REPLACEMENTS = {
     "Investigate Fin.": "調查金流",
     "Hide Fin.": "隱藏金流",
     
+    "Think Tank Analysis Report": "智庫分析報告",
+    "Think Tank Forecast": "智庫預測",
+    "Think Tank Real-time Variables": "智庫即時變數",
     "Think Tank": "智庫預測處",
     "Intelligence": "情報調查處",
     "Media Dept": "黨媒公關處",
     "Counter-Intel": "反情報與隱蔽處",
     "Engineering": "工程建設處",
     "Edu Dept": "教育處",
-    "Propaganda Value": "宣傳量",
-    "Investigation Value": "調查值",
-    "Counter-Intel Value": "反情報值",
-    "Engineering Value": "工程值",
-    "Education Value": "教育值",
     
     "Current Draft Preview": "當前草案預覽",
     "Opponent Draft Ref.": "對手草案參考",
     "Ruling Party Decision": "執政黨最終裁決",
     "Final Decision (H-System Only)": "最終決定 (僅限執行系統)",
-    "Think Tank Analysis Report": "智庫分析報告",
+    
     "Our Est. Net Profit": "我方預估淨利",
     "Opp. Est. Net Profit": "對手預估淨利",
     "Total Expected Support": "預估獲得總支持度",
@@ -126,11 +124,14 @@ def t(text, fallback=None):
     if not isinstance(text, str): return text
     lang = st.session_state.get('lang', 'EN')
     if lang == 'EN':
-        text = text.replace("切換至繁體中文", "Switch to Chinese")
-        text = text.replace("執行系統", "Executive").replace("監管系統", "Regulator")
+        # Default language in codebase is now assumed to be English/Mixed.
+        # Ensure it stays English if EN is selected.
         return text
 
+    # Chinese translation layer
     if text in EXACT_MATCH_DICT: return EXACT_MATCH_DICT[text]
+    
+    # Protection mapping for non-translatable entities
     protected_map = {
         "GDP": "__PROTECT_GDP__",
         "ROI": "__PROTECT_ROI__",
