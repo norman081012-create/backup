@@ -90,6 +90,7 @@ ZH_DICT = {
     "Low": "低階",
     "Med": "中階",
     "High": "高階",
+    "Requires": "維持正成長至少需",
     
     "Phase 2: Execution & Ops - Turn:": "第二階段：資源分配與執行 - 輪到：",
     "Operations Allocation": "資源與行動分配",
@@ -100,10 +101,12 @@ ZH_DICT = {
     "Finance & Construction (EV)": "財政與工程建設 (EV)",
     "Total Real EV Generated": "生成真實 EV 總量",
     "Inject Fake EV (Cost Ratio:": "注入假 EV (豆腐渣工程) 成本比:",
-    "Allocate EV to specific projects:": "將可用 EV 分配至具體建案:",
+    "Allocate EV to active projects:": "將 EV 分配至合約建案中:",
     "Upgrade Dept. (Target Level)": "升級部門 (目標等級)",
     "Financial Checkout": "財務結算",
     "Confirm Actions": "確認行動並執行",
+    "Completed": "完工",
+    "Failed": "爛尾",
     
     "Symbiocracy Times - Annual Report": "共生體制時報 - 年度結算",
     "🎲 Initiate Financial Audit": "🎲 啟動財務查核",
