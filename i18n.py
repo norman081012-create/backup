@@ -72,6 +72,29 @@ ZH_DICT = {
     "❌ Reject & Renegotiate": "❌ 拒絕並重新談判",
     "✅ Accept Ultimatum": "✅ 接受最後通牒",
     
+    "🗂️ Select Reconstruction Project": "🗂️ 選擇重建建案",
+    "Available Projects": "可用建案清單",
+    "Selected:": "已選擇:",
+    "Cost:": "成本:",
+    "Est. Macro Effect (GDP):": "預估監管政績乘數 (GDP):",
+    "Toggle Contract View": "一鍵切換合約視角",
+    "My Proposal": "我方提案",
+    "Opponent Proposal": "對手提案",
+    "Regulator Draft": "監管方草案",
+    "Executive Draft": "執行方草案",
+    
+    "Reconstruction Contract": "重建合約書",
+    "Client (Regulator)": "委託方 (Regulator)",
+    "Contractor (Executive)": "乙方 (Executive)",
+    "Required EV Scale": "要求建設規模 (EV)",
+    "Regulator Provision": "監管方墊付額 (Reg-Pays)",
+    "Executive Provision": "執行方自籌額 (Exec-Pays)",
+    "Total Reward Pool": "專案總獎金",
+    "Tier": "階級",
+    "Low": "低",
+    "Med": "中",
+    "High": "高",
+    
     "Phase 2: Execution & Ops - Turn:": "第二階段：資源分配與執行 - 輪到：",
     "Operations Allocation": "資源與行動分配",
     "Intel Div.": "情報調查處",
@@ -103,11 +126,9 @@ def t(text):
     if lang == 'EN':
         return text
 
-    # Exact Match
     if text in ZH_DICT: 
         return ZH_DICT[text]
     
-    # Partial matching for dynamic strings
     for en_key, zh_val in ZH_DICT.items():
         if en_key in text and len(en_key) > 4:
             text = text.replace(en_key, zh_val)
