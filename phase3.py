@@ -1,340 +1,252 @@
 # ==========================================
-# phase3.py
+# phase2.py
 # ==========================================
 import streamlit as st
-import random
+import config
 import formulas
+import ui_core
 import i18n
 t = i18n.t
 
-def render(game, cfg):
-    st.header(t("Symbiocracy Times - Annual Report"))
+def render(game, view_party, opponent_party, cfg):
+    is_h = (view_party.name == game.h_role_party.name)
+    h_label = t('🛡️ Executive')
+    r_label = t('⚖️ Regulator')
+    st.subheader(f"🛠️ Phase 2: Execution & Ops - Turn: {view_party.name} ({h_label if is_h else r_label})")
     
-    if not game.last_year_report:
-        rp, hp = game.r_role_party, game.h_role_party
-        ra = st.session_state.get(f"{rp.name}_acts", {})
-        ha = st.session_state.get(f"{hp.name}_acts", {})
-        d = st.session_state.get('turn_data', {})
-        
-        fine_mult = float(d.get('fine_mult', 0.3)) 
-        
-        fake_ev = float(ha.get('fake_ev') or 0.0)
-        c_net_h = float(ha.get('c_net', 0))
-        
-        r_inv_fin = float(ra.get('alloc_inv_fin', 0))
-        h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
-        net_fin_ev = r_inv_fin - h_ci_fin
-        
-        if net_fin_ev > 0:
-            chunk_size = max(0.01, 10.0 / net_fin_ev)
-            catch_prob = min(1.0, cfg.get('FAKE_EV_CATCH_BASE_RATE', 0.10) * max(1.0, net_fin_ev * 0.1))
-        else:
-            chunk_size = float('inf')
-            catch_prob = 0.0
-
-        unit_cost_real = formulas.calc_unit_cost(cfg, game.gdp, hp.build_ability, game.current_real_decay)
-        
-        if 'pending_dice_roll' not in st.session_state:
-             st.session_state.pending_dice_roll = {
-                 'fake_ev': fake_ev,
-                 'catch_prob': catch_prob,
-                 'chunk_size': chunk_size,
-                 'fine_mult': fine_mult,
-                 'unit_cost_real': unit_cost_real,
-                 'is_rolled': False
-             }
-        
-        dice_data = st.session_state.pending_dice_roll
-
-        if not dice_data['is_rolled']:
-            st.markdown("---")
-            st.markdown(t("### 🎲 Initiate Financial Audit"))
-            if dice_data['chunk_size'] == float('inf'):
-                st.info(t("Regulator lacks operational capacity to audit. Cash flow hidden."))
-                if st.button(t("⏩ Confirm Report & Next Year"), type="primary", use_container_width=True):
-                    st.session_state.pending_dice_roll['fake_ev_results'] = (0.0, dice_data['fake_ev'], 0.0, 0.0)
-                    st.session_state.pending_dice_roll['is_rolled'] = True
-                    st.rerun()
-            else:
-                st.warning(f"**Target:** `{dice_data['fake_ev']:.1f}` Fake EV | **Catch Prob:** `{dice_data['catch_prob']*100:.1f}%` per `{dice_data['chunk_size']:.2f}` block.")
-
-                if st.button(t("Execute Audit!"), type="primary", use_container_width=True):
-                    with st.spinner('Investigators tracing funds...'):
-                        import time
-                        time.sleep(1.5) 
-                        fake_ev_res = formulas.calc_fake_ev_dice(dice_data['fake_ev'], dice_data['catch_prob'], dice_data['fine_mult'], dice_data['chunk_size'], dice_data['unit_cost_real'])
-                        st.session_state.pending_dice_roll['fake_ev_results'] = fake_ev_res
-                        st.session_state.pending_dice_roll['is_rolled'] = True
-                    st.rerun() 
-            st.stop()
-
-        caught_fake_ev, safe_fake_ev, caught_value, fine_value = dice_data['fake_ev_results']
-        fake_ev_caught = (caught_fake_ev > 0)
-        
-        returned_to_r = caught_value
-        confiscated_to_budget = fine_value
-        hp_wealth_penalty = (caught_value + fine_value)
-        
-        for k in ['t_pre', 't_inv', 't_med', 't_stl', 't_bld', 't_edu', 'edu_stance']:
-            if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ra[k]))
-            if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ha[k]))
-
-        req_cost = float(d.get('req_cost', 0.0))
-        proj_fund = float(d.get('proj_fund') or 0.0)
-        bid_cost = float(d.get('bid_cost') or 1.0)
-        claimed_decay = float(d.get('claimed_decay') or 0.0)
-        r_pays = float(d.get('r_pays') or 0.0)
-        
-        hp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == hp.name else 0))
-        rp_base = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == rp.name else 0))
-        
-        actual_h_wealth_available = max(0.0, hp.wealth + req_cost - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty + hp_base)
-        
-        eval_fake_ev_safe = safe_fake_ev
-        res_exec = formulas.calc_economy(
-            cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, 
-            float(hp.build_ability), float(game.current_real_decay), 
-            r_pays=r_pays, h_wealth=actual_h_wealth_available, 
-            c_net_override=c_net_h, fake_ev_spent=fake_ev, fake_ev_safe=eval_fake_ev_safe
-        )
-        
-        budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
-        
-        hp_project_net = res_exec['h_project_profit']
-        total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
-        base_r_surplus = max(0.0, game.total_budget - total_bonus_deduction - proj_fund)
-        unspent_proj = proj_fund * (1.0 - res_exec['h_idx'])
-        
-        rp_project_net = base_r_surplus + unspent_proj - r_pays
-        
-        hp_inc = hp_base + hp_project_net + req_cost
-        rp_inc = rp_base + rp_project_net + returned_to_r
-        
-        r_censor_alloc = float(ra.get('alloc_inv_censor', 0))
-        h_anti_censor_alloc = float(ha.get('alloc_ci_anticen', 0))
-        censor_diff = r_censor_alloc - h_anti_censor_alloc
-
-        B = game.boundary_B
-        opp_indices = range(B + 1, 201) if hp.name == game.party_A.name else range(1, B + 1)
-        censor_successes = 0; censor_failures = 0
-        
-        for i in opp_indices:
-            rig = formulas.get_spin_rigidity(i, game.sanity, game.emotion, hp.edu_stance, getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), B, game.party_A.name)
-            if random.random() > rig: censor_successes += 1
-            else: censor_failures += 1
-        
-        censor_weight = max(0.0, censor_diff / 100.0) 
-        censor_emotion_add = censor_weight * censor_successes
-        censor_rigidity_buff = censor_weight * (censor_successes / (censor_successes + censor_failures)) if (censor_successes + censor_failures) > 0 else 0.0
-            
-        if censor_diff > 0: game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
-        
-        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net_total'])
-        
-        perf_A = 0.0; perf_B = 0.0
-        
-        # Regulator 全拿 raw_p_plan
-        if rp.name == game.party_A.name: perf_A += raw_p_plan
-        else: perf_B += raw_p_plan
-        
-        # Executive 全拿 raw_p_exec
-        if hp.name == game.party_A.name: perf_A += raw_p_exec
-        else: perf_B += raw_p_exec
-
-        spin_A = 0.0; spin_B = 0.0
-        h_spin_pwr = float(ha.get('alloc_med_control', 0.0)) + float(ha.get('alloc_med_camp', 0.0))
-        r_spin_pwr = float(ra.get('alloc_med_control', 0.0)) + float(ra.get('alloc_med_camp', 0.0))
-        
-        if hp.name == game.party_A.name: 
-            spin_A += h_spin_pwr; spin_B += r_spin_pwr
-        else: 
-            spin_B += h_spin_pwr; spin_A += r_spin_pwr
-
-        net_perf_A = perf_A - perf_B
-        net_spin_A = spin_A - spin_B
-        old_boundary = game.boundary_B
-        
-        avg_edu = (hp.edu_stance + rp.edu_stance) / 2.0
-
-        new_boundary, perf_used, perf_conquered, spin_used, spin_conquered = formulas.run_conquest_split(
-            game.boundary_B, net_perf_A, net_spin_A, game.sanity, game.emotion, avg_edu, 
-            getattr(game, 'h_rigidity_buff', {}).get('amount', 0.0), getattr(game, 'h_rigidity_buff', {}).get('party'), game.party_A.name
-        )
-        
-        game.boundary_B = new_boundary
-        game.party_A.support = new_boundary * 0.5
-        game.party_B.support = 100.0 - game.party_A.support
-        
-        gdp_grw_bonus = ((res_exec['est_gdp'] - game.gdp)/max(1.0, game.gdp)) * 100.0
-        
-        total_incite_rolls = float(ha.get('alloc_med_incite', 0.0)) + float(ra.get('alloc_med_incite', 0.0))
-        incite_points = formulas.calc_incite_success(total_incite_rolls, game.emotion)
- 
-        emotion_delta = (incite_points * 0.1) + censor_emotion_add - gdp_grw_bonus - (game.sanity * 0.15)
-        new_emotion = max(0.0, min(100.0, game.emotion + emotion_delta))
-        
-        f_target_san = max(0.0, min(100.0, 50.0 + (ha.get('edu_stance', 0) + ra.get('edu_stance', 0)) * 0.5))
-        f_san_move = (f_target_san - game.sanity) * 0.2
-        new_sanity = max(0.0, min(100.0, game.sanity - (new_emotion * 0.02) + f_san_move))
-       
-        game.last_year_report = {
-            'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
-            'new_san': new_sanity, 'new_emo': new_emotion,
-            'h_party_name': hp.name, 'r_party_name': rp.name,
-            'raw_p_plan': raw_p_plan, 'raw_p_exec': raw_p_exec,
-            'perf_A': perf_A, 'perf_B': perf_B, 'net_perf_A': net_perf_A,
-            'spin_A': spin_A, 'spin_B': spin_B, 'net_spin_A': net_spin_A,
-            'perf_used': perf_used, 'perf_conquered': perf_conquered,
-            'spin_used': spin_used, 'spin_conquered': spin_conquered,
-            'old_boundary': old_boundary, 'new_boundary': new_boundary,
-            'censor_successes': censor_successes, 'censor_failures': censor_failures, 'censor_emotion_add': censor_emotion_add, 'censor_buff': censor_rigidity_buff,
-            'h_inc': hp_inc, 'r_inc': rp_inc, 
-            'h_base': hp_base, 'r_base': rp_base, 
-            'h_project_net': hp_project_net, 'r_project_net': rp_project_net,
-            'payout_h': res_exec['payout_h'], 'act_fund': res_exec['act_fund'], 'r_pays': r_pays,
-            'r_extra': returned_to_r,
-            'caught_fake_ev': caught_fake_ev,
-            'caught_value': caught_value,
-            'fine_value': fine_value,
-            'hp_penalty': hp_wealth_penalty,
-            'fake_ev_caught': fake_ev_caught,
-            'fake_ev_attempted': fake_ev,
-            'chunk_size': chunk_size,
-            'fine_mult': fine_mult,
-            'proj_fund': proj_fund, 'h_idx': res_exec['h_idx'], 
-            'total_bonus_deduction': total_bonus_deduction, 'base_r_surplus': base_r_surplus, 'unspent_proj': unspent_proj,
-            'h_invest_wealth': float(ha.get('invest_wealth', 0)), 'r_invest_wealth': float(ra.get('invest_wealth', 0))
-        }
-        
-        game.gdp = res_exec['est_gdp']
-        game.sanity = new_sanity
-        game.emotion = new_emotion
-        game.h_fund = res_exec['payout_h']
-        game.total_budget = budg + confiscated_to_budget
-        
-        hp.wealth += hp_inc - float(ha.get('invest_wealth', 0)) - hp_wealth_penalty
-        rp.wealth += rp_inc - float(ra.get('invest_wealth', 0))
-
-        if hasattr(game, 'h_rigidity_buff') and game.h_rigidity_buff['duration'] > 0:
-            game.h_rigidity_buff['duration'] -= 1
-            if game.h_rigidity_buff['duration'] <= 0:
-                game.h_rigidity_buff = {'amount': 0.0, 'duration': 0, 'party': None}
-
-        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
-        if is_election_end:
-            winner = game.party_A if game.party_A.support > game.party_B.support else game.party_B
-            game.ruling_party = winner
-
-        hp.last_acts = ha.copy(); rp.last_acts = ra.copy()
-        game.record_history(is_election=is_election_end)
+    d = st.session_state.get('turn_data', {})
+    req_cost = float(d.get('req_cost', 0.0))
+    bid_cost = float(d.get('bid_cost', 1.0))
     
-    rep = game.last_year_report
+    if is_h: cw = float(view_party.wealth) + float(d.get('r_pays', 0.0))
+    else: cw = float(view_party.wealth) - float(d.get('r_pays', 0.0))
     
-    st.markdown("---")
-    st.markdown(t("### 🗞️ **[Front Page]**"))
-    if rep.get('caught_fake_ev', 0) > 0:
-        st.error(t(f"**[Corruption Scandal] Shoddy Projects Exposed!**\n\nInvestigators uncovered `{rep['caught_fake_ev']:.1f}` units of fake EV.\n- **{rep['h_party_name']}** was fined `${rep['caught_value']:.1f}` and penalized `${rep['fine_value']:.1f}`.\n- **{rep['r_party_name']}** received `${rep['caught_value']:.1f}` as whistleblower reward.\n- National treasury collected `${rep['fine_value']:.1f}`.\n- 📉 **Project completion rate dropped due to removed fake EV!**"))
-    else:
-        if rep.get('chunk_size', float('inf')) == float('inf'):
-            st.success(t(f"**[Whitewashed] Nothing to See Here?**\n\nAudit failed. All books appear perfectly legal on paper."))
-        elif rep.get('fake_ev_attempted', 0) > 0:
-            st.success(t(f"**[Clean Getaway] Passed the Audit!**\n\nDespite strict investigation, special funds remain hidden."))
-        else:
-            st.success(t(f"**[Clean Gov] Zero Fake EV!**\n\nInvestigators confirm all projects are 100% genuine."))
-            
-    st.markdown("---")
+    h_bonus = 1.2 if is_h else 1.0
+    r_bonus = 1.2 if not is_h else 1.0
+    
+    med_cap = view_party.media_ability * 10.0 * h_bonus
+    inv_cap = view_party.investigate_ability * 10.0 * r_bonus
+    ci_cap = view_party.stealth_ability * 10.0
+    edu_cap = view_party.edu_ability * 10.0 * r_bonus
+    eng_base_ev = view_party.build_ability * 10.0 * h_bonus
+    eng_limit = 100.0 + (view_party.build_ability * 100.0) 
+    
+    last_acts = view_party.last_acts if hasattr(view_party, 'last_acts') else {}
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown(t(f"### 📊 Economic Indicators"))
-        st.write(f"- **GDP:** `{rep['old_gdp']:.1f}` ➔ **`{game.gdp:.1f}`**")
-        st.write(f"- **{t('Civic Literacy')}:** `{rep['old_san']:.1f}` ➔ **`{game.sanity:.1f}`** ({game.sanity - rep['old_san']:+.1f})")
-        st.write(f"- **{t('Voter Emotion')}:** `{rep['old_emo']:.1f}` ➔ **`{game.emotion:.1f}`** ({game.emotion - rep['old_emo']:+.1f})")
+        st.markdown(t("#### 📣 Operations Allocation"))
         
-        st.markdown(t(f"### 🏛️ Financial Summary"))
-        if rep['fine_value'] > 0:
-            st.success(t(f"Treasury Income: +`${rep['fine_value']:.1f}`"))
+        st.write(f"**Intel Div.** (Capacity: {inv_cap:.1f} Ops)")
+        col_i1, col_i2, col_i3 = st.columns(3)
+        if not is_h:
+            w_i_cen = col_i1.number_input("Censorship", min_value=0, max_value=100, value=last_acts.get('w_i_cen', 0), key=f"w_i_cen_{view_party.name}")
+        else:
+            w_i_cen = 0
+            col_i1.write(f"**Censorship**")
+            col_i1.caption("(Regulator Only)")
+            
+        w_i_org = col_i2.number_input("Audit Org", min_value=0, max_value=100, value=last_acts.get('w_i_org', 0), key=f"w_i_org_{view_party.name}")
+        w_i_fin = col_i3.number_input("Trace Fin", min_value=0, max_value=100, value=last_acts.get('w_i_fin', 0), key=f"w_i_fin_{view_party.name}")
+        i_tot = max(1, w_i_cen + w_i_org + w_i_fin)
+        alloc_inv_censor = inv_cap * (w_i_cen / i_tot) if w_i_cen else 0
+        alloc_inv_audit = inv_cap * (w_i_org / i_tot) if w_i_org else 0
+        alloc_inv_fin = inv_cap * (w_i_fin / i_tot) if w_i_fin else 0
         
-        with st.expander(f"💼 {rep['h_party_name']} (Executive) Financials"):
-            st.write(f"**Project Net Profit:** `${rep['h_project_net']:.1f}`")
-            st.write(f"+ Base Income: `${rep['h_base']:.1f}`")
-            if rep['caught_fake_ev'] > 0:
-                st.write(f"- Confiscated: `-${rep['caught_value']:.1f}`")
-                st.write(f"- Penalty Fine: `-${rep['fine_value']:.1f}`")
-            st.write(f"- Upgrade Costs: `-${rep['h_invest_wealth']:.1f}`")
-            net_cash = rep['h_project_net'] + rep['h_base'] - rep.get('hp_penalty', 0) - rep['h_invest_wealth']
-            st.write(f"**Final Cash Flow:** `${net_cash:.1f}`")
-
-        with st.expander(f"⚖️ {rep['r_party_name']} (Regulator) Financials"):
-            st.write(f"**Base Income:** `${rep['r_base']:.1f}`")
-            st.write(f"- Paid Executive: `-${rep['r_pays']:.1f}`")
-            st.write(f"+ Unspent Recovery: `${rep['unspent_proj']:.1f}`")
-            st.write(f"+ Budget Surplus: `${rep['base_r_surplus']:.1f}`")
-            if rep['r_extra'] > 0: 
-                st.write(f"+ Whistleblower Bonus: `${rep['r_extra']:.1f}`")
-            st.write(f"- Upgrade Costs: `-${rep['r_invest_wealth']:.1f}`")
-            net_cash_r = rep['r_base'] - rep['r_pays'] + rep['unspent_proj'] + rep['base_r_surplus'] + rep['r_extra'] - rep['r_invest_wealth']
-            st.write(f"**Final Cash Flow:** `${net_cash_r:.1f}`")
+        st.write(f"**Stealth & Counter-Intel Div.** (Capacity: {ci_cap:.1f} Ops)")
+        col_c1, col_c2, col_c3 = st.columns(3)
+        if is_h:
+            w_c_cen = col_c1.number_input("Anti-Censor", min_value=0, max_value=100, value=last_acts.get('w_c_cen', 0), key=f"w_c_cen_{view_party.name}")
+        else:
+            w_c_cen = 0
+            col_c1.write(f"**Anti-Censor**")
+            col_c1.caption("(Executive Only)")
+            
+        w_c_org = col_c2.number_input("Hide Org", min_value=0, max_value=100, value=last_acts.get('w_c_org', 0), key=f"w_c_org_{view_party.name}")
+        w_c_fin = col_c3.number_input("Hide Fin", min_value=0, max_value=100, value=last_acts.get('w_c_fin', 0), key=f"w_c_fin_{view_party.name}")
+        c_tot = max(1, w_c_cen + w_c_org + w_c_fin)
+        alloc_ci_anticen = ci_cap * (w_c_cen / c_tot) if w_c_cen else 0
+        alloc_ci_hideorg = ci_cap * (w_c_org / c_tot) if w_c_org else 0
+        alloc_ci_hidefin = ci_cap * (w_c_fin / c_tot) if w_c_fin else 0
+        
+        st.write(f"**PR & Media Div.** (Capacity: {med_cap:.1f} Power)")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        w_m_cam = col_m1.number_input("Campaign", min_value=0, max_value=100, value=last_acts.get('w_m_cam', 0), key=f"w_m_cam_{view_party.name}")
+        w_m_inc = col_m2.number_input("Incite", min_value=0, max_value=100, value=last_acts.get('w_m_inc', 0), key=f"w_m_inc_{view_party.name}")
+        w_m_con = col_m3.number_input("Control", min_value=0, max_value=100, value=last_acts.get('w_m_con', 0), key=f"w_m_con_{view_party.name}")
+        m_tot = max(1, w_m_cam + w_m_inc + w_m_con)
+        alloc_med_camp = med_cap * (w_m_cam / m_tot) if w_m_cam else 0
+        alloc_med_incite = med_cap * (w_m_inc / m_tot) if w_m_inc else 0
+        alloc_med_control = med_cap * (w_m_con / m_tot) if w_m_con else 0
+        
+        st.write(f"**Edu. Div.** (Capacity: {edu_cap:.1f} Power)")
+        old_edu_stance = view_party.edu_stance
+        e_dir = st.radio("Education Shift", ["Maintain", "Shift Left (Rote/Obedience)", "Shift Right (Critical Thinking)"], horizontal=True, key=f"e_dir_{view_party.name}")
+        if "Shift Left" in e_dir: edu_shift = -edu_cap * 0.5
+        elif "Shift Right" in e_dir: edu_shift = edu_cap * 0.5
+        else: edu_shift = 0.0
+        new_edu_stance = max(-100.0, min(100.0, old_edu_stance + edu_shift))
+        st.info(f"Stance: `{old_edu_stance:.1f}` ➔ `{new_edu_stance:.1f}`")
 
     with c2:
-        st.markdown(t(f"### 🗳️ Electoral Shift"))
+        st.markdown(t("#### 🔒 Finance & Construction (EV)"))
         
-        net_ammo = rep['net_perf_A'] + rep['net_spin_A']
-        atk_party = game.party_A.name if net_ammo > 0 else game.party_B.name
-        def_party = game.party_B.name if net_ammo > 0 else game.party_A.name
+        fake_ev = 0.0
+        c_net = 0.0
         
-        if abs(net_ammo) < 1.0: 
-            st.info(t("🤝 Stalemate. No significant shifts."))
+        unit_cost = formulas.calc_unit_cost(cfg, game.gdp, view_party.build_ability, game.current_real_decay)
+        
+        if is_h:
+            c_net = st.number_input(f"Allocate Real EV to Project (Target: {bid_cost})", min_value=0.0, value=float(last_acts.get('c_net', min(cw/max(0.01, unit_cost), bid_cost))), key=f"c_net_{view_party.name}")
+            fake_ev_cost_ratio = cfg.get('FAKE_EV_COST_RATIO', 0.2)
+            fake_label = f"Inject Fake EV (Cost Ratio: {fake_ev_cost_ratio})"
+            fake_ev = st.number_input(fake_label, min_value=0.0, value=float(last_acts.get('fake_ev', 0.0)), key=f"fake_ev_{view_party.name}")
+            
+            project_ev_cost = c_net + (fake_ev * fake_ev_cost_ratio)
         else:
-            st.success(t(f"🔥 **Net Advantage:** `{abs(net_ammo):.1f}`！**{atk_party}** launched an offensive against **{def_party}**!"))
+            project_ev_cost = 0.0
 
-        if st.session_state.get('god_mode'):
-            with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=True):
-                st.write(f"*(Global Modifiers: Sanity `{rep['old_san']:.0f}`, Emotion `{rep['old_emo']:.0f}`)*")
+        st.markdown(t("##### 🛠️ Upgrade Dept. (Target Level)"))
+        st.caption(f"*(Infinite scaling. Max pure upgrade EV per year: `{eng_limit:.1f}`)*")
+        
+        def render_dept(label, key, obj_val, cap_text_func):
+            old_ui_val = obj_val * 10.0
+            col_l, col_r = st.columns([1, 2.5])
+            with col_l:
+                new_ui_val = st.number_input(label, min_value=1.0, value=float(old_ui_val), step=1.0, key=key)
+            with col_r:
+                old_raw = old_ui_val / 10.0
+                new_raw = new_ui_val / 10.0
+                maint_now = old_raw * 5.0
+                maint_new = new_raw * 5.0
                 
-                st.markdown(f"**{t('Regulator Perf.')} ({rep['r_party_name']})**: `{rep['raw_p_plan']:+.1f}` | **{t('Executive Perf.')} ({rep['h_party_name']})**: `{rep['raw_p_exec']:+.1f}`")
-                
-                if abs(rep['net_perf_A']) >= 1.0:
-                    atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
-                    perf_blocked = rep['perf_used'] - rep['perf_conquered']
-                    st.success(f"⚡ **Fact Penetration**: {atk_p} exerted `{rep['perf_used']:.1f}` impact. Ignorant/Emotional armor blocked `{perf_blocked:.1f}`, conquering **{rep['perf_conquered']}** blocks!")
-                    
-                st.markdown(f"**Media & Spin Offense**: {game.party_A.name} `{rep['spin_A']:.1f}` | {game.party_B.name} `{rep['spin_B']:.1f}`")
-                if abs(rep['net_spin_A']) >= 1.0:
-                    atk_s = game.party_A.name if rep['net_spin_A'] > 0 else game.party_B.name
-                    blocked = rep['spin_used'] - rep['spin_conquered']
-                    st.warning(f"🛡️ **Brainwash Defense**: Rational sanity armor absorbed `{blocked:.1f}` spin impact. {atk_s} conquered **{rep['spin_conquered']}** blocks.")
+                if new_ui_val > old_ui_val:
+                    cost = (new_raw**2 - old_raw**2) * 10.0
+                    st.caption(f"**Cur:** `{old_ui_val:.0f}` (Maint: -{maint_now:.1f}) ➔ **New:** `{new_ui_val:.0f}` (Maint: -{maint_new:.1f}) | <span style='color:orange'>**Cost:** -{cost:.1f} EV</span>", unsafe_allow_html=True)
+                    ev_cost = cost
+                    is_up = True
+                elif new_ui_val < old_ui_val:
+                    refund = (old_raw**2 - new_raw**2) * 5.0
+                    st.caption(f"**Cur:** `{old_ui_val:.0f}` (Maint: -{maint_now:.1f}) ➔ **New:** `{new_ui_val:.0f}` (Maint: -{maint_new:.1f}) | <span style='color:blue'>**Refund:** +{refund:.1f} EV</span>", unsafe_allow_html=True)
+                    ev_cost = -refund
+                    is_up = False
+                else:
+                    st.caption(f"**Cur:** `{old_ui_val:.0f}` (Maint: -{maint_now:.1f}) ➔ **Unchanged**", unsafe_allow_html=True)
+                    ev_cost = 0.0
+                    is_up = False
 
-                old_sup_A = rep['old_boundary'] * 0.5
-                new_sup_A = rep['new_boundary'] * 0.5
-                old_sup_B = 100.0 - old_sup_A
-                new_sup_B = 100.0 - new_sup_A
-                
-                st.markdown(f"#### 📊 **{game.party_A.name} True Support:** `{old_sup_A:.1f}%` ➔ **`{new_sup_A:.1f}%`** ({new_sup_A - old_sup_A:+.1f}%)")
-                st.markdown(f"#### 📊 **{game.party_B.name} True Support:** `{old_sup_B:.1f}%` ➔ **`{new_sup_B:.1f}%`** ({new_sup_B - old_sup_B:+.1f}%)")
+                st.caption(f"💡 *{cap_text_func(new_ui_val)}*")
+            return new_raw, ev_cost, maint_new, (ev_cost if is_up else 0.0)
+
+        t_pre, pre_cost, pre_maint, pre_up = render_dept("Think Tank", f"tt_pre_{view_party.name}", view_party.predict_ability, lambda v: f"Generates {v:.1f} EP for prediction.")
+        t_inv, inv_cost, inv_maint, inv_up = render_dept("Intel", f"tt_inv_{view_party.name}", view_party.investigate_ability, lambda v: f"Generates {v * r_bonus:.1f} Ops for intel.")
+        t_med, med_cost, med_maint, med_up = render_dept("PR Media", f"tt_med_{view_party.name}", view_party.media_ability, lambda v: f"Generates {v * h_bonus:.1f} Pwr for PR/Control.")
+        t_stl, stl_cost, stl_maint, stl_up = render_dept("Stealth", f"tt_stl_{view_party.name}", view_party.stealth_ability, lambda v: f"Generates {v:.1f} Ops for stealth.")
+        t_bld, bld_cost, bld_maint, bld_up = render_dept("Engineering", f"tt_bld_{view_party.name}", view_party.build_ability, lambda v: f"Unlocks {100.0 + (v * 100.0):.1f} EV upgrade cap.")
+        t_edu, edu_cost, edu_maint, edu_up = render_dept("Education", f"tt_edu_{view_party.name}", view_party.edu_ability, lambda v: f"Generates {v * r_bonus:.1f} Pwr for ideology.")
+
+        total_upgrade_cost = pre_cost + inv_cost + med_cost + stl_cost + bld_cost + edu_cost
+        total_maint_cost = pre_maint + inv_maint + med_maint + stl_maint + bld_maint + edu_maint
+        pure_upgrades = pre_up + inv_up + med_up + stl_up + bld_up + edu_up
+        
+        total_ev_required = project_ev_cost + total_maint_cost + total_upgrade_cost
+        invest_wealth = total_ev_required * max(0.01, unit_cost)
+        
+        remaining_wealth = cw - invest_wealth
+        
+        st.markdown("---")
+        st.markdown(t(f"**💰 Financial Checkout**"))
+        st.write(f"- Total EV Cost: `{total_ev_required:.1f}` EV *(Unit Rate: `${unit_cost:.2f}`)*")
+        st.write(f"- Total Funds Required: `${invest_wealth:.1f}`")
+        
+        is_invalid = False
+        if remaining_wealth < 0:
+            st.error(t(f"🚨 **Insufficient Funds**: Estimated remainder `${remaining_wealth:.1f}`. Reduce EV spending!"))
+            is_invalid = True
         else:
-            st.caption(t("*(True support hidden. Conduct polls to reveal.)*"))
+            st.success(t(f"✅ **Est. Remaining Funds:** `${cw:.1f}` - `${invest_wealth:.1f}` = **`${remaining_wealth:.1f}`**"))
 
+        if pure_upgrades > eng_limit:
+            st.error(t(f"🚨 Upgrade exceeded cap! Max allowed: `{eng_limit:.1f}`. (Current: `{pure_upgrades:.1f}`)"))
+            is_invalid = True
+
+    my_acts = {
+        'w_i_cen': w_i_cen, 'w_i_org': w_i_org, 'w_i_fin': w_i_fin,
+        'alloc_inv_censor': alloc_inv_censor, 'alloc_inv_audit': alloc_inv_audit, 'alloc_inv_fin': alloc_inv_fin,
+        'w_c_cen': w_c_cen, 'w_c_org': w_c_org, 'w_c_fin': w_c_fin,
+        'alloc_ci_anticen': alloc_ci_anticen, 'alloc_ci_hideorg': alloc_ci_hideorg, 'alloc_ci_hidefin': alloc_ci_hidefin,
+        'w_m_cam': w_m_cam, 'w_m_inc': w_m_inc, 'w_m_con': w_m_con,
+        'alloc_med_camp': alloc_med_camp, 'alloc_med_incite': alloc_med_incite, 'alloc_med_control': alloc_med_control,
+        'edu_stance': new_edu_stance, 'fake_ev': fake_ev, 
+        't_pre': t_pre, 't_inv': t_inv, 't_med': t_med, 't_stl': t_stl, 't_bld': t_bld, 't_edu': t_edu,
+        'invest_wealth': invest_wealth, 'c_net': c_net
+    }
+    
     st.markdown("---")
-    if st.button(t("Next Year"), type="primary", use_container_width=True):
-        if 'pending_dice_roll' in st.session_state: del st.session_state.pending_dice_roll
-        
-        is_election_end = (game.year % cfg['ELECTION_CYCLE'] == 0)
-        game.year += 1
-        
-        if game.year > cfg['END_YEAR']: game.phase = 4
+    
+    if is_h:
+        act_ha = my_acts
+        act_ra = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'alloc_inv_censor': 0, 'alloc_inv_fin': 0, 'invest_wealth': 0})
+    else:
+        act_ra = my_acts
+        act_ha = st.session_state.get(f"{opponent_party.name}_acts", {'alloc_med_control': 0, 'alloc_med_camp': 0, 'alloc_med_incite': 0, 'fake_ev': 0, 'c_net': float(d.get('bid_cost') or 1.0), 'alloc_ci_hidefin': 0, 'invest_wealth': 0})
+
+    eval_c_net = float(act_ha.get('c_net', 0))
+    eval_fake_ev = float(act_ha.get('fake_ev', 0))
+    r_pays = float(d.get('r_pays', 0.0))
+    proj_fund = float(d.get('proj_fund', 0.0))
+    
+    res_prev = formulas.calc_economy(cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, float(game.h_role_party.build_ability), float(game.current_real_decay), r_pays=r_pays, c_net_override=eval_c_net, fake_ev_spent=eval_fake_ev, fake_ev_safe=eval_fake_ev)
+    
+    h_media_pwr = float(act_ha.get('alloc_med_control', 0.0)) + float(act_ha.get('alloc_med_camp', 0.0))
+    r_media_pwr = float(act_ra.get('alloc_med_control', 0.0)) + float(act_ra.get('alloc_med_camp', 0.0))
+    
+    avg_edu_stance = (act_ha.get('edu_stance', 0.0) + act_ra.get('edu_stance', 0.0)) / 2.0
+
+    macro_mult = float(d.get('proj_macro_mult', 1.0))
+    exec_mult = float(d.get('proj_exec_mult', 1.0))
+
+    shift_preview = formulas.calc_performance_preview(
+        cfg, game.h_role_party, game.r_role_party, game.ruling_party.name,
+        res_prev['est_gdp'], game.gdp, 
+        float(d.get('claimed_decay', 0.0)), game.sanity, game.emotion, bid_cost, res_prev['c_net_total'],
+        h_media_pwr, r_media_pwr, avg_edu_stance, macro_mult, exec_mult
+    )
+    
+    h_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.h_role_party.name else 0))
+    r_base_prev = game.total_budget * (cfg['BASE_INCOME_RATIO'] + (cfg['RULING_BONUS_RATIO'] if game.ruling_party.name == game.r_role_party.name else 0))
+
+    r_project_profit = res_prev['payout_r'] + (proj_fund * (1.0 - res_prev['h_idx'])) - r_pays
+    
+    h_inc_prev = h_base_prev + res_prev['h_project_profit']
+    r_inc_prev = r_base_prev + r_project_profit
+
+    eval_h_pays = max(0.0, req_cost - r_pays)
+    h_roi = (res_prev['h_project_profit'] / eval_h_pays) * 100.0 if eval_h_pays > 0 else float('inf')
+    r_roi = (r_project_profit / r_pays) * 100.0 if r_pays > 0 else float('inf')
+
+    preview_data = {
+        'gdp': res_prev['est_gdp'], 'budg': game.total_budget, 'h_fund': res_prev['payout_h'],
+        'san': game.sanity, 'emo': game.emotion,
+        'my_perf': shift_preview[view_party.name]['perf'],
+        'my_spin': shift_preview[view_party.name]['spin'],
+        'opp_perf': shift_preview[opponent_party.name]['perf'],
+        'opp_spin': shift_preview[opponent_party.name]['spin'],
+        'perf_ap_center': shift_preview['perf_ap_center'],
+        'spin_ap_center': shift_preview['spin_ap_center'],
+        'h_inc': h_inc_prev, 'r_inc': r_inc_prev,
+        'my_roi': h_roi if is_h else r_roi,
+        'opp_roi': r_roi if is_h else h_roi
+    }
+    
+    ui_core.render_dashboard(game, view_party, cfg, is_preview=True, preview_data=preview_data)
+    
+    if not is_invalid and st.button(t("Confirm Actions"), use_container_width=True, type="primary"):
+        st.session_state[f"{view_party.name}_acts"] = my_acts
+        if f"{opponent_party.name}_acts" not in st.session_state:
+            game.proposing_party = opponent_party
+            st.rerun()
         else:
-            game.phase = 1; game.p1_step = 'draft_r'
-            game.p1_proposals = {'R': None, 'H': None}; game.p1_selected_plan = None
-            
-            if is_election_end:
-                game.r_role_party = game.ruling_party
-                game.h_role_party = game.party_B if game.ruling_party.name == game.party_A.name else game.party_A
-            
+            game.phase = 3
             game.proposing_party = game.r_role_party
-            game.last_year_report = None
-            
-            for k in list(st.session_state.keys()):
-                if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
-            if 'turn_initialized' in st.session_state: del st.session_state.turn_initialized
-        st.rerun()
+            st.rerun()
