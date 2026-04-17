@@ -34,35 +34,75 @@ def calc_fake_ev_dice(total_fake_ev: float, catch_prob: float, fine_mult: float,
     
     return caught_fake_ev, safe_fake_ev, caught_value, fine
 
-def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_decay, r_pays, h_wealth, c_net_real, fake_ev_safe, fake_ev_spent, projects, allocations, fake_ev_caught):
+def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_decay, override_unit_cost=None, r_pays=0.0, h_wealth=0.0, c_net_override=None, fake_ev_spent=0.0, fake_ev_safe=0.0, active_projects=None, allocations=None, fake_ev_caught=0.0, current_year=1):
+    active_projects = active_projects or []
+    allocations = allocations or {}
+    
     l_gdp = gdp * (real_decay * cfg['DECAY_WEIGHT_MULT'] + cfg['BASE_DECAY_RATE'])
-    unit_cost = calc_unit_cost(cfg, gdp, build_abi, real_decay)
+    unit_cost = override_unit_cost if override_unit_cost is not None else calc_unit_cost(cfg, gdp, build_abi, real_decay)
     
     # Exec效率加成 1.2x -> 實際花費的 EV 會以更低的單位成本計算
-    unit_cost = unit_cost / 1.2
+    unit_cost_eff = unit_cost / 1.2
     
     req_cost = total_bid_cost * unit_cost
     available_fund = max(0.0, proj_fund + r_pays + h_wealth)
     
-    c_net_total = c_net_real + fake_ev_safe
-    act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost
-    h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
-    
+    if c_net_override is not None:
+        c_net_real = min(float(total_bid_cost), c_net_override)
+        c_net_total = c_net_real + fake_ev_safe
+        act_fund = (c_net_real + fake_ev_spent * cfg.get('FAKE_EV_COST_RATIO', 0.2)) * unit_cost_eff
+        h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
+    else:
+        if req_cost <= available_fund:
+            act_fund = req_cost
+            c_net_real = float(total_bid_cost)
+            c_net_total = c_net_real + fake_ev_safe
+            h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
+        else:
+            act_fund = available_fund
+            c_net_real = act_fund / max(0.01, unit_cost_eff)
+            c_net_total = c_net_real + fake_ev_safe
+            h_idx = min(1.0, c_net_total / max(1.0, float(total_bid_cost))) if total_bid_cost > 0 else 0.0
+
     payout_h = min(budget_t, proj_fund * h_idx)
     total_bonus_deduction = budget_t * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
     payout_r = max(0.0, budget_t - total_bonus_deduction - proj_fund)
     
     total_allocated = sum(allocations.values())
-    completed_projects = []
-    total_gdp_addition = 0.0
-    
-    for p in projects:
-        alloc = allocations.get(p['id'], 0.0)
+    effective_allocs = {}
+    for pid, amt in allocations.items():
         if fake_ev_caught > 0 and total_allocated > 0:
-            alloc -= fake_ev_caught * (alloc / total_allocated)
-        if alloc >= p['ev'] * 0.99:
-            completed_projects.append(p)
-            total_gdp_addition += p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
+            effective_allocs[pid] = amt - (fake_ev_caught * (amt / total_allocated))
+        else:
+            effective_allocs[pid] = amt
+
+    completed_projects = []
+    failed_projects = []
+    ongoing_projects = []
+    total_gdp_addition = 0.0
+
+    for p in active_projects:
+        p_copy = dict(p)
+        p_copy['investments'] = list(p.get('investments', []))
+        
+        invested_so_far = sum(inv['amount'] for inv in p_copy['investments'])
+        remaining_ev = p_copy['ev'] - invested_so_far
+        alloc = effective_allocs.get(p_copy['id'], 0.0)
+        
+        if alloc > 0:
+            p_copy['investments'].append({'year': current_year, 'amount': alloc})
+            
+        total_invested_now = invested_so_far + alloc
+        
+        if total_invested_now >= p_copy['ev'] * 0.99:
+            completed_projects.append(p_copy)
+            total_gdp_addition += p_copy['ev'] * p_copy['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2)
+        else:
+            min_req = remaining_ev * 0.2
+            if alloc < min_req - 0.01:
+                failed_projects.append(p_copy)
+            else:
+                ongoing_projects.append(p_copy)
     
     est_gdp = max(0.0, gdp - l_gdp + total_gdp_addition)
     h_project_profit = payout_h + r_pays - act_fund
@@ -70,12 +110,14 @@ def calc_economy(cfg, gdp, budget_t, proj_fund, total_bid_cost, build_abi, real_
     return {
         'est_gdp': est_gdp, 'payout_h': payout_h, 'payout_r': payout_r,
         'h_idx': h_idx, 'c_net': c_net_real, 'c_net_total': c_net_total, 'l_gdp': l_gdp, 
-        'unit_cost': unit_cost, 'act_fund': act_fund, 
+        'unit_cost': unit_cost_eff, 'act_fund': act_fund, 
         'h_project_profit': h_project_profit, 'req_cost': req_cost,
-        'completed_projects': completed_projects
+        'completed_projects': completed_projects,
+        'failed_projects': failed_projects,
+        'ongoing_projects': ongoing_projects
     }
 
-def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects):
+def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects, real_decay, current_year):
     # 1. Ruling Perf (Macro / GDP)
     target_gdp_growth_val = sum(p['ev'] * p['macro_mult'] * cfg.get('GDP_CONVERSION_RATE', 0.2) for p in completed_projects)
     delta_A = (target_gdp_growth_val / max(1.0, curr_gdp)) * 100.0
@@ -87,14 +129,21 @@ def generate_raw_support(cfg, curr_gdp, claimed_decay, completed_projects):
     p_ruling_raw = (delta_A * 0.05) + (gap * 0.15)
     p_ruling = p_ruling_raw * cfg.get('AMMO_MULTIPLIER', 50.0)
     
-    # 2. Exec & Proposal Perf
+    # 2. Exec & Proposal Perf (w/ Depreciation)
     exec_perf = 0.0
     proposal_perf = {}
     inflation_corr = 5000.0 / max(1.0, curr_gdp)
     
     for p in completed_projects:
-        base_perf = (p['ev'] * p['exec_mult'] * inflation_corr) / 20.0
+        depreciated_ev = 0.0
+        for inv in p.get('investments', []):
+            age = current_year - inv['year']
+            retention = max(0.1, 1.0 - real_decay) ** age
+            depreciated_ev += inv['amount'] * retention
+            
+        base_perf = (depreciated_ev * p['exec_mult'] * inflation_corr) / 20.0
         exec_perf += base_perf
+        
         author = p.get('author', 'System')
         proposal_perf[author] = proposal_perf.get(author, 0.0) + base_perf
         
@@ -177,8 +226,8 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
 
     return B, perf_used, perf_conquered, spin_used, spin_conquered
 
-def calc_performance_preview(cfg, hp, rp, ruling_party_name, curr_gdp, claimed_decay, sanity, emotion, projects, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0):
-    p_ruling, p_exec, p_prop, d_a, d_e = generate_raw_support(cfg, curr_gdp, claimed_decay, projects)
+def calc_performance_preview(cfg, hp, rp, ruling_party_name, curr_gdp, claimed_decay, sanity, emotion, projects, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0, real_decay=0.0, current_year=1):
+    p_ruling, p_exec, p_prop, d_a, d_e = generate_raw_support(cfg, curr_gdp, claimed_decay, projects, real_decay, current_year)
 
     h_perf = p_exec + p_prop.get(hp.name, 0.0)
     r_perf = p_prop.get(rp.name, 0.0)
