@@ -118,26 +118,14 @@ def get_base_rigidity(i, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_
     return min(1.0, base_rigidity)
 
 def get_defense_modifier(sanity, emotion, edu_stance):
-    # 社會素養變數轉換為裝甲修正值
-    # 高理性 (High Sanity, Low Emotion, High Edu) = 正值
     return (sanity / 100.0) * 0.5 - (emotion / 100.0) * 0.5 + (edu_stance / 100.0) * 0.5
 
 def get_perf_rigidity(i, sanity, emotion, edu_stance, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
-    """
-    政績防禦裝甲 (Performance Rigidity)
-    理性/思辨 越好，對「事實政績」的防禦越低 (容易接受事實)
-    填鴨/情緒 越重，對「事實政績」的防禦越高 (無視事實)
-    """
     base_rigidity = get_base_rigidity(i, buff_amt, buff_party, h_boundary, party_a_name)
     modifier = get_defense_modifier(sanity, emotion, edu_stance)
     return max(0.01, min(1.0, base_rigidity - modifier))
 
 def get_spin_rigidity(i, sanity, emotion, edu_stance, buff_amt=0.0, buff_party=None, h_boundary=100, party_a_name=None):
-    """
-    公關防禦裝甲 (Spin Rigidity)
-    理性/思辨 越好，對「媒體洗腦」的防禦越高 (不容易被洗腦)
-    填鴨/情緒 越重，對「媒體洗腦」的防禦越低 (容易被煽動)
-    """
     base_rigidity = get_base_rigidity(i, buff_amt, buff_party, h_boundary, party_a_name)
     modifier = get_defense_modifier(sanity, emotion, edu_stance)
     return max(0.01, min(1.0, base_rigidity + modifier))
@@ -146,7 +134,6 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
     B = int(boundary_B)
     perf_used = 0.0; perf_conquered = 0
     
-    # 1. 結算政績攻防 (Performance Combat)
     if net_perf_A > 0:
         sup = net_perf_A
         while sup >= 1.0 and B < 200:
@@ -162,7 +149,6 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
             if random.random() < (1.0 - rigidity):
                 B -= 1; perf_conquered += 1
             
-    # 2. 結算公關攻防 (Spin Combat)
     spin_used = 0.0; spin_conquered = 0
     if net_spin_A > 0:
         sup = net_spin_A
@@ -184,14 +170,11 @@ def run_conquest_split(boundary_B, net_perf_A, net_spin_A, sanity=50.0, emotion=
 def calc_performance_preview(cfg, hp, rp, ruling_party_name, new_gdp, curr_gdp, claimed_decay, sanity, emotion, bid_cost, c_net_total, h_spin_pwr=0.0, r_spin_pwr=0.0, avg_edu=0.0):
     p_plan, p_exec, d_a, d_e, d_c = generate_raw_support(cfg, new_gdp, curr_gdp, claimed_decay, bid_cost, c_net_total)
 
-    # 根據新規矩：GDP 政績 (p_plan) 全部歸屬 Ruling 黨；專案政績 (p_exec) 全部歸屬 H 黨
-    h_perf = 0; r_perf = 0
-    if ruling_party_name == hp.name: h_perf += p_plan
-    else: r_perf += p_plan
-    
-    h_perf += p_exec # H party executes the project
+    # 監管方 (Regulator) 嚴格且唯一地取得大環境/預期政績 (p_plan)
+    # 執行方 (Executive) 嚴格且唯一地取得專案執行表現 (p_exec)
+    h_perf = p_exec 
+    r_perf = p_plan
 
-    # 取得中心搖擺選民的平均穿甲率 (Armor Piercing Rate = 1.0 - Rigidity) 作為 UI 預覽參考
     perf_ap_center = 1.0 - get_perf_rigidity(100, sanity, emotion, avg_edu)
     spin_ap_center = 1.0 - get_spin_rigidity(100, sanity, emotion, avg_edu)
 
