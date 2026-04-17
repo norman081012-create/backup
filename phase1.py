@@ -43,8 +43,16 @@ def render(game, view_party, cfg):
             st.markdown(t("### 🗂️ Select Reconstruction Project(s)"))
             all_available_projects = view_party.projects + opp.projects
             
+            my_obs_ep = view_party.last_acts.get('alloc_tt_obs', 0) + view_party.last_acts.get('alloc_inv_audit', 0)
+            opp_hide_ops = opp.last_acts.get('alloc_ci_hideorg', 0)
+            net_stealth = max(0.0, opp_hide_ops - my_obs_ep)
+            fake_boost = (net_stealth / 100.0) * 0.4 
+            
             def format_proj(p):
-                return f"[{p['author'][:1]}] {p['name']} ({t('Tier')}: {t(p['tier'][0])} | EV: {p['ev']:.0f} | Exec-Perf: {p['exec_mult']}x)"
+                is_mine = (p['author'] == view_party.name)
+                disp_exec = p['exec_mult'] if is_mine else (p['exec_mult'] + fake_boost)
+                disp_macro = p['macro_mult'] if is_mine else (p['macro_mult'] + fake_boost)
+                return f"[{p['author'][:1]}] {p['name']} ({t('Tier')}: {t(p['tier'][0])} | EV: {p['ev']:.0f} | Exec-Perf: {disp_exec:.2f}x)"
                 
             selected_proj_ids = st.multiselect(t("Available Projects"), options=[p['id'] for p in all_available_projects], format_func=lambda x: format_proj(next(p for p in all_available_projects if p['id'] == x)))
             selected_projects = [p for p in all_available_projects if p['id'] in selected_proj_ids]
@@ -77,20 +85,19 @@ def render(game, view_party, cfg):
                 opp_claimed_decay = opp_plan.get('claimed_decay') if opp_plan else None
                 opp_txt1 = f"Opp. Claimed: {opp_claimed_decay:.3f}" if opp_claimed_decay is not None else "Awaiting Opp."
                 
-                current_val = st.session_state.get(widget_decay_key, tt_decay)
+                claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, value=float(st.session_state.get(widget_decay_key, tt_decay)), key=widget_decay_key)
                 conv_rate = cfg.get('GDP_CONVERSION_RATE', 0.2)
-                equiv_infra_loss = (game.gdp * (current_val * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
+                equiv_infra_loss = (game.gdp * (claimed_decay * cfg.get('DECAY_WEIGHT_MULT', 0.05) + cfg.get('BASE_DECAY_RATE', 0.0))) / conv_rate
                 
-                st.markdown(t(f"**Claimed Decay (Current: {current_val:.3f})**") + f" | {t(opp_txt1)}")
+                st.markdown(t(f"**Claimed Decay (Current: {claimed_decay:.3f})**") + f" | {t(opp_txt1)}")
                 st.caption(f"*({t('Requires')} {equiv_infra_loss:.1f} EV)*")
-                claimed_decay = st.number_input("Claimed Decay", step=0.001, min_value=0.0, key=widget_decay_key, label_visibility="collapsed")
                 st.session_state[input_decay_key] = claimed_decay
                 
             with c_ann2:
                 opp_claimed_cost = opp_plan.get('claimed_cost') if opp_plan else None
                 opp_txt2 = f"Opp. Claimed: {opp_claimed_cost:.2f}" if opp_claimed_cost is not None else "Awaiting Opp."
-                st.markdown(t(f"**Claimed Unit Cost (Current: {st.session_state.get(widget_cost_key, tt_cost):.2f})**") + f" | {t(opp_txt2)}")
-                claimed_cost = st.number_input("Claimed Unit Cost", step=0.01, key=widget_cost_key, label_visibility="collapsed")
+                claimed_cost = st.number_input("Claimed Unit Cost", step=0.01, value=float(st.session_state.get(widget_cost_key, tt_cost)), key=widget_cost_key)
+                st.markdown(t(f"**Claimed Unit Cost (Current: {claimed_cost:.2f})**") + f" | {t(opp_txt2)}")
                 st.session_state[input_cost_key] = claimed_cost
             
             total_bonus_deduction = game.total_budget * ((cfg['BASE_INCOME_RATIO'] * 2) + cfg['RULING_BONUS_RATIO'])
@@ -154,9 +161,11 @@ def render(game, view_party, cfg):
                 
                 swap_cost = 0 if view_party.name == game.ruling_party.name else penalty_amt
                 if c_btn3.button(t(f"🔄 Force Pass & Swap (Cost: {swap_cost:.1f})"), use_container_width=True, disabled=is_invalid):
+                    if active_role == 'R': 
+                        plan_dict['h_pays'] += plan_dict['r_pays']
+                        plan_dict['r_pays'] = 0.0
                     st.session_state.turn_data.update(plan_dict)
                     
-                    # ⚠️ 將專案併入 active_projects 陣列
                     for np_proj in plan_dict['selected_projects']:
                         if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
                             game.active_projects.append(np_proj)
@@ -200,7 +209,6 @@ def render(game, view_party, cfg):
             if c1.button(t("✅ Agree to Bill"), use_container_width=True, type="primary"):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 
-                # ⚠️ 將專案併入 active_projects 陣列
                 for np_proj in game.p1_selected_plan.get('selected_projects', []):
                     if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
                         game.active_projects.append(np_proj)
@@ -215,7 +223,6 @@ def render(game, view_party, cfg):
             if c3.button(t(f"🔄 Agree & Swap\n(Cost: {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 
-                # ⚠️ 將專案併入 active_projects 陣列
                 for np_proj in game.p1_selected_plan.get('selected_projects', []):
                     if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
                         game.active_projects.append(np_proj)
@@ -239,7 +246,6 @@ def render(game, view_party, cfg):
             if c1.button(t("✅ Accept Ultimatum"), use_container_width=True, type="primary"):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 
-                # ⚠️ 將專案併入 active_projects 陣列
                 for np_proj in game.p1_selected_plan.get('selected_projects', []):
                     if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
                         game.active_projects.append(np_proj)
@@ -251,7 +257,6 @@ def render(game, view_party, cfg):
             if c2.button(t(f"🔄 Flip Table & Swap\n(Warning: Cost {penalty_amt:.1f})"), use_container_width=True):
                 st.session_state.turn_data.update(game.p1_selected_plan)
                 
-                # ⚠️ 將專案併入 active_projects 陣列
                 for np_proj in game.p1_selected_plan.get('selected_projects', []):
                     if not any(ap['id'] == np_proj['id'] for ap in game.active_projects):
                         game.active_projects.append(np_proj)
