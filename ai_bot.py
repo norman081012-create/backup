@@ -83,24 +83,19 @@ def take_turn(game, cfg):
         bid_cost = float(d.get('bid_cost', 1.0))
         selected_projects = d.get('selected_projects', [])
         
-        inv_cap = ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0)
-        ci_cap = ai_party.stealth_ability * 10
-        med_cap = ai_party.media_ability * 10 * (1.2 if not is_h else 1.0)
-        tt_cap = ai_party.predict_ability * 10.0
+        inv_cap = int(ai_party.investigate_ability * 10 * (1.2 if not is_h else 1.0))
+        ci_cap = int(ai_party.stealth_ability * 10)
+        med_cap = int(ai_party.media_ability * 10 * (1.2 if not is_h else 1.0))
+        tt_cap = int(ai_party.predict_ability * 10.0)
         
         my_acts = {
-            'w_t_dec': 33, 'w_t_obs': 33, 'w_t_opt': 34,
-            'alloc_tt_dec': tt_cap * 0.33, 'alloc_tt_obs': tt_cap * 0.33, 'alloc_tt_opt': tt_cap * 0.34,
-            'w_i_cen': 0, 'w_i_org': 0, 'w_i_fin': 0,
-            'alloc_inv_censor': 0, 'alloc_inv_audit': 0, 'alloc_inv_fin': 0,
-            'w_c_cen': 0, 'w_c_org': 0, 'w_c_fin': 0,
-            'alloc_ci_anticen': 0, 'alloc_ci_hideorg': 0, 'alloc_ci_hidefin': 0,
-            'w_m_cam': 50, 'w_m_inc': 0, 'w_m_con': 50, 'w_m_edu': 0,
-            'alloc_med_camp': med_cap * 0.5, 'alloc_med_incite': 0, 'alloc_med_control': med_cap * 0.5, 'alloc_med_edu': 0,
+            'alloc_tt_dec': float(int(tt_cap * 0.33)), 'alloc_tt_obs': float(int(tt_cap * 0.33)), 'alloc_tt_opt': float(int(tt_cap * 0.34)),
+            'alloc_inv_censor': 0.0, 'alloc_inv_audit': 0.0, 'alloc_inv_fin': 0.0,
+            'alloc_ci_anticen': 0.0, 'alloc_ci_hideorg': 0.0, 'alloc_ci_hidefin': 0.0,
+            'alloc_med_camp': float(int(med_cap * 0.5)), 'alloc_med_incite': 0.0, 'alloc_med_control': float(int(med_cap * 0.5)), 'alloc_med_edu': 0.0,
             'edu_stance': ai_party.edu_stance, 'fake_ev': 0.0,
             't_pre': ai_party.predict_ability, 't_inv': ai_party.investigate_ability,
-            't_med': ai_party.media_ability, 't_stl': ai_party.stealth_ability,
-            't_bld': ai_party.build_ability,
+            't_med': ai_party.media_ability, 't_bld': ai_party.build_ability,
             'invest_wealth': 0.0, 'c_net': 0.0, 'allocations': {}
         }
 
@@ -109,32 +104,37 @@ def take_turn(game, cfg):
         eng_base_ev = ai_party.build_ability * 10 * (1.2 if is_h else 1.0)
 
         if is_h:
-            my_acts['w_c_fin'] = 100
-            my_acts['alloc_ci_hidefin'] = ci_cap
+            my_acts['alloc_ci_hidefin'] = float(ci_cap)
             
             c_net = bid_cost
-            fake_ev = bid_cost * random.uniform(0.1, 0.3) if random.random() < 0.4 else 0.0
-            
-            my_acts['fake_ev'] = fake_ev
-            my_acts['c_net'] = c_net
+            fake_ev_total = bid_cost * random.uniform(0.1, 0.3) if random.random() < 0.4 else 0.0
             
             allocations = {}
-            avail_ev = c_net + fake_ev
+            avail_ev_real = c_net
+            avail_ev_fake = fake_ev_total
+            
             for p in game.active_projects:
-                invested = sum(inv['amount'] for inv in p.get('investments', []))
+                invested = sum(inv.get('real', inv['amount']) + inv.get('fake', 0.0) for inv in p.get('investments', []))
                 remaining = max(0.0, p['ev'] - invested)
                 min_req = remaining * 0.2
-                alloc_amt = min(avail_ev, min_req * 1.5) 
-                allocations[p['id']] = alloc_amt
-                avail_ev -= alloc_amt
+                
+                # AI tries to fund min req, evenly splitting real and fake if possible
+                alloc_real = min(avail_ev_real, min_req * 1.5)
+                alloc_fake = min(avail_ev_fake, min_req * 0.5) 
+                
+                allocations[p['id']] = {'real': alloc_real, 'fake': alloc_fake}
+                avail_ev_real -= alloc_real
+                avail_ev_fake -= alloc_fake
+                
             my_acts['allocations'] = allocations
+            my_acts['fake_ev'] = fake_ev_total
+            my_acts['c_net'] = c_net
 
-            total_ev_req = c_net + (fake_ev * cfg.get('FAKE_EV_COST_RATIO', 0.2)) + maint_ev
+            total_ev_req = c_net + (fake_ev_total * cfg.get('FAKE_EV_COST_RATIO', 0.2)) + maint_ev
             ev_to_buy = max(0.0, total_ev_req - eng_base_ev)
             my_acts['invest_wealth'] = ev_to_buy * max(0.01, unit_cost / 1.2)
         else:
-            my_acts['w_i_fin'] = 100
-            my_acts['alloc_inv_fin'] = inv_cap
+            my_acts['alloc_inv_fin'] = float(inv_cap)
             
             total_ev_req = maint_ev
             ev_to_buy = max(0.0, total_ev_req - eng_base_ev)
