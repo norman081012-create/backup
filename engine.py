@@ -10,7 +10,6 @@ PROJECT_NAMES = ["Phoenix", "Citadel", "Aegis", "Titan", "Neon", "Echo", "Apex",
 
 def generate_projects(tt_opt_ep, author_name):
     projects = []
-    # Optimize Proj EP boosts multipliers directly
     ep_buff = (tt_opt_ep / 100.0) * 0.5  
     
     tiers = [
@@ -57,6 +56,10 @@ class Party:
         self.poll_count = 0
         self.last_acts = {}
         self.projects = []
+        # 📌 儲存具有年限 (age) 的歷史政績
+        self.perf_history = {
+            'ruling': [], 'exec': [], 'prop': []
+        }
 
 class GameEngine:
     def __init__(self, cfg):
@@ -103,8 +106,8 @@ class GameEngine:
             'R_Party': self.r_role_party.name,
             'A_Edu': float(self.party_A.edu_stance),
             'B_Edu': float(self.party_B.edu_stance),
-            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability + self.party_A.stealth_ability)/5,
-            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability + self.party_B.stealth_ability)/5
+            'A_Avg_Abi': (self.party_A.build_ability + self.party_A.investigate_ability + self.party_A.media_ability + self.party_A.predict_ability)/4,
+            'B_Avg_Abi': (self.party_B.build_ability + self.party_B.investigate_ability + self.party_B.media_ability + self.party_B.predict_ability)/4
         })
         self.swap_triggered_this_year = False
 
