@@ -15,11 +15,13 @@ def render(game, cfg):
         ra = st.session_state.get(f"{rp.name}_acts", {})
         ha = st.session_state.get(f"{hp.name}_acts", {})
         d = st.session_state.get('turn_data', {})
+        selected_projects = d.get('selected_projects', [])
         
         fine_mult = float(d.get('fine_mult', 0.3)) 
         
         fake_ev = float(ha.get('fake_ev') or 0.0)
         c_net_h = float(ha.get('c_net', 0))
+        allocations = ha.get('allocations', {})
         
         r_inv_fin = float(ra.get('alloc_inv_fin', 0))
         h_ci_fin = float(ha.get('alloc_ci_hidefin', 0))
@@ -75,9 +77,9 @@ def render(game, cfg):
         confiscated_to_budget = fine_value
         hp_wealth_penalty = (caught_value + fine_value)
         
-        for k in ['t_pre', 't_inv', 't_med', 't_stl', 't_bld', 't_edu', 'edu_stance']:
-            if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ra[k]))
-            if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_ability' if k == 't_edu' else 'edu_stance', float(ha[k]))
+        for k in ['t_pre', 't_inv', 't_med', 't_stl', 't_bld', 'edu_stance']:
+            if k in ra: setattr(rp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ra[k]))
+            if k in ha: setattr(hp, 'predict_ability' if k == 't_pre' else 'investigate_ability' if k == 't_inv' else 'media_ability' if k == 't_med' else 'stealth_ability' if k == 't_stl' else 'build_ability' if k == 't_bld' else 'edu_stance', float(ha[k]))
 
         req_cost = float(d.get('req_cost', 0.0))
         proj_fund = float(d.get('proj_fund') or 0.0)
@@ -94,8 +96,8 @@ def render(game, cfg):
         res_exec = formulas.calc_economy(
             cfg, float(game.gdp), float(game.total_budget), proj_fund, bid_cost, 
             float(hp.build_ability), float(game.current_real_decay), 
-            r_pays=r_pays, h_wealth=actual_h_wealth_available, 
-            c_net_override=c_net_h, fake_ev_spent=fake_ev, fake_ev_safe=eval_fake_ev_safe
+            r_pays, actual_h_wealth_available, 
+            c_net_h, fake_ev, eval_fake_ev_safe, selected_projects, allocations, caught_fake_ev
         )
         
         budg = cfg['BASE_TOTAL_BUDGET'] + (res_exec['est_gdp'] * cfg['HEALTH_MULTIPLIER'])
@@ -129,18 +131,18 @@ def render(game, cfg):
             
         if censor_diff > 0: game.h_rigidity_buff = {'amount': censor_rigidity_buff, 'duration': 2, 'party': hp.name}
         
-        macro_mult = float(d.get('proj_macro_mult', 1.0))
-        exec_mult = float(d.get('proj_exec_mult', 1.0))
-        
-        raw_p_plan, raw_p_exec, d_a, d_e, d_c = formulas.generate_raw_support(cfg, res_exec['est_gdp'], game.gdp, claimed_decay, bid_cost, res_exec['c_net_total'], macro_mult, exec_mult)
+        p_ruling, p_exec, p_prop, d_a, d_e = formulas.generate_raw_support(cfg, game.gdp, claimed_decay, res_exec['completed_projects'])
         
         perf_A = 0.0; perf_B = 0.0
         
-        if rp.name == game.party_A.name: perf_A += raw_p_plan
-        else: perf_B += raw_p_plan
+        if game.ruling_party.name == game.party_A.name: perf_A += p_ruling
+        else: perf_B += p_ruling
         
-        if hp.name == game.party_A.name: perf_A += raw_p_exec
-        else: perf_B += raw_p_exec
+        if hp.name == game.party_A.name: perf_A += p_exec
+        else: perf_B += p_exec
+        
+        perf_A += p_prop.get(game.party_A.name, 0.0)
+        perf_B += p_prop.get(game.party_B.name, 0.0)
 
         spin_A = 0.0; spin_B = 0.0
         h_spin_pwr = float(ha.get('alloc_med_control', 0.0)) + float(ha.get('alloc_med_camp', 0.0))
@@ -182,7 +184,7 @@ def render(game, cfg):
             'old_gdp': game.gdp, 'old_san': game.sanity, 'old_emo': game.emotion, 'old_budg': game.total_budget, 'old_h_fund': game.h_fund,
             'new_san': new_sanity, 'new_emo': new_emotion,
             'h_party_name': hp.name, 'r_party_name': rp.name,
-            'raw_p_plan': raw_p_plan, 'raw_p_exec': raw_p_exec,
+            'p_ruling': p_ruling, 'p_exec': p_exec, 'p_prop': p_prop,
             'perf_A': perf_A, 'perf_B': perf_B, 'net_perf_A': net_perf_A,
             'spin_A': spin_A, 'spin_B': spin_B, 'net_spin_A': net_spin_A,
             'perf_used': perf_used, 'perf_conquered': perf_conquered,
@@ -293,7 +295,17 @@ def render(game, cfg):
             with st.expander(t("👁️ God Mode: Electoral Mechanics"), expanded=True):
                 st.write(f"*(Global Modifiers: Sanity `{rep['old_san']:.0f}`, Emotion `{rep['old_emo']:.0f}`)*")
                 
-                st.markdown(f"**{t('Regulator Perf.')} ({rep['r_party_name']})**: `{rep['raw_p_plan']:+.1f}` | **{t('Executive Perf.')} ({rep['h_party_name']})**: `{rep['raw_p_exec']:+.1f}`")
+                # 顯示三分天下的政績
+                r_p_a = rep['p_ruling'] if game.ruling_party.name == game.party_A.name else 0
+                r_p_b = rep['p_ruling'] if game.ruling_party.name == game.party_B.name else 0
+                e_p_a = rep['p_exec'] if hp.name == game.party_A.name else 0
+                e_p_b = rep['p_exec'] if hp.name == game.party_B.name else 0
+                pr_p_a = rep['p_prop'].get(game.party_A.name, 0)
+                pr_p_b = rep['p_prop'].get(game.party_B.name, 0)
+                
+                st.markdown(f"**{t('Ruling Perf.')}**: {game.party_A.name} `{r_p_a:+.1f}` | {game.party_B.name} `{r_p_b:+.1f}`")
+                st.markdown(f"**{t('Exec Perf.')}**: {game.party_A.name} `{e_p_a:+.1f}` | {game.party_B.name} `{e_p_b:+.1f}`")
+                st.markdown(f"**{t('Prop Perf.')}**: {game.party_A.name} `{pr_p_a:+.1f}` | {game.party_B.name} `{pr_p_b:+.1f}`")
                 
                 if abs(rep['net_perf_A']) >= 1.0:
                     atk_p = game.party_A.name if rep['net_perf_A'] > 0 else game.party_B.name
@@ -334,6 +346,10 @@ def render(game, cfg):
             
             game.proposing_party = game.r_role_party
             game.last_year_report = None
+            
+            # Regenerate projects for new year based on new TT EP
+            for p in [game.party_A, game.party_B]:
+                p.projects = engine.generate_projects(p.predict_ability, p.name)
             
             for k in list(st.session_state.keys()):
                 if k.endswith('_acts') or k.startswith('up_'): del st.session_state[k]
